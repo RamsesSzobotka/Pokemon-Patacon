@@ -165,7 +165,22 @@ Incluye la tabla estándar de Pokémon:
 **Opcionales (Fase 2):**
 - **Stats Variables por Porcentaje:** Mostrar barra de HP con % (ej: "80% ATK"), permitir cambios temporales de stats por habilidades
 
-### 3.9 Sistema de Base de Datos Pokémon
+### 3.9 Sistema de Objetos en Batalla
+
+| Objeto | Cantidad | Efecto | Cooldown |
+|--------|----------|--------|----------|
+| **Poción Total** | 3 máximo | Restaura 100% HP del Pokémon activo | 1 uso por objeto |
+| **Revivir** | 2 máximo | Revive un Pokémon debilitado con 50% HP | 1 uso por objeto |
+
+**Mecánica:**
+- **Disponibilidad:** 1 botón "Objetos" en el panel de acciones cada turno (junto a "Atacar" y "Cambiar Pokémon")
+- **Interfaz:** Muestra inventario actual (ej: "Pociones: 2/3 | Revivir: 1/2")
+- **Restricción:** No puede usarse poción si el Pokémon activo está al 100% HP
+- **Revivir:** Solo aplica a Pokémon del equipo que están debilitados (no al activo)
+- **Sincronización:** El objeto se consume inmediatamente y ambos jugadores ven el cambio
+- **Ataque después:** Usar un objeto = 1 acción del turno (no ataca en ese turno)
+
+### 3.10 Sistema de Base de Datos Pokémon
 
 #### Flujo de Datos:
 
@@ -273,8 +288,172 @@ battle:start          → Inicia la batalla
 turn:action          → Jugador selecciona acción
 turn:execute         → Servidor ejecuta turno
 pokemon:fainted      → Pokémon debilitado
+pokemon:selected     → Jugador seleccionó Pokémon (draft)
+item:used           → Objeto consumido en batalla
 battle:end           → Batalla finalizada
 ```
+
+### 4.4 Estructura de Carpetas del Proyecto
+
+```
+pokemon-patacon/
+│
+├── frontend/                      # Tauri + Svelte
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Battle.svelte           # Pantalla principal de batalla
+│   │   │   ├── PokemonSprite.svelte    # Renderer de sprites .gif
+│   │   │   ├── ActionPanel.svelte      # Panel de acciones (atacar, cambiar, objetos)
+│   │   │   ├── ObjectsMenu.svelte      # Menú de objetos (pociones, revivir)
+│   │   │   ├── DraftSelector.svelte    # Selector de equipo (draft)
+│   │   │   ├── RoomLobby.svelte        # Sala de espera
+│   │   │   └── MainMenu.svelte         # Menú principal
+│   │   ├── store/
+│   │   │   ├── battle.js               # Estado de batalla (Svelte store)
+│   │   │   ├── room.js                 # Estado de sala
+│   │   │   └── pokemon.js              # Cache de Pokémon
+│   │   ├── services/
+│   │   │   ├── websocket.js            # WebSocket client
+│   │   │   ├── pokemonApi.js           # Llamadas a API backend
+│   │   │   └── sync.js                 # Sincronización
+│   │   ├── utils/
+│   │   │   ├── damage.js               # Cálculo de daño
+│   │   │   ├── typeChart.js            # Tabla de tipos
+│   │   │   └── spriteRenderer.js       # Manejo de .gif animados
+│   │   ├── App.svelte
+│   │   └── main.js
+│   ├── public/
+│   │   └── assets/
+│   │       ├── sprites/                # Sprites .gif de Pokémon (generados o descargados)
+│   │       ├── sounds/                 # Efectos de sonido
+│   │       └── music/                  # BGM de batalla
+│   ├── vite.config.js
+│   ├── tsconfig.json
+│   └── package.json
+│
+├── backend/                       # Bun + Hono
+│   ├── src/
+│   │   ├── routes/
+│   │   │   ├── pokemon.ts             # GET /api/pokemon/:id, /search
+│   │   │   ├── rooms.ts               # POST /api/rooms, GET /api/rooms/:code
+│   │   │   ├── types.ts               # GET /api/types
+│   │   │   └── moves.ts               # GET /api/moves/:id
+│   │   ├── websocket/
+│   │   │   ├── handler.ts             # Event handlers (battle:start, turn:action, etc)
+│   │   │   ├── sync.ts                # Sincronización de estado
+│   │   │   └── rooms.ts               # Gestión de conexiones por sala
+│   │   ├── services/
+│   │   │   ├── battleEngine.ts        # Lógica de turnos, daño, efectos
+│   │   │   ├── pokeapiClient.ts       # Cliente de PokeAPI con caché
+│   │   │   ├── objectManager.ts       # Gestión de objetos (pociones, revivir)
+│   │   │   ├── typeChart.ts           # Tabla de tipos
+│   │   │   └── syncService.ts         # Envío de actualizaciones sincronizadas
+│   │   ├── models/
+│   │   │   ├── pokemon.ts             # Schema de Pokémon
+│   │   │   ├── room.ts                # Schema de sala
+│   │   │   ├── battle.ts              # Estado de batalla
+│   │   │   └── objects.ts             # Inventario de objetos
+│   │   ├── middleware/
+│   │   │   ├── wsAuth.ts              # Autenticación WebSocket (sesión anónima)
+│   │   │   └── errorHandler.ts        # Manejo de errores
+│   │   ├── db/
+│   │   │   ├── mongo.ts               # Conexión a MongoDB
+│   │   │   └── seeds.ts               # Carga inicial de Pokémon Gen V
+│   │   ├── config/
+│   │   │   ├── constants.ts           # Constantes del juego
+│   │   │   └── env.ts                 # Variables de entorno
+│   │   └── index.ts                   # Entrada principal (Hono app)
+│   ├── .env.example
+│   ├── bun.lockb
+│   ├── tsconfig.json
+│   └── package.json
+│
+├── docs/
+│   ├── PRD.md                      # Este documento
+│   ├── API.md                      # Documentación de endpoints
+│   └── ARCHITECTURE.md             # Detalles técnicos profundos
+│
+├── .gitignore
+└── README.md
+```
+
+### 4.5 Sincronización en Tiempo Real (WebSocket)
+
+**Principio:** Ambas pantallas (Jugador A y B) ven cambios instantáneamente
+
+#### 4.5.1 Eventos de Sincronización
+
+| Evento | Trigger | Quién lo recibe | Efecto en Pantalla |
+|--------|---------|-----------------|-------------------|
+| **pokemon:selected** | Jugador selecciona Pokémon en draft | Ambos | Pokémon se marca como NO disponible en el otro lado |
+| **team:locked** | Ambos jugadores confirman equipo | Ambos | Se inicia pantalla de selección inicial |
+| **turn:action** | Jugador ejecuta acción | Otro jugador | Se muestra animación de espera ("Jugador B está eligiendo...") |
+| **turn:execute** | Servidor procesa turno | Ambos | Se sincronizan animaciones, daño, efectos de estado |
+| **pokemon:switched** | Jugador cambia Pokémon | Ambos | Se muestra animación de cambio en tiempo real |
+| **item:used** | Jugador usa poción/revivir | Ambos | Se actualiza contador de objetos en ambas pantallas |
+| **pokemon:fainted** | HP llega a 0 | Ambos | Se muestra animación KO, opción de cambiar Pokémon |
+| **battle:end** | Última Pokémon cae | Ambos | Pantalla de victoria/derrota sincronizada |
+
+#### 4.5.2 Flujo de Sincronización por Turno
+
+```
+TURNO N - Sincronización Detallada:
+
+1. Servidor recibe acción de Jugador A
+   └─ Envía { event: "turn:waiting", player: "A" } a Jugador B
+
+2. Servidor recibe acción de Jugador B
+   └─ Acciones completas en ambos lados
+
+3. Servidor procesa turno:
+   ├─ Coinflip (compartido a ambos)
+   ├─ Cálculo de daño
+   ├─ Aplicación de efectos
+   └─ Decremento de turnos de efectos
+
+4. Broadcast a ambos clientes:
+   {
+     "event": "turn:execute",
+     "turn": n,
+     "actions": [
+       {
+         "player": "A",
+         "action": "attack",
+         "move": "Tackle",
+         "damage": 42,
+         "target_hp": 58,
+         "effects_applied": ["none"]
+       },
+       {
+         "player": "B",
+         "action": "attack",
+         "move": "Ember",
+         "damage": 38,
+         "target_hp": 62,
+         "effects_applied": ["burn"]
+       }
+     ],
+     "state": {
+       "active_pokemon_a": { ... },
+       "active_pokemon_b": { ... },
+       "items_a": { "potion": 3, "revive": 2 },
+       "items_b": { "potion": 2, "revive": 2 }
+     }
+   }
+
+5. Frontend renderiza sincronizado:
+   ├─ Ambos ven las mismas animaciones
+   ├─ Mismo HP reflejado
+   ├─ Mismo inventario
+   └─ Mismo estado de efectos
+```
+
+#### 4.5.3 Manejo de Desconexiones
+
+- **Desconexión antes de batalla:** Sala se elimina después de 5 segundos de espera
+- **Desconexión durante batalla:** Juego se pausa, espera 30 segundos reconexión
+- **Desconexión permanente:** Oponente gana automáticamente
+- **Sincronización post-reconexión:** Se envía estado completo al cliente reconectado
 
 ---
 
@@ -291,9 +470,13 @@ battle:end           → Batalla finalizada
 - **Elementos Principales:**
   - Arena de batalla (2 lados, un Pokémon activo por lado con animación .gif)
   - Barra de HP y estado del Pokémon
-  - Selector de habilidades (4 botones)
+  - Panel de acciones (3 botones): "Atacar" | "Cambiar Pokémon" | "Objetos"
+  - Selector de habilidades (4 botones, solo si elige "Atacar")
+  - Menú de objetos (desplegable con pociones y revivir disponibles)
+  - Indicador de inventario (ej: "Pociones: 2/3 | Revivir: 1/2")
   - Chat/comunicación pre-batalla
   - Historial de acciones (log de batalla)
+  - Indicador de estado "Esperando acción del oponente..."
 
 ### 5.2 Sprites y Assets de Generación V
 
@@ -306,23 +489,51 @@ battle:end           → Batalla finalizada
 
 **Nota:** Los .gif de Black/White incluyen loops de 2-4 frames para cada Pokémon. El frontend mostrará estos loops durante la batalla con timing sincronizado a los turnos.
 
-### 5.3 Animaciones
+### 5.3 Panel de Objetos (Interfaz)
+
+**Interfaz del Menú de Objetos:**
+
+```
+┌─ OBJETOS ────────────────────────────────────┐
+│                                              │
+│  ⬤ Poción Total           3 / 3 disponibles  │
+│    └─ Restaura 100% HP    [USO DISPONIBLE]   │
+│                                              │
+│  ⬜ Revivir              2 / 2 disponibles    │
+│    └─ 50% HP + Revive    [USO DISPONIBLE]    │
+│                                              │
+│              [Cerrar]   [Usar Seleccionado]  │
+└──────────────────────────────────────────────┘
+```
+
+**Estados de Botones:**
+- **DISPONIBLE (color verde):** Recurso disponible, puede usarse
+- **AGOTADO (color gris):** Recurso en 0, botón deshabilitado
+- **NO APLICABLE (color naranja):** Poción cuando HP = 100%, revivir sin Pokémon debilitados
+
+**Animaciones:**
+- Al usar: Flash de luz, consumo del objeto, actualización de contador
+- Al agotar: Transición a gris con "X" visual
+
+### 5.4 Animaciones
 
 | Elemento | Descripción |
 |----------|------------|
 | **Ataque** | Animación del Pokémon atacante + efecto visual del ataque |
 | **Daño** | Destello rojo, desplazamiento del sprite, número flotante de daño |
 | **Cambio de Pokémon** | Transición suave (fade / slide) |
+| **Uso de Objeto** | Flash de luz, consumo visual del objeto, HP restore animation |
 | **Efectos de Estado** | Iconos animados (llama para quemadura, etc.) |
 | **Coinflip** | Animación visual de moneda |
 
-### 5.4 Sonidos
+### 5.5 Sonidos
 
 | Evento | Sonido |
 |--------|--------|
 | **Ataque** | Efecto de sonido genérico de ataque + específico por tipo |
 | **Daño** | Sonido de impacto |
 | **KO** | Sonido de derrota |
+| **Uso de Objeto** | Sonido de "poción bebida" o "revivir" |
 | **Victoria** | Música/fanfare de victoria |
 | **Botón UI** | Click suave |
 | **BGM Batalla** | Música de fondo loop |
@@ -444,9 +655,10 @@ TURNO N:
 2. Jugador A selecciona acción
    - Opción 1: Atacar (elige 1 de 4 habilidades)
    - Opción 2: Cambiar Pokémon (elige de los restantes)
+   - Opción 3: Usar Objeto (si hay disponibles: poción o revivir)
    
 3. Jugador B selecciona acción
-   - Mismo menú paralelo
+   - Mismo menú paralelo (3 opciones)
    
 4. Coinflip: ¿Quién ejecuta primero?
    - P(A primero) = 0.5
