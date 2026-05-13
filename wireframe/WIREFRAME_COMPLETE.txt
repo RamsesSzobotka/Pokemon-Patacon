@@ -1,0 +1,383 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║                   🎮 POKÉMON PATACON - WIREFRAME MENU 🎮                      ║
+║                                                                               ║
+║                          Battle Arena - Generación V                          ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ PANTALLA 1: MENÚ PRINCIPAL
+═══════════════════════════════════════════════════════════════════════════════
+
+    ╔───────────────────────────────────────────────────────────────╗
+    │                                                               │
+    │                    POKÉMON PATACON                           │
+    │                    Battle Arena                              │
+    │                    Generación V                              │
+    │                                                               │
+    │  ╔═══════════════════════════════════════════════════════╗  │
+    │  ║                                                       ║  │
+    │  ║              ➕ CREAR SALA                           ║  │
+    │  ║              Genera código único                     ║  │
+    │  ║                                                       ║  │
+    │  ╚═══════════════════════════════════════════════════════╝  │
+    │                                                               │
+    │  ╔═══════════════════════════════════════════════════════╗  │
+    │  ║                                                       ║  │
+    │  ║              🔗 UNIRSE A SALA                        ║  │
+    │  ║              Ingresa código                          ║  │
+    │  ║                                                       ║  │
+    │  ╚═══════════════════════════════════════════════════════╝  │
+    │                                                               │
+    │  ┌───────────────────────────────────────────────────────┐  │
+    │  │ 📋 Historial de Salas:                              │  │
+    │  │                                                       │  │
+    │  │  • AB3F2K         hace 5 minutos                    │  │
+    │  │  • XY7K2L         hace 1 hora                       │  │
+    │  │  • ZA9B1M         hace 3 horas                      │  │
+    │  │                                                       │  │
+    │  └───────────────────────────────────────────────────────┘  │
+    │                                                               │
+    │              Pokémon Patacon v1.0 | Sin login               │
+    │                                                               │
+    ╚───────────────────────────────────────────────────────────────╝
+
+    CARACTERÍSTICAS:
+    ✨ Animación slide-down del logo (0.8s)
+    ✨ Animación slide-up de botones (staggered 0.2s)
+    ✨ Hover effects con elevación (-3px)
+   ✨ Colores: Monocromia + acentos azul/rojo
+    ✨ Responsive: Full-width mobile, centrado desktop
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ PANTALLA 2: CREAR SALA
+═══════════════════════════════════════════════════════════════════════════════
+
+    ╔───────────────────────────────────────────────────────────────╗
+    │ ← Volver al Menú                                              │
+    │                                                               │
+   │                    CREAR SALA                                │
+   │                                                               │
+   │  Codigo de la Sala:                                          │
+    │                                                               │
+    │  ┌──────────────────────────┐    ┌──────────────┐           │
+    │  │       AB3F2K            │    │ 📋 Copiar   │           │
+    │  └──────────────────────────┘    └──────────────┘           │
+    │  (Monospace, Verde #2ECC71, Bold, 18px, Letter-spacing 3px) │
+    │                                                               │
+    │  ╔═══════════════════════════════════════════════════════╗  │
+    │  ║           [QR Code Placeholder]                       ║  │
+    │  ║                                                       ║  │
+   │  ║         Comparte este codigo con tu oponente         ║  │
+    │  ║                                                       ║  │
+    │  ╚═══════════════════════════════════════════════════════╝  │
+    │                                                               │
+    │  ⏳ Esperando jugador...                                     │
+   │  Tu oponente debe ingresar el codigo para                   │
+   │  unirse a la sala                                            │
+    │                                                               │
+    ╚───────────────────────────────────────────────────────────────╝
+
+   CARACTERÍSTICAS:
+   ✨ Codigo mostrado con Font: 'Courier New'
+   ✨ Borde Verde (#2ECC71)
+   ✨ Boton copiar con hover effect
+   ✨ Placeholder para QR code
+   ✨ Status indicator (⏳ Esperando...)
+   ✨ Hint text con instrucciones
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ PANTALLA 3: UNIRSE A SALA
+═══════════════════════════════════════════════════════════════════════════════
+
+    ╔───────────────────────────────────────────────────────────────╗
+    │ ← Volver al Menú                                              │
+    │                                                               │
+   │                    UNIRSE A SALA                             │
+   │                                                               │
+   │  Ingresa el codigo de la sala para unirte                    │
+    │                                                               │
+    │  ┌───────────────────────────────────────────────────────┐  │
+    │  │ AB3F2K                          ┌──────────────────┐ │  │
+    │  │  (Input vacío)                  │    UNIRSE       │ │  │
+    │  │                                 │  (deshabilitado) │ │  │
+    │  │                                 └──────────────────┘ │  │
+    │  └───────────────────────────────────────────────────────┘  │
+    │                                                               │
+   │  El codigo debe tener 6 caracteres                           │
+    │                                                               │
+    ╚───────────────────────────────────────────────────────────────╝
+
+    VALIDACIÓN:
+    ✓ Input solo acepta 6 caracteres
+    ✓ Botón deshabilitado (gris) hasta que tenga 6 chars
+    ✓ Al escribir el 6to carácter → Botón se habilita (naranja)
+    ✓ Permite solo letras y números (0-9, A-Z)
+    ✓ Convierte a mayúsculas automáticamente
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ FLUJO DE NAVEGACIÓN
+═══════════════════════════════════════════════════════════════════════════════
+
+                             ┌─ INICIO
+                             │
+                    ┌────────┴────────┐
+                    │                 │
+              MENÚ PRINCIPAL     MENÚ PRINCIPAL
+                    │                 │
+        Click "Crear Sala"    Click "Unirse a Sala"
+                    │                 │
+                    ▼                 ▼
+                ┌────────────────┐  ┌────────────────┐
+                │  CREAR SALA    │  │  UNIRSE A SALA │
+                │ (codigo listo) │  │ (ingresa codigo)│
+                └────────────────┘  └────────────────┘
+                   │                 │
+                Esperando jugador  Enter codigo (6 chars)
+                   │                 │
+                   ▼                 ▼
+                ┌────────────────┐  ┌────────────────┐
+                │ SALA LISTA     │  │ VALIDANDO      │
+                │ ESPERANDO      │  │                │
+                └────────────────┘  └────────────────┘
+                    │                 │
+                    │                 ▼
+                    │          [SALA LISTA]
+                    │                 │
+                    └─────────┬───────┘
+                              │
+                    Ambos jugadores listos
+                              │
+                              ▼
+                      [DRAFT SELECTOR]
+                    (Fase 2 - Próxima)
+                              │
+                              ▼
+                          [BATALLA]
+                     (Fase 3 - Próxima)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ PALETA DE COLORES (BLACK/WHITE SKILL)
+═══════════════════════════════════════════════════════════════════════════════
+
+┌────────────────────┬──────────┬────────────────────────────────────────────┐
+│ COLOR              │ HEX      │ USO                                        │
+├────────────────────┼──────────┼────────────────────────────────────────────┤
+│ Deep Black         │ #0D0D0D  │ Fondo principal                           │
+│ Soft Black         │ #1A1A1A  │ Cards oscuras                             │
+│ Pure White         │ #FFFFFF  │ Fondo claro                               │
+│ Pearl Gray         │ #E6E6E6  │ Secciones secundarias                     │
+│ Neutral Gray       │ #B3B3B3  │ Bordes / texto secundario                 │
+│ Electric Blue      │ #00BFFF  │ Acento Zekrom                             │
+│ Cyan Pulse         │ #00E5FF  │ Glow Zekrom                               │
+│ Crimson Flame      │ #E10600  │ Acento Reshiram                           │
+│ Soft Red           │ #FF4C4C  │ Glow Reshiram                             │
+│ Dark Steel         │ #2C2F33  │ Texto fuerte                              │
+└────────────────────┴──────────┴────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ ANIMACIONES
+═══════════════════════════════════════════════════════════════════════════════
+
+ENTRADA:
+┌──────────────────────────────────────────────────────────────────────────┐
+│ slideDown (Logo)                                                         │
+│   Duration: 0.8s ease-out                                               │
+│   From:     translateY(-30px), opacity 0                                 │
+│   To:       translateY(0), opacity 1                                     │
+│                                                                          │
+│ slideUp (Botones/Secciones)                                             │
+│   Duration: 0.8s ease-out + staggered delay (0.2s, 0.4s, ...)          │
+│   From:     translateY(30px), opacity 0                                 │
+│   To:       translateY(0), opacity 1                                     │
+└──────────────────────────────────────────────────────────────────────────┘
+
+INTERACCIÓN:
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Hover Button                                                             │
+│   transform:   translateY(-3px)                                          │
+│   box-shadow:  0 8px 20px rgba(230, 126, 34, 0.4)                       │
+│   border:      cambiar a Verde #2ECC71                                   │
+│                                                                          │
+│ Focus Input                                                              │
+│   outline:  none                                                         │
+│   border:   #E6732E (Naranja)                                            │
+│   bg:       rgba(0, 0, 0, 0.5) más oscuro                               │
+│                                                                          │
+│ Screen Transition                                                        │
+│   Duration: 0.3s fade in/out                                             │
+│   Type:     Opacity animation                                            │
+└──────────────────────────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ COMPONENTES SVELTE IMPLEMENTADOS
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ MainMenu.svelte (250 líneas)
+   - Logo con animación
+   - 2 botones principales
+   - Historial de salas
+   - Eventos: on:createRoom, on:joinRoom
+
+✅ CreateRoom.svelte (nuevo)
+   - Codigo generado automaticamente
+   - Mostrar QR + esperar
+   - Boton copiar
+   - Evento: on:back
+
+✅ JoinRoom.svelte (nuevo)
+   - Input de codigo
+   - Validacion (6 chars)
+   - Evento: on:back
+
+✅ App.svelte
+   - Router de pantallas
+   - Gestión de estado currentScreen
+
+🔄 Stubs (Para próximas fases):
+   - Battle.svelte
+   - DraftSelector.svelte
+   - ActionPanel.svelte
+   - PokemonSprite.svelte
+   - ObjectsMenu.svelte
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ STORES (GESTIÓN DE ESTADO)
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ battleStore (src/store/battle.js)
+   - Estado de batalla
+   - Código de sala
+   - Equipos
+   - Turnos actuales
+
+✅ roomStore (src/store/room.js)
+   - Información de sala
+   - Jugadores
+   - Status
+
+✅ pokemonStore (src/store/pokemon.js)
+   - Caché de Pokémon
+   - Loading states
+   - Error handling
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ SERVICIOS
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ WebSocketService (src/services/websocket.js)
+   - connect() → Conectar a servidor
+   - send(event, data) → Enviar eventos
+   - on(event, callback) → Escuchar eventos
+   - disconnect() → Cerrar conexión
+
+✅ REST API Client (src/services/pokemonApi.js)
+   - pokemonApi.search(query)
+   - pokemonApi.getById(id)
+   - roomApi.create()
+   - roomApi.get(code)
+
+✅ SyncManager (src/services/sync.js)
+   - shouldUpdate() → Throttle updates
+   - calculateDelta(old, new) → Solo cambios
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ UTILIDADES
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ damage.js
+   - calculateDamage(power, defense, multiplier)
+   - TypeChart (Tabla tipos Gen V)
+   - getTypeMultiplier(attackType, defendType)
+
+✅ typeChart.js
+   - Tabla completa de tipos
+   - TypeColors (Colores por tipo)
+
+✅ spriteRenderer.js
+   - SpriteRenderer class
+   - loadSprite(url)
+   - startAnimation()
+   - stopAnimation()
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ RESPONSIVE DESIGN
+═══════════════════════════════════════════════════════════════════════════════
+
+MOBILE (< 600px):
+  • Logo: 2.5rem (de 3.5rem)
+  • Botones: Full-width
+  • Padding: 20px (de 40px)
+  • Max-width: 100%
+
+DESKTOP (≥ 600px):
+  • Logo: 3.5rem
+  • Botones: Centrados, max-width 350px
+  • Padding: 40px
+  • Centrado horizontal
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ CÓMO USAR
+═══════════════════════════════════════════════════════════════════════════════
+
+1. INICIAR DESARROLLO:
+   
+   Terminal 1 (Backend):
+   $ cd backend
+   $ bun run dev
+   
+   Terminal 2 (Frontend):
+   $ cd frontend
+   $ bun run dev
+
+2. ABRIR EN NAVEGADOR:
+   http://localhost:5173
+
+3. FLUJO DE PRUEBA:
+   - Abre 2 navegadores (o 2 tabs)
+   - Tab 1: Click "Crear Sala" → Codigo listo
+   - Tab 2: Click "Unirse a Sala" → Ingresa codigo
+   - Ambos deberian ver "Sala lista"
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ PRÓXIMAS FASES
+═══════════════════════════════════════════════════════════════════════════════
+
+FASE 2: DRAFT SELECTOR (Selección de Equipo)
+  □ Búsqueda de Pokémon
+  □ Filtros por tipo/generación
+  □ Vista previa de stats
+  □ Selección alternada (draft style)
+
+FASE 3: PANTALLA DE BATALLA
+  □ Arena 1v1
+  □ Sprites animados .gif
+  □ Panel de acciones
+  □ Sincronización de turnos
+
+FASE 4: SINCRONIZACIÓN WEBSOCKET
+  □ Conectar componentes con backend
+  □ Broadcast de eventos
+  □ Reconciliación de estado
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ WIREFRAME COMPLETADO - 12 de Mayo de 2026
+Status: Listo para desarrollo de próximas fases
+
+═══════════════════════════════════════════════════════════════════════════════

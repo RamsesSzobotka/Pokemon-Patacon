@@ -46,13 +46,15 @@ Pokémon Patacon es un videojuego de batallas Pokémon en tiempo real donde dos 
 
 ### 3.2 Pokédex Disponible (Generación V)
 
-**Pool de Pokémon:** 156 Pokémon nativos de Unova + 493 totales de Gen I-V
+**Pool de Pokémon:** Mínimo 300 Pokémon importados desde PokéAPI (Generación V)
 
-- **Generación V (Unova natives):** Victini, Snivy, Tepig, Oshawott, ... Genesect (156 nuevos)
-- **Compatibilidad Gen I-IV:** Todos los Pokémon de generaciones anteriores que pueden evolucionar en Gen V
-- **Legendarios Gen V:** Reshiram, Zekrom, Kyurem (máximo 1 por equipo)
+- **Generación V (Unova natives):** 156 Pokémon nuevos (Victini, Snivy, Tepig, Oshawott, ... Genesect)
+- **Generaciones anteriores:** Compatibilidad con Pokémon de Gen I-IV que pueden evolucionar en Gen V
+- **Total disponible:** 493 Pokémon de Gen I-V (priorizando Gen V en UI)
+- **Legendarios:** Máximo 1 legendario por equipo
 - **Sprites Black/White:** Todos los Pokémon mostrarán sus sprites .gif animados de Black/White desde PokeAPI
 - **Movepool:** Se usa el movepool de Generación V para cada Pokémon
+- **Data:** Importada desde PokeAPI v2 y persistida en MongoDB (no hardcodeada)
 
 ### 3.3 Selección de Equipo
 
@@ -98,58 +100,153 @@ Victoria/Derrota:
 | **Tiempo Real** | Velocidad moderada para permitir reacción (indicador visual de contador) |
 | **Sincronización** | Ambos clientes sincronizados mediante servidor Hono |
 
-### 3.5 Sistema de Habilidades
+### 3.5 Sistema de Habilidades (Movimientos)
 
 | Parámetro | Detalles |
-|-----------|---------|
-| **Habilidades por Pokémon** | 4 habilidades (Moves) seleccionables del moveset del Pokémon |
+|-----------|----------|
+| **Habilidades por Pokémon** | Exactamente 4 movimientos por Pokémon en batalla |
+| **Selección de Movimientos** | Elegidos del movepool disponible en PokeAPI del Pokémon |
+| **No Repetibles** | Un mismo movimiento no puede aparecer dos veces |
+| **Exclusión de Pokémon** | Si un Pokémon no tiene 4 movimientos válidos, se excluye o se maneja con regla documentada |
 | **Fuente de Datos** | PokeAPI v2: `pokemon/{id}/moves` |
-| **Atributos de Habilidad** | Poder (Power), Precisión (Accuracy), PP (Power Points), Tipo (Type) |
+| **Atributos por Movimiento** | Nombre, Tipo, Poder (Power), Precisión (Accuracy), Prioridad, Categoría de daño (Physical/Special/Status) |
 | **PP en Batalla** | Sin limitación de PP (sin necesidad de rastrear) |
 | **Efectos Especiales** | Daño fijo, daño porcentual, cambio de stats, aplicación de estados |
 
 ### 3.6 Sistema de Daño y Tipos
 
-#### 3.6.1 Cálculo de Daño
+#### 3.6.1 Nivel y Stats Fijos
+
+Todos los Pokémon en batalla tienen **nivel 50** fijo (no variable).
 
 ```
-Daño Base = Move Power × (Ataque_Atacante / Defensa_Defensor) × Multiplicador_Tipo
+Calcular Stats Iniciales:
+  level = 50
+  iv = randomInt(0, 31)  // IV generado al iniciar partida, NO se recalcula cada turno
+  hp = floor(((2 * baseHp + ivHp) * level) / 100) + level + 10
+  stat = floor(((2 * baseStat + ivStat) * level) / 100) + 5
 
 Donde:
-- Move Power: Poder base de la habilidad
-- Stats: Máximos (sin variación por nivel)
-- Multiplicador_Tipo: 0.5x (débil), 1.0x (normal), 2.0x (efectivo)
+- baseHp, baseStat: Valores base del Pokémon desde PokeAPI
+- iv: Valor Individual generado aleatoriamente [0-31] por Pokémon
+- Estos IVs se guardan en el estado de batalla y NO se recalculan
 ```
 
-#### 3.6.2 Tabla de Tipos
+#### 3.6.2 Cálculo de Daño Completo
 
-Incluye la tabla estándar de Pokémon:
-- **Ventajas (2x daño):** Ej: Fuego > Planta
-- **Desventajas (0.5x daño):** Ej: Agua < Planta
-- **Inmunidades (0x daño):** Ej: Volador > Tierra (para ciertos movimientos)
+```
+baseDamage = floor(
+  floor(
+    floor((2 * level) / 5 + 2) * movePower * attackStat / defenseStat
+  ) / 50
+) + 2
 
-| Tipo | Efectivo Contra | Débil Contra | Resiste | Inmune |
-|------|-----------------|-------------|---------|--------|
-| Fuego | Planta, Hielo, Bicho, Acero | Agua, Tierra, Roca | Fuego, Planta, Hielo, Bicho, Acero, Hada | - |
-| Agua | Fuego, Tierra, Roca | Planta, Eléctrico | Fuego, Agua, Hielo, Acero | - |
-| (... resto de tabla estándar Pokemon) | | | | |
+finalDamage = floor(baseDamage * modifier)
+
+modifier = randomFactor * stab * typeMultiplier * critical * burnModifier * fieldModifier
+
+Donde:
+- level = 50
+- movePower = Poder del movimiento (desde PokeAPI)
+- attackStat = ATK (físico) o SpA (especial) según damageClass
+- defenseStat = DEF (física) o SpD (especial) según damageClass
+- randomFactor = randomInt(85, 100) / 100  // Varianza de ±15%
+- stab = 1.5 si tipo movimiento coincide con tipo atacante; si no, 1
+- typeMultiplier = x2, x0.5, x0 o x1 por efectividad de tipo
+- critical = 1.5 si random() < 1/24; si no, 1
+- burnModifier = 0.5 si atacante quemado y movimiento físico; si no, 1
+- fieldModifier = 1 (por defecto; lluvia/sol en opcionales)
+
+Si movimiento falla por precisión: finalDamage = 0
+Si typeMultiplier === 0: finalDamage = 0
+```
+
+#### 3.6.3 Determinación de Stat según Categoría
+
+```
+if (move.damageClass === 'physical') {
+  attackStat = attacker.attack
+  defenseStat = defender.defense
+}
+if (move.damageClass === 'special') {
+  attackStat = attacker.specialAttack
+  defenseStat = defender.specialDefense
+}
+if (move.damageClass === 'status') {
+  damage = 0
+}
+```
+
+#### 3.6.4 Multiplicador por Tipo
+
+```
+typeMultiplier = 1
+for (const defenderType of defender.types) {
+  typeMultiplier *= getMultiplier(move.type, defenderType)
+}
+
+if (typeMultiplier === 0) {
+  finalDamage = 0
+}
+
+Ejemplo: Un movimiento eléctrico contra Agua/Volador produce x2 * x2 = x4
+```
+
+**La tabla de tipos se obtiene desde PokeAPI, NO está hardcodeada.** Cada combinación (movimiento tipo vs Pokémon tipo) se consulta desde el endpoint `/type/{id-or-name}/`.
+
+#### 3.6.5 Precisión del Movimiento
+
+```
+accuracy = move.accuracy ?? 100
+hitRoll = randomInt(1, 100)
+hits = hitRoll <= accuracy
+
+Si el movimiento falla: no se calcula daño ni efecto.
+```
+
+#### 3.6.6 Modificadores Temporales de Stats
+
+Durante batalla, los stats pueden cambiar temporalmente (ej: Ataque +2):\n\n```
+stage = clamp(stage, -6, 6)  // Mínimo -6, máximo +6
+
+if (stage >= 0) {
+  multiplier = (2 + stage) / 2
+} else {
+  multiplier = 2 / (2 - stage)
+}
+
+effectiveStat = floor(baseBattleStat * multiplier)
+```
+
+**Comportamiento:**
+- Si el Pokémon es cambiado o retirado, sus modificadores temporales se eliminan
+- Los modificadores solo afectan cálculos de daño (no la precisión del turno)
 
 ### 3.7 Sistema de Efectos de Estado
 
 | Estado | Duración | Efecto Mecánico | Puede Removerse |
 |--------|----------|-----------------|-----------------|
-| **Quemadura (Burn)** | 3 turnos | -25% Ataque efectivo | Sí (habilidad/item) |
-| **Parálisis (Paralysis)** | 3 turnos | -50% velocidad (cosmético, no afecta orden) | Sí |
-| **Sueño (Sleep)** | 3 turnos | Pokémon no ataca | Sí |
+| **Quemadura (Burn)** | 3 turnos | -50% Ataque físico efectivo (durante aplicación de daño) | Sí (habilidad/item) |
+| **Parálisis (Paralysis)** | 3 turnos | -50% velocidad (cosmético, no afecta orden) + 25% chance no moverse (opcional) | Sí |
+| **Sueño (Sleep)** | 3 turnos | Pokémon no ataca, despierta al recibir daño | Sí |
 | **Congelación (Freeze)** | 3 turnos | Pokémon no ataca | Sí |
-| **Envenenamiento (Poison)** | 3 turnos | -12.5% HP por turno | Sí |
+| **Envenenamiento (Poison)** | 3 turnos | -5% HP máximo por turno (daño pasivo) | Sí |
 | **Atracción (Attraction)** | 3 turnos | 50% chance de no atacar | Sí |
 | **Desorientación (Confusion)** | 3 turnos | 33% chance de atacar a sí mismo | Sí |
 
 **Comportamiento:**
-- Decrecen 1 turno por cada acción del Pokémon afectado
+- Decrecen 1 turno por cada acción del Pokémon afectado: `status.remainingTurns -= 1`
 - Habilidades de "quitar estado" (ej: Refresh) limpian todos los estados
 - Máximo 1 estado no-volátil por Pokémon (excepto confusión/atracción que son volátiles)
+- Si el Pokémon es cambiado o retirado, el estado temporal se elimina
+
+**Daño por Estados Pasivos:**
+```
+burnDamage = floor(target.maxHp * 0.05)
+poisonDamage = floor(target.maxHp * 0.05)
+status.remainingTurns -= 1
+if (status.remainingTurns <= 0) removeStatus(target)
+```
 
 ### 3.8 Sistema de Stats
 
@@ -798,61 +895,256 @@ GET https://pokeapi.co/api/v2/pokemon/?limit=300&offset=0
 
 ---
 
-## 10. Opcionales / Fase 2
+## 10. Opcionales / Fase 2 — Mejoras Post-MVP
 
-### 10.1 Items y Consumibles
+Estas características NO son obligatorias para la entrega inicial, pero mejoran significativamente la experiencia. El MVP debe ser funcional sin ellas.
 
-- **Pociones:** Recuperan % de HP
-- **Revivir:** Devuelven un Pokémon debilitado con 50% HP
-- **Antídotos:** Curan envenenamiento, etc.
-
-### 10.2 Sistema de Baneos (Draft Champions)
+### 10.1 Sistema de Baneos Previo (Draft Banning)
 
 ```
-Fase de Baneos (pre-draft):
-- Cada jugador blea 1-2 Pokémon (no pueden ser elegidos)
-- Total: 2-4 Pokémon baneados
-- Luego procede el draft normal con los restantes
+Pre-Draft Banning Phase:
+- Cada jugador elige 1-3 Pokémon para banear (no pueden ser elegidos después)
+- Alternancia: P1 balea 1 → P2 balea 1 → P1 balea 1 (opcional 2-3 rondas)
+- Total baneados: 2-6 Pokémon (según rondas)
+- Después: Procede draft normal con Pokémon restantes
+
+Requisitos:
+- Interfaz clara mostrando baneados
+- Legendarios pueden ser baneados igual que otros
+- Validación de que hay suficientes Pokémon disponibles post-baneo
 ```
 
-### 10.3 Stats Dinámicos por Porcentaje
+### 10.2 Variación de Estadísticas por Partida (IVs)
+
+**Status:** Ya implementado en versión base
 
 ```
-Mostrar en batalla:
-- Barra visual de HP con %
-- Indicadores de ATK "80%", SPD "100%"
-- Cambios temporales después de usar habilidades
+Cómo funciona (recuérdese):
+- Al iniciar partida: generar IV[0-31] para cada stat de cada Pokémon
+- IVs se almacenan en estado de batalla, NO se recalculan cada turno
+- Cada Pokémon tiene sus propios IVs (varían partida a partida)
+
+Fórmula (nivel 50):
+  iv = randomInt(0, 31)
+  hp = floor(((2 * baseHp + ivHp) * 50) / 100) + 50 + 10
+  stat = floor(((2 * baseStat + ivStat) * 50) / 100) + 5
+
+Resultado: Mismo Pokémon puede tener stats ligeramente diferentes cada batalla
 ```
 
-### 10.4 Replays y Estadísticas
+### 10.3 Orden de Turno Avanzado (Prioridad + Velocidad)
 
-- Guardar historial de batallas
-- Reproducción de replays
-- Estadísticas del jugador (W/L, Pokémon favoritos)
+**Estado:** Versión mejorada, mantener coinflip como base
+
+```
+Mejora opcional al orden actual (coinflip simple):
+
+Nuevo Orden de Resolución (si se implementa):
+1. Mayor prioridad de movimiento
+2. Mayor velocidad efectiva
+3. Coinflip solo si hay empate
+
+Implementación:
+  actionPriority = 
+    action.type === 'switch' ? 6 :
+    action.type === 'item' ? 6 :
+    move.priority (1, 0, -1, etc)
+
+  Orden final = sort by:
+    1. actionPriority DESC
+    2. effectiveSpeed DESC
+    3. random()
+
+Nota: Coinflip simple (versión actual) sigue siendo válido para MVP.
+```
+
+### 10.4 Sistema de Campos/Clima (Weather & Terrain)
+
+```
+Mecánica de Clima (Weather):
+- Durabilidad: 5 turnos (decrementan cada turno sin acción específica)
+- Efectos:
+  - Lluvia: Agua ×1.5 daño, Fuego ×0.5
+  - Soleado: Fuego ×1.5 daño, Agua ×0.5
+  - Tormenta de Arena: Roca/Tierra/Acero resistencia, Roca ×1.5 defensa
+  - Terreno Eléctrico: Eléctrico ×1.5 daño, previene sueño
+
+- Movimientos que activan clima: Weather Move (Rain, Sunny Day, Sandstorm, etc)
+
+Integración en Cálculo de Daño:
+  fieldModifier = getFieldModifier(weather, move.type, defender.types)
+  // En lugar de fieldModifier = 1 por defecto
+```
+
+### 10.5 Temporizador por Turno (Turn Timer)
+
+```
+Mecánica:
+- Cada jugador tiene 15-30 segundos por turno (configurable)
+- Barra visual mostrando tiempo restante
+- Si expira: acción por defecto (ej: defender, cambiar Pokémon aleatorio)
+
+Implementación:
+- WebSocket evento: turn:timer (cada segundo)
+- turn:timeout → backend ejecuta acción default
+- Sincronización exacta entre clientes
+```
+
+### 10.6 Historial y Replay de Partidas
+
+```
+Almacenamiento en MongoDB (battle_log):
+- Grabar cada turno: acciones, daño, efectos aplicados
+- Incluir timestamps de cada evento
+- Guardar estado final (ganador, duración, fecha)
+
+Reproducción:
+- Panel "Ver Replay"
+- Play/Pause de la batalla
+- Velocidad (1x, 2x, 4x)
+- Saltar a turno específico
+- Exportar como JSON o video
+
+Almacenamiento:
+  battle_replays collection:
+  {
+    _id, room_id, player_1, player_2, winner,
+    turns: [{ turn_num, actions: [...], state: {...} }],
+    duration, recorded_at
+  }
+```
+
+### 10.7 Reconexión a Sala (Browser Reconnect)
+
+```
+Mecánica:
+- Si jugador se desconecta durante batalla, tiene 30 segundos para reconectar
+- Session ID se almacena en localStorage
+- Reconexión automática si room_id coincide
+
+Implementación:
+- WebSocket reconnect logic (exponential backoff)
+- Enviar estado completo al cliente reconectado
+- Si es en fase de selección: vuelve a draft
+- Si es en batalla: continúa turno actual
+
+TTL de Sala:
+- Sala inactiva 2 minutos → estado "paused"
+- Sala inactiva 5+ minutos → auto-cierre
+```
+
+### 10.8 Modo Espectador (Spectator Mode)
+
+```
+Funcionalidad:
+- Usuarios no involucrados pueden ver batalla en vivo
+- Múltiples espectadores simultáneos
+- Chat en vivo entre espectadores
+- Sin acceso a decisiones (solo lectura)
+
+Implementación:
+- Nuevo rol: "spectator" en batalla
+- Endpoint: GET /api/rooms/:code/spectate
+- WebSocket sala con broadcast a espectadores
+- Base de datos: agregar campo spectators[] en rooms
+```
+
+### 10.9 Filtros y Búsqueda Avanzada en Pokédex
+
+```
+Filtros en Selector de Equipo/Draft:
+1. Por Nombre (búsqueda texto)
+2. Por Tipo (seleccionar 1 o más tipos)
+3. Por Generación (Gen I, II, III, IV, V)
+4. Por Stats Base (ATK > 100, SPE < 80, etc)
+5. Por Legendario (Sí/No)
+6. Por Rol (Ataque, Defensa, Especial, Velocidad)
+
+Implementación:
+- Frontend: filtros locales (caché de Pokémon)
+- Backend: GET /api/pokemon/search?type=fire&gen=5&minAttack=100
+- Ordenamiento: Nombre, Stats, ID
+```
+
+### 10.10 Sistemas Opcionales del PDF (Bajo Prioridad)
+
+- **Antídotos y Removedores de Estado:** Items adicionales para combate estratégico
+- **Habilidades Capas:** Múltiples habilidades con efectos complejos
+- **Evoluciones Temporales:** Cambios visuales durante batalla
+- **Tutorial Interactivo:** Enseñanza de mecánicas para nuevos jugadores
 
 ---
 
 ## 11. Timeline y Milestones
 
-| Milestone | Funcionalidad | Semana |
-|-----------|---------------|--------|
-| **Fase 1: MVP** | Backend setup, Pokémon CRUD, Batalla básica | Semana 1-2 |
-| **Fase 1: UI** | Tauri + Svelte frontend, selección equipo | Semana 2-3 |
-| **Fase 1: Multijugador** | Salas, WebSocket, sincronización | Semana 3-4 |
-| **Fase 2: Polish** | Animaciones, sonidos, efectos visuales | Semana 4-5 |
-| **Fase 2: Opcionales** | Items, baneos, stats dinámicos | Semana 5-6 |
+### Fase 1: MVP — Versión Mínima Funcional (Semanas 1-3)
+
+**Objetivo:** Entregar un juego completo y jugable sin opcionales
+
+| Milestone | Funcionalidad | Prioridad |
+|-----------|---------------|-----------|
+| **Backend MVP** | Pokémon CRUD, tipos, movimientos, fórmula daño | 🔴 Crítica |
+| **Sistema de Salas** | Crear, unirse, lobby, validación | 🔴 Crítica |
+| **Motor de Batalla** | Turnos, coinflip, daño, estados (3 turnos) | 🔴 Crítica |
+| **Frontend MVP** | Svelte + Vite, Battle UI, panel de acciones | 🔴 Crítica |
+| **WebSocket Real-time** | Sincronización jugadores, eventos batalla | 🔴 Crítica |
+| **Pokédex** | 300+ Pokémon cargados, sprites gen-v | 🔴 Crítica |
+| **UI Completa** | Menú principal, draft, lobby, batalla, fin | 🟡 Alta |
+| **Animaciones Básicas** | Ataque, daño, cambio, KO | 🟡 Alta |
+| **Testing** | Pruebas manuales batalla, multijugador | 🟡 Alta |
+
+**Resultado esperado:** Dos jugadores pueden completar una batalla 1v1 funcional
+
+### Fase 2: Mejoras y Pulido (Semanas 4-6, opcional)
+
+| Mejora | Impacto | Complejidad |
+|--------|--------|------------|
+| **Baneo de Pokémon (Draft)** | Profundidad competitiva ↑ | Media |
+| **IVs + Stats variables** | Rejugabilidad ↑ | Media |
+| **Orden avanzado (Prioridad+Velocidad)** | Balance competitivo ↑ | Media |
+| **Clima/Campos** | Estrategia ↑ | Alta |
+| **Temporizador por turno** | Competitividad ↑ | Baja |
+| **Replay + Historial** | Valor educativo ↑ | Media |
+| **Reconexión automática** | Confiabilidad ↑ | Media |
+| **Modo Espectador** | Experiencia social ↑ | Alta |
+| **Filtros avanzados** | Usabilidad ↑ | Baja |
+| **Sonidos + Música** | Inmersión ↑ | Baja |
+
+**Estrategia:** Implementar en orden de complejidad/impacto. MVP es suficiente para pasar; mejoras son bonus.
 
 ---
 
-## 12. Criterios de Éxito
+---
 
-- ✅ Batalla fluida sin lag (< 100ms latencia)
-- ✅ Mínimo 300 Pokémon disponibles
-- ✅ 2+ jugadores pueden jugar simultáneamente
-- ✅ UI responsive y atractiva
-- ✅ Sin necesidad de login
-- ✅ Efectos de estado funcionan correctamente
-- ✅ Coinflip balanceado (no favorece a ningún jugador)
+## 12. Criterios de Éxito — MVP
+
+### Funcionales
+
+- ✅ **Pokédex funcional:** Mínimo 300 Pokémon cargados desde PokeAPI, con sprites Gen V
+- ✅ **Movimientos válidos:** Cada Pokémon tiene exactamente 4 movimientos en batalla
+- ✅ **Sistema de Salas:** Crear sala → generar código → unirse por código → iniciar
+- ✅ **Batalla 1v1 completa:** Selección equipo → draft → batalla → fin de partida
+- ✅ **Cálculo de daño correcto:** Fórmula con tipo, STAB, crítico, aleatorio, quemadura
+- ✅ **Efectos de tipo:** Vulnerabilidades, resistencias, inmunidades funcionan (desde PokeAPI)
+- ✅ **Estados temporales:** Duran exactamente 3 turnos, se eliminen al cambiar Pokémon
+- ✅ **Orden de turnos:** Coinflip justo (50/50) para determinar quién ataca primero
+- ✅ **Victorias/Derrotas:** Sistema determina ganador correctamente
+- ✅ **Sincronización real-time:** WebSocket sin lag perceptible
+
+### Técnicos
+
+- ✅ **MongoDB:** Pokémon persistidos, salas, historial de batalla funcionales
+- ✅ **Backend (Hono+Bun):** Endpoints activos, WebSocket estable
+- ✅ **Frontend (Svelte+Vite):** UI responsiva, sin errores críticos
+- ✅ **Docker:** docker-compose.yml funcional, levanta todo en 1 comando
+- ✅ **Sin hardcodeo:** Datos desde PokeAPI, no tablas fijas
+
+### Calidad
+
+- ✅ **Sprites consistentes:** Gen V Black/White, sin mezcla de estilos
+- ✅ **Animaciones básicas:** Ataque, daño, cambio de Pokémon visibles
+- ✅ **Sin lag:** Latencia < 100ms en turnos de batalla
+- ✅ **2+ jugadores simultáneos:** Salas paralelas funcionan
 
 ---
 
@@ -863,17 +1155,27 @@ Mostrar en batalla:
 | PokeAPI lenta o offline | Alto | Caché en MongoDB, fallback a datos default |
 | Sincronización desincronizada | Alto | Implementar heartbeat + reconciliación |
 | MongoDB sobrecargado | Medio | Indexes en fields frecuentes, TTL automático |
-| Desbalance de tipos | Medio | Tabla de tipos estándar + testing |
-| Lag en red local | Bajo | WebSocket con compresión, delta sync |
+| Desbalance de tipos | Medio | Tabla de tipos estándar + testing manual |
+| Lag en red | Bajo | WebSocket con compresión, delta sync |
+| Errores en multijugador | Alto | Pruebas exhaustivas con 2 browsers |
 
 ---
 
 ## 14. Referencias y Recursos
 
 - **PokeAPI v2 Docs:** https://pokeapi.co/docs/v2
+- **PDF Especificaciones:** Enunciado funcional y fórmulas sugeridas
 - **Pokémon Type Chart:** https://pokémondb.net/type
 - **Tauri Docs:** https://tauri.app/
 - **Hono Docs:** https://hono.dev/
+- **MongoDB Docs:** https://docs.mongodb.com/
+
+---
+
+**Documento actualizado desde:** PDF Especificaciones (v1.0 - 2026-05-12) + PRD (v1.0 - 2026-05-12)  
+**Última actualización:** 13 de Mayo, 2026  
+**Estado:** Alineado con PDF, priorizando PRD en conflictos  
+**Próxima revisión:** Después de Fase 1
 - **MongoDB Docs:** https://docs.mongodb.com/
 
 ---
