@@ -1,10 +1,13 @@
 import { MainMenu } from '../components/MainMenu';
-import { createFileRoute } from '@tanstack/react-router';
+import { createRoute } from '@tanstack/react-router';
+import { Route as rootRoute } from './__root';
 
-export const route = createFileRoute('/')({
-  component: Home,
+export const Route = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: Index,
 });
 
-function Home() {
+function Index() {
   return <MainMenu />;
 }

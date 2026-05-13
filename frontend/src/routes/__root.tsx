@@ -1,4 +1,5 @@
-import { Outlet, createRootRoute } from '@tanstack/react-router';
+import { createRootRoute } from '@tanstack/react-router';
+import { MainMenu } from '../components/MainMenu';
 
 export const Route = createRootRoute({
   component: Root,
@@ -7,7 +8,7 @@ export const Route = createRootRoute({
 function Root() {
   return (
     <div className="app-container">
-      <Outlet />
+      <MainMenu />
     </div>
   );
 }
