@@ -1,22 +1,29 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "module": "ES2022",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true,
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "baseUrl": "./",
     "paths": {
-      "~/*": ["./src/*"]
-    }
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"],
+      "@routes/*": ["src/routes/*"],
+      "@assets/*": ["src/assets/*"]
+    },
+    "jsx": "react-jsx"
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
 }

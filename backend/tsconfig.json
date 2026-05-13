@@ -1,21 +1,27 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "bundler",
+    "module": "ESNext",
     "lib": ["ES2022"],
-    "types": ["bun-types"],
+    "moduleResolution": "bundler",
     "strict": true,
-    "skipLibCheck": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx",
-    "jsxImportSource": "hono"
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["src/*"],
+      "@types/*": ["src/types/*"],
+      "@services/*": ["src/services/*"],
+      "@routes/*": ["src/routes/*"],
+      "@middleware/*": ["src/middleware/*"]
+    }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "dist"]
 }

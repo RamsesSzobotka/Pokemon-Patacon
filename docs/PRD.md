@@ -44,17 +44,20 @@ Pokémon Patacon es un videojuego de batallas Pokémon en tiempo real donde dos 
 | **Timeout de Sala** | Salas inactivas se cierran después de 30 minutos |
 | **Lobby Pre-batalla** | Ambos jugadores seleccionan equipo antes de iniciar |
 
-### 3.2 Pokédex Disponible (Generación V)
+### 3.2 Pokédex Disponible (Generación V - Pool Fijo)
 
-**Pool de Pokémon:** Mínimo 300 Pokémon importados desde PokéAPI (Generación V)
+**Pool de Pokémon:** Exactamente **493 Pokémon** (Gen I-V, fijo del proyecto)
 
 - **Generación V (Unova natives):** 156 Pokémon nuevos (Victini, Snivy, Tepig, Oshawott, ... Genesect)
-- **Generaciones anteriores:** Compatibilidad con Pokémon de Gen I-IV que pueden evolucionar en Gen V
-- **Total disponible:** 493 Pokémon de Gen I-V (priorizando Gen V en UI)
-- **Legendarios:** Máximo 1 legendario por equipo
-- **Sprites Black/White:** Todos los Pokémon mostrarán sus sprites .gif animados de Black/White desde PokeAPI
-- **Movepool:** Se usa el movepool de Generación V para cada Pokémon
-- **Data:** Importada desde PokeAPI v2 y persistida en MongoDB (no hardcodeada)
+- **Generaciones anteriores:** 337 Pokémon de Gen I-IV que evolucionan en Gen V o tienen movepool compatible con Gen V
+- **Total disponible:** **493 Pokémon de ID 1-649** (excluidos: Pokémon Gen VI+)
+- **Legendarios:** Máximo 1 por equipo. Lista validada: ~48 legendarios incluidos Victini, Reshiram, Zekrom, Kyurem, etc. *(ver LEGENDARIOS.md para lista completa)*
+- **Sprites Black/White:** Todos los 493 mostrarán sprites .gif animados de Pokémon Black/White desde PokeAPI:
+  - URL oficial: `https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/versions/generation-v/black-white/animated/{id}.gif`
+  - Fallback a PNG si .gif no disponible
+- **Movepool:** Cada Pokémon tiene exactamente 4 movimientos válidos en Gen V (validados en PokeAPI)
+- **Validación:** Todos los 493 tienen 4+ movimientos válidos; ninguno se excluye por falta de movimientos
+- **Data:** Importada desde PokeAPI v2 al iniciar; persistida en MongoDB para caché local (no hardcodeada)
 
 ### 3.3 Selección de Equipo
 
@@ -334,33 +337,45 @@ if (status.remainingTurns <= 0) removeStatus(target)
 
 | Capa | Tecnología | Propósito |
 |------|-----------|----------|
-| **Frontend** | TanStack Start + Vite | Desktop app nativa, UI moderna |
-| **Backend** | Bun + Hono | Servidor HTTP/WebSocket rápido y ligero |
+| **Frontend** | TanStack Start + Vite | Web progresiva (SPA), UI moderna, sin compilación nativa |
+| **Backend** | Bun + Hono | Servidor HTTP/WebSocket rápido y ligero, sin Node.js |
 | **Base de Datos** | MongoDB | Almacenar Pokémon cacheados, salas, historial |
 | **API Externa** | PokeAPI v2 | Datos de Pokémon (https://pokeapi.co/api/v2/) |
 
 ### 4.2 Arquitectura
 
+**Plataforma:** Aplicación Web Progresiva (SPA) ejecutada en navegador, sin requerimientos de instalación nativa.
+
 ```
 ┌─────────────────────────────────────────┐
-│         Tauri Window (Svelte/Vite)      │
-│  - UI Batalla                           │
-│  - Selección de Equipo                  │
-│  - Salas Multijugador                   │
+│      Navegador (TanStack Start + Vite)  │
+│  - UI Batalla en tiempo real             │
+│  - Selección de Equipo (draft)           │
+│  - Gestión de Salas Multijugador         │
+│  - WebSocket conectado permanente        │
 └────────────┬────────────────────────────┘
-             │ HTTP + WebSocket
+             │ HTTP + WebSocket (ws://)
              ↓
 ┌─────────────────────────────────────────┐
-│      Hono Server (Bun)                  │
-│  - Endpoints: GET /pokemon/:id          │
-│  - WebSocket: /battle/:room_id          │
-│  - Logic: Turno, Daño, Sincronización  │
+│      Hono Server (Bun Runtime)          │
+│  - REST API: GET /api/pokemon/:id       │
+│  - WebSocket: ws://host/battle/:roomId  │
+│  - Motor de Batalla: turnos, daño       │
+│  - Sincronización en tiempo real         │
+│  - Gestión de salas en memoria          │
 └────────────┬────────────────────────────┘
              │
    ┌─────────┼─────────┐
    ↓         ↓         ↓
-MongoDB   PokeAPI   Cache
+MongoDB   PokeAPI   Cache Local
+(persistencia) (fetch on-demand) (sprites, type matchups)
 ```
+
+**Notas de Implementación:**
+- CORS habilitado en Bun para desarrollo (`localhost:*`) y producción (dominio específico)
+- WebSocket nativo: Bun maneja upgrade de HTTP a WS automáticamente
+- Salas: estado en memoria de Bun + persistencia opcional en MongoDB para historial
+- Sprites: descargados on-demand desde PokeAPI, cacheados en navegador + MongoDB
 
 ### 4.3 Endpoints Básicos
 
