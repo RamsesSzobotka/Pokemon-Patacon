@@ -334,7 +334,7 @@ if (status.remainingTurns <= 0) removeStatus(target)
 
 | Capa | Tecnología | Propósito |
 |------|-----------|----------|
-| **Frontend** | TanStack Start + Vite | Desktop app nativa, UI moderna |
+| **Frontend** | Tauri + Svelte + Vite | Desktop app nativa, UI moderna |
 | **Backend** | Bun + Hono | Servidor HTTP/WebSocket rápido y ligero |
 | **Base de Datos** | MongoDB | Almacenar Pokémon cacheados, salas, historial |
 | **API Externa** | PokeAPI v2 | Datos de Pokémon (https://pokeapi.co/api/v2/) |

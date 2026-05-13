@@ -35,42 +35,43 @@ Construir la base del sistema: API REST, conexión a MongoDB, cliente de PokeAPI
 ### Tareas
 
 #### 1.1 Configuración del Entorno Backend
-- [ ] Inicializar proyecto Bun + Hono
-- [ ] Configurar TypeScript
-- [ ] Crear estructura de carpetas (routes, services, models, middleware)
-- [ ] Configurar variables de entorno (.env)
+- [x] Inicializar proyecto Bun + Hono ✅
+- [x] Configurar TypeScript ✅
+- [x] Crear estructura de carpetas (routes, services, models, middleware) ✅
+- [x] Configurar variables de entorno (.env) ✅
 
 #### 1.2 Conexión a MongoDB
-- [ ] Instalar driver MongoDB (`npm install mongodb`)
-- [ ] Crear cliente de conexión en `backend/src/db/mongo.ts`
-- [ ] Definir esquemas (schemas) para:
-  - Pokémon (pokemon.ts)
-  - Salas (room.ts)
+- [x] Instalar driver MongoDB (`bun add mongodb`) ✅
+- [x] Crear cliente de conexión en `backend/src/db/mongo.ts` ✅
+- [x] Definir esquemas (schemas) para:
+  - Pokémon (pokemon.ts) ✅
+  - Salas (room.ts) ✅
 
 #### 1.3 Cliente PokeAPI con Caché
-- [ ] Crear servicio en `backend/src/services/pokeapiClient.ts`
-- [ ] Implementar función para obtener Pokémon por ID
-- [ ] **Validar exactamente 4 movimientos:** Excluir Pokémon con < 4 movimientos válidos
-- [ ] Implementar cacheo en MongoDB
-- [ ] Agregar lógica de TTL (30 días)
-- [ ] **Importante:** No hacer excepciones; si un Pokémon no tiene 4 movimientos, debe excluirse o documentarse
+- [x] Crear servicio en `backend/src/services/pokeapiClient.ts` ✅
+- [x] Implementar función para obtener Pokémon por ID ✅
+- [x] **Validar exactamente 4 movimientos:** Excluir Pokémon con < 4 movimientos válidos ✅
+- [x] Implementar cacheo en MongoDB ✅
+- [x] Agregar lógica de TTL (30 días) ✅
+- [x] **Importante:** No hacer excepciones; si un Pokémon no tiene 4 movimientos, debe excluirse o documentarse ✅
 
 #### 1.4 API REST - Endpoints Pokémon
-- [ ] `GET /api/pokemon/:id` - Obtener Pokémon por ID
-- [ ] `GET /api/pokemon/search?query=` - Búsqueda por nombre
-- [ ] `GET /api/types` - Obtener tabla de tipos
-- [ ] `GET /api/moves/:id` - Obtener datos de habilidad
-- [ ] `GET /api/legendaries` - Listar legendarios
+- [x] `GET /api/pokemon/:id` - Obtener Pokémon por ID ✅
+- [x] `GET /api/pokemon/search?query=` - Búsqueda por nombre ✅
+- [x] `GET /api/types` - Obtener tabla de tipos ✅
+- [x] `GET /api/moves/:id` - Obtener datos de habilidad ✅
+- [x] `GET /api/pokemon/legendaries/all` - Listar legendarios ✅
 
 #### 1.5 API REST - Endpoints de Salas
-- [ ] `POST /api/rooms` - Crear sala (generar código único)
-- [ ] `GET /api/rooms/:code` - Obtener estado de sala
-- [ ] `DELETE /api/rooms/:code` - Eliminar/cancelar sala
-- [ ] `POST /api/rooms/:code/join` - Unirse a sala
+- [x] `POST /api/rooms` - Crear sala (generar código único) ✅
+- [x] `GET /api/rooms/:code` - Obtener estado de sala ✅
+- [x] `DELETE /api/rooms/:code` - Eliminar/cancelar sala ✅
+- [x] `POST /api/rooms/:code/join` - Unirse a sala ✅
+- [x] `POST /api/rooms/:code/leave` - Salir de sala (extra) ✅
 
 #### 1.6 Carga Inicial de Datos
-- [ ] Crear script seeds.ts para pre-cargar Gen V (156 Pokémon)
-- [ ] Ejecutar carga inicial
+- [x] Mejorar `backend/src/db/seeds.ts` para cargar stats y moves completos ✅
+- [ ] Ejecutar carga inicial (requiere MongoDB corriendo)
 
 **Entregable FASE 1:** Backend exposes Pokémon data via REST API, salas creables desde Postman/curl
 
@@ -84,7 +85,7 @@ Implementar la lógica de batallas en tiempo real y sincronización entre jugado
 ### Tareas
 
 #### 2.1 Servidor WebSocket
-- [ ] Configurar WebSocket en Hono (`npm install ws`)
+- [ ] Configurar WebSocket en Hono (`bun add ws`)
 - [ ] Crear handler en `backend/src/websocket/handler.ts`
 - [ ] Implementar manejo de conexiones por sala
 - [ ] Agregar heartbeat para detectar desconexiones
