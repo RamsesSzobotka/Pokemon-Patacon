@@ -7,13 +7,22 @@ const rooms = new Hono();
 
 // ============ MIDDLEWARE ============
 
-// Extraer session_id del header o body
+// Extraer session_id del header, query params o body
 function getSessionId(c: any): string | null {
   // Primero verificar header
   const headerSessionId = c.req.header('X-Session-Id');
   if (headerSessionId) return headerSessionId;
   
-  // Luego verificar body
+  // Luego verificar query params
+  const querySessionId = c.req.query('session_id');
+  if (querySessionId) return querySessionId;
+  
+  // Para POST requests, verificar body
+  if (c.req.method !== 'GET') {
+    const body = c.req.body;
+    if (body && body.session_id) return body.session_id;
+  }
+  
   return null;
 }
 
@@ -65,6 +74,7 @@ rooms.post('/', async (c) => {
 rooms.get('/:code', async (c) => {
   try {
     const code = c.req.param('code');
+    const sessionId = getSessionId(c);
     
     if (!code) {
       return c.json({
@@ -73,7 +83,7 @@ rooms.get('/:code', async (c) => {
       }, 400);
     }
     
-    const result = await getRoom(code);
+    const result = await getRoom(code, sessionId || undefined);
     
     if (!result.success) {
       return c.json({

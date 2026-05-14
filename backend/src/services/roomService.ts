@@ -29,7 +29,7 @@ export interface JoinRoomResponse {
 
 export interface GetRoomResponse {
   success: boolean;
-  room?: Room;
+  room?: Room & { isHost?: boolean };
   message?: string;
 }
 
@@ -100,7 +100,7 @@ export async function createRoom(sessionId: string, playerName: string = 'Jugado
 /**
  * Obtiene una sala por código
  */
-export async function getRoom(code: string): Promise<GetRoomResponse> {
+export async function getRoom(code: string, sessionId?: string): Promise<GetRoomResponse> {
   try {
     if (!code || typeof code !== 'string') {
       return {
@@ -118,12 +118,18 @@ export async function getRoom(code: string): Promise<GetRoomResponse> {
       };
     }
     
+    // Determinar si el solicitante es el host
+    const isHost = sessionId ? room.players.player1.session_id === sessionId : undefined;
+    
     // No exponer información sensible
     const safeRoom = sanitizeRoom(room);
     
     return {
       success: true,
-      room: safeRoom
+      room: {
+        ...safeRoom,
+        isHost
+      }
     };
   } catch (error) {
     console.error('Error obteniendo sala:', error);

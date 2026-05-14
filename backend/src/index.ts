@@ -6,6 +6,8 @@ import { pokemonService } from './services/pokemonService';
 import { initializeRoomsIndexes } from './db/rooms';
 import pokemonRoutes from './routes/pokemon';
 import roomRoutes from './routes/rooms';
+import { handleMessage, handleClose } from './websocket/handler';
+import { cleanup as cleanupWebSocket } from './websocket/roomManager';
 
 // Initialize Hono app
 const app = new Hono();
@@ -37,18 +39,7 @@ app.get('/', (c) => {
     endpoints: {
       health: '/api/health',
       pokemon: '/api/pokemon',
-      pokemonList: '/api/pokemon?limit=50&offset=0&types=fire,water&generation=1&legendary=false',
-      pokemonSearch: '/api/pokemon/search?q=pikachu',
-      pokemonById: '/api/pokemon/1',
-      pokemonByType: '/api/pokemon/type/fire',
-      pokemonByGeneration: '/api/pokemon/generation/1',
-      legendary: '/api/pokemon/legendary',
-      mythical: '/api/pokemon/mythical',
-      types: '/api/pokemon/meta/types',
-      generations: '/api/pokemon/meta/generations',
       rooms: '/api/rooms',
-      roomJoin: '/api/rooms/:code/join',
-      roomTeam: '/api/rooms/:code/team',
       battle: 'ws://localhost:3000/battle/:room_code'
     }
   });
@@ -82,6 +73,106 @@ app.onError((err, c) => {
 // Start server
 const PORT = parseInt(process.env.PORT || '3000');
 
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Shutting down...');
+  cleanupWebSocket();
+  await disconnectDB();
+  process.exit(0);
+});
+
+// ============ WEBSOCKET SERVER (Bun native) ============
+
+interface WSData {
+  roomCode: string;
+  sessionId: string;
+}
+
+// Almacenar clientes WebSocket por sesión
+const wsClients = new Map<string, WebSocket>();
+
+// Usar Bun.serve con la API correcta de Bun
+const server = Bun.serve<WSData>({
+  port: PORT,
+  fetch(req, server) {
+    const url = new URL(req.url);
+    
+    // Solo manejar conexiones WebSocket en /ws/
+    if (url.pathname.startsWith('/ws/')) {
+      const pathParts = url.pathname.replace('/ws/', '').split('?');
+      const roomCode = pathParts[0].toUpperCase();
+      const sessionId = url.searchParams.get('session_id');
+      
+      if (!sessionId) {
+        return new Response('session_id requerido', { status: 400 });
+      }
+      
+      const success = server.upgrade(req, {
+        data: { roomCode, sessionId }
+      });
+      
+      if (success) {
+        return; // Upgrade completado
+      }
+      
+      return new Response('WebSocket upgrade falló', { status: 500 });
+    }
+    
+    // Para otras rutas, usar el fetch de Hono
+    return app.fetch(req);
+  },
+  websocket: {
+    open(ws) {
+      const data = ws.data as WSData;
+      wsClients.set(data.sessionId, ws as any);
+      
+      console.log(`[WS] Conexión abierta: ${data.sessionId} -> sala ${data.roomCode}`);
+      
+      // Enviar confirmación de conexión
+      ws.send(JSON.stringify({
+        type: 'connected',
+        data: { roomCode: data.roomCode }
+      }));
+    },
+    
+    message(ws, message) {
+      const data = ws.data as WSData;
+      
+      // Ignorar mensajes binarios o vacíos
+      if (!message || typeof message !== 'string') return;
+      
+      // Pasar al handler de mensajes
+      try {
+        handleMessage(ws as any, message.toString());
+      } catch (err) {
+        console.error('[WS] Error procesando mensaje:', err);
+      }
+    },
+    
+    close(ws, code, reason) {
+      const data = ws.data as WSData;
+      wsClients.delete(data.sessionId);
+      
+      console.log(`[WS] Conexión cerrada: ${data.sessionId} (code: ${code})`);
+      
+      // Notificar al handler de desconexión
+      try {
+        handleClose(ws as any);
+      } catch (err) {
+        console.error('[WS] Error en close handler:', err);
+      }
+    },
+    
+    error(ws, error) {
+      const data = ws.data as WSData;
+      console.error(`[WS] Error en ${data.sessionId}:`, error);
+    }
+  }
+});
+
+console.log(`🔌 WebSocket server en ws://localhost:${PORT}/ws/:room_code?session_id=xxx`);
+
+// Iniciar servidor con conexión a MongoDB
 async function startServer() {
   try {
     // Conectar a MongoDB
@@ -108,16 +199,6 @@ async function startServer() {
   }
 }
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Shutting down...');
-  await disconnectDB();
-  process.exit(0);
-});
-
 startServer();
 
-export default {
-  port: PORT,
-  fetch: app.fetch,
-};
+export default server;

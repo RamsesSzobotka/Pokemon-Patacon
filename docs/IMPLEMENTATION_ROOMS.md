@@ -1,9 +1,9 @@
 # Implementación Sistema de Salas - Pokemon Patacon
 
-**Versión:** 1.0  
-**Fecha:** 13 de Mayo de 2026  
-**Estado:** Especificación Técnica  
-**Proyecto:** Sistema de Salas + WebSocket
+**Versión:** 1.1  
+**Fecha:** 14 de Mayo de 2026  
+**Estado:** Parcialmente Implementado  
+**Proyecto:** Sistema de Salas + Polling (WebSocket pendiente)
 
 ---
 
@@ -168,8 +168,31 @@ POST /api/rooms
 | Aspecto | Valor |
 |---------|-------|
 | **Endpoint** | `GET /api/rooms/:code` |
-| **Respuesta 200** | `{ code, state, players, ... }` |
+| **Query Params** | `?session_id=uuid` (requerido para determinar host) |
+| **Respuesta 200** | `{ code, state, players, isHost, ... }` |
 | **Errores** | 404 si no existe |
+
+**Respuesta incluye:**
+- `isHost: boolean` - indica si el cliente actual es el creador (player1)
+
+```json
+// Request
+GET /api/rooms/AB12CD?session_id=abc123
+
+// Response 200
+{
+  "success": true,
+  "room": {
+    "code": "AB12CD",
+    "state": "waiting",
+    "players": {
+      "player1": { "session_id": "abc123", "player_name": "Ash", "ready": false },
+      "player2": { "session_id": "def456", "player_name": "Misty", "ready": false }
+    },
+    "isHost": true   // ← Basado en session_id vs player1.session_id
+  }
+}
+```
 
 ### 4.3 Unirse a Sala
 
@@ -563,24 +586,30 @@ Bun.serve({
 
 ---
 
-## 11. Archivos a Crear/Modificar
+## 11. Archivos Creados/Modificados
 
-### Nuevos
+### Implementados ✅
 
 | Archivo | Descripción |
 |---------|-------------|
 | `src/db/rooms.ts` | Conexión + funciones CRUD para rooms |
-| `src/services/roomService.ts` | Lógica de negocio de salas |
-| `src/routes/rooms.ts` | Endpoints REST |
+| `src/services/roomService.ts` | Lógica de negocio + campo `isHost` |
+| `src/routes/rooms.ts` | Endpoints REST + `isHost` en GET |
+| `frontend/src/components/MainMenu.tsx` | UI lobby + polling + botones según host |
+
+### Por Crear ⏳
+
+| Archivo | Descripción |
+|---------|-------------|
 | `src/websocket/handler.ts` | WebSocket message handler |
 | `src/websocket/roomManager.ts` | Gestión de conexiones por sala |
 
-### Modificar
+### Por Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/index.ts` | Agregar rutas rooms + WebSocket server |
-| `docs/WEBSOCKET_PROTOCOL.md` | Actualizar con eventos de sala |
+| `src/index.ts` | Agregar WebSocket server |
+| `frontend/src/components/MainMenu.tsx` | Reemplazar polling por WebSocket |
 
 ---
 
@@ -601,7 +630,72 @@ Bun.serve({
 
 ---
 
-## 13. Referencias
+## 13. Estado de Implementación
+
+### Implementado ✅
+
+| Componente | Archivo | Estado |
+|------------|---------|--------|
+| Estructura Room en MongoDB | `backend/src/db/rooms.ts` | ✅ Completo |
+| Servicio de salas | `backend/src/services/roomService.ts` | ✅ Completo |
+| Endpoint POST /api/rooms (crear) | `backend/src/routes/rooms.ts` | ✅ Completo |
+| Endpoint GET /api/rooms/:code | `backend/src/routes/rooms.ts` | ✅ Completo + `isHost` |
+| Endpoint POST /api/rooms/:code/join | `backend/src/routes/rooms.ts` | ✅ Completo |
+| Endpoint PUT /api/rooms/:code/state | `backend/src/routes/rooms.ts` | ✅ Completo |
+| Endpoint POST /api/rooms/:code/ready | `backend/src/routes/rooms.ts` | ✅ Completo |
+| Endpoint POST /api/rooms/:code/leave | `backend/src/routes/rooms.ts` | ✅ Completo |
+| Lobby UI con botones | `frontend/src/components/MainMenu.tsx` | ✅ Completo |
+| Detección de host por backend | `backend/src/routes/rooms.ts` | ✅ Completo |
+| Polling para estado de sala | `frontend/src/components/MainMenu.tsx` | ✅ Completo |
+
+### Pendiente ⏳
+
+| Componente | Descripción | Prioridad |
+|------------|-------------|-----------|
+| **WebSocket server** | Servidor WS con Bun + Hono para comunicación en tiempo real | Alta |
+| **WebSocket room manager** | Gestión de conexiones por sala | Alta |
+| **WS connection:init** | Evento para inicializar conexión WS | Alta |
+| **WS player:joined** | Notificación cuando opponent se conecta | Alta |
+| **WS draft:start** | Evento para iniciar draft (solo host) | Alta |
+| **WS team:confirmed** | Confirmación de equipo por jugador | Media |
+| **WS team:waiting** | Indicador de esperar al opponent | Media |
+| **WS team:ready** | Ambos equipos listos → iniciar batalla | Media |
+| **Reemplazar polling por WS** | Cambiar polling 2s por eventos WebSocket | Media |
+| **Desconexión handling** | Notificar cuando opponent se desconecta | Media |
+| **TTL 30 min** | Auto-delete de salas inactivas en MongoDB | Baja |
+
+---
+
+## 14. Próximos Pasos (Prioridad)
+
+### Paso 1: Implementar WebSocket Server (Alta)
+
+Crear `backend/src/websocket/handler.ts` y `backend/src/websocket/roomManager.ts`:
+- Configurar Bun.serve con upgrade manual para WebSocket
+- Rutas: `/ws/:room_code?session_id=xxx`
+- Eventos: `connection:init`, `draft:start`, `team:confirmed`, `ping`
+
+### Paso 2: Reemplazar Polling por WebSocket (Alta)
+
+Modificar `frontend/src/components/MainMenu.tsx`:
+- Conectar a WebSocket en lugar de polling cada 2 segundos
+- Escuchar eventos: `room:joined`, `player:joined`, `room:state`
+
+### Paso 3: Sistema de Draft (Media)
+
+Implementar flujo de selección de Pokémon:
+- `draft:started` → `draft:pick` → `draft:confirm`
+- Validaciones: 6 Pokémon, 4 moves, máximo 1 legendario
+
+### Paso 4: Inicio de Batalla (Media)
+
+Conectar draft con sistema de batallas:
+- Crear documento en `battles` collection
+- Transición: `in_draft` → `in_battle`
+
+---
+
+## 15. Referencias
 
 - **PRD.md** - Sección 3.1 (Sistema de Salas), 7 (Flujo de Juego)
 - **SCHEMAS_MONGODB.md** - Sección 2 (rooms collection)
@@ -610,4 +704,5 @@ Bun.serve({
 ---
 
 **Documento creado:** 13 Mayo 2026  
-**Próximo paso:** Implementar según este documento
+**Última actualización:** 14 Mayo 2026  
+**Próximo paso:** Implementar WebSocket Server (`backend/src/websocket/`)

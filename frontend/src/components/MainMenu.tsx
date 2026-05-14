@@ -30,6 +30,7 @@ const MainMenu: React.FC = () => {
   const [isHost, setIsHost] = useState(false);
   const [player1DisplayName, setPlayer1DisplayName] = useState<string>('Jugador 1');
   const [player2DisplayName, setPlayer2DisplayName] = useState<string>('Esperando oponente...');
+  const [playerNumber, setPlayerNumber] = useState<number>(0); // 1 o 2, 0 = no know
 
   // Audio background music ref
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -73,59 +74,157 @@ const MainMenu: React.FC = () => {
     }
   }, []);
 
-  // Poll room status when in lobby (createdRoomCode present)
+  // WebSocket connection for real-time room updates
   useEffect(() => {
-    let timer: any = null;
-    async function poll() {
+    let ws: WebSocket | null = null;
+    let reconnectTimer: NodeJS.Timeout | null = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT = 5;
+
+    function connect() {
       if (!createdRoomCode) return;
-      try {
-        const res = await fetch(`/api/rooms/${createdRoomCode}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data && data.success && data.room) {
-          const room = data.room as any;
-          // player2 connected if session_id present
-          const p2 = room.players?.player2;
-          const p1 = room.players?.player1;
-          // determine if current session is host
-          if (p1 && p1.session_id && p1.session_id !== 'masked') {
-            // p1.session_id is masked in sanitized response; instead check local sessionId equality by separate fetch? fallback: if our sessionId equals stored patacon_session_id and matches created host name => setIsHost
-          }
-          if (p2 && p2.session_id) {
-            setOpponentConnected(true);
-            setOpponentName(p2.player_name || 'Jugador 2');
-            setOpponentReady(!!p2.ready);
-          } else {
-            setOpponentConnected(false);
-            setOpponentName(null);
-            setOpponentReady(false);
-          }
 
-          // set player ready from server (player1)
-          if (p1) {
-            setPlayerReady(!!p1.ready);
-            setPlayer1DisplayName(p1.player_name || 'Jugador 1');
-            setIsHost(p1.player_name === playerName || p1.session_id === 'masked');
-          }
+      const wsUrl = `ws://localhost:3000/ws/${createdRoomCode}?session_id=${encodeURIComponent(sessionId)}`;
+      ws = new WebSocket(wsUrl);
 
-          if (p2 && p2.player_name) {
-            setPlayer2DisplayName(p2.player_name);
+      ws.onopen = () => {
+        console.log('[WS] Connected to room:', createdRoomCode);
+        reconnectAttempts = 0;
+
+        // Enviar init al servidor
+        ws!.send(JSON.stringify({
+          type: 'connection:init',
+          data: { session_id: sessionId, room_code: createdRoomCode }
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+
+          switch (message.type) {
+            case 'connected':
+              console.log('[WS] Server confirmed connection');
+              break;
+
+            case 'room:joined':
+              // Guardar el número de jugador que viene del backend
+              if (typeof message.data.player_number === 'number') {
+                setPlayerNumber(message.data.player_number);
+              }
+              // Usar isHost del backend
+              if (typeof message.data.isHost === 'boolean') {
+                setIsHost(message.data.isHost);
+              }
+              // Actualizar estados de readiness
+              if (message.data.your_ready !== undefined) {
+                setPlayerReady(!!message.data.your_ready);
+              }
+              if (message.data.opponent_ready !== undefined) {
+                setOpponentReady(!!message.data.opponent_ready);
+              }
+              // Actualizar nombres de jugadores desde el inicio
+              if (message.data.player1_name) {
+                setPlayer1DisplayName(message.data.player1_name);
+              }
+              if (message.data.player2_name) {
+                setPlayer2DisplayName(message.data.player2_name || 'Esperando oponente...');
+              }
+              break;
+
+            case 'player:joined':
+              setOpponentConnected(true);
+              setOpponentName(message.data.player_name);
+              setPlayer2DisplayName(message.data.player_name);
+              // También actualizar player_number si viene
+              if (typeof message.data.player_number === 'number') {
+                setPlayerNumber(message.data.player_number);
+              }
+              // Actualizar nombres si vienen
+              if (message.data.player1_name) {
+                setPlayer1DisplayName(message.data.player1_name);
+              }
+              if (message.data.player2_name) {
+                setPlayer2DisplayName(message.data.player2_name);
+              }
+              break;
+
+            case 'player:left':
+              if (message.data.session_id !== sessionId) {
+                setOpponentConnected(false);
+                setOpponentName(null);
+                setOpponentReady(false);
+                setPlayer2DisplayName('Esperando oponente...');
+              }
+              break;
+
+            case 'room:state':
+              // Actualizar número de jugador si viene
+              if (typeof message.data.player_number === 'number') {
+                setPlayerNumber(message.data.player_number);
+              }
+              // Actualizar estados de readiness
+              if (message.data.your_ready !== undefined) {
+                setPlayerReady(!!message.data.your_ready);
+              }
+              if (message.data.opponent_ready !== undefined) {
+                setOpponentReady(!!message.data.opponent_ready);
+              }
+              if (message.data.opponent_connected !== undefined) {
+                setOpponentConnected(!!message.data.opponent_connected);
+              }
+              // Actualizar nombres de jugadores
+              if (message.data.player1_name) {
+                setPlayer1DisplayName(message.data.player1_name);
+              }
+              if (message.data.player2_name) {
+                setPlayer2DisplayName(message.data.player2_name);
+                setOpponentName(message.data.player2_name);
+              }
+              // Sincronizar isHost del backend
+              if (typeof message.data.isHost === 'boolean') {
+                setIsHost(message.data.isHost);
+              }
+              break;
+
+            case 'pong':
+              // Heartbeat response - conexión viva
+              break;
+
+            case 'error':
+              console.error('[WS] Server error:', message.message);
+              break;
           }
+        } catch (e) {
+          console.error('[WS] Failed to parse message:', e);
         }
-      } catch (e) {
-        // ignore
-      }
+      };
+
+      ws.onclose = (event) => {
+        console.log(`[WS] Disconnected (code: ${event.code})`);
+
+        // Auto-reconectar si no fue un cierre intencional
+        if (event.code !== 1000 && reconnectAttempts < MAX_RECONNECT) {
+          reconnectAttempts++;
+          console.log(`[WS] Reconnecting... attempt ${reconnectAttempts}/${MAX_RECONNECT}`);
+          reconnectTimer = setTimeout(connect, 2000 * reconnectAttempts);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('[WS] WebSocket error:', error);
+      };
     }
 
-    if (createdRoomCode) {
-      poll();
-      timer = setInterval(poll, 2000);
-    }
+    connect();
 
     return () => {
-      if (timer) clearInterval(timer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.close(1000, 'Component unmounting');
+      }
     };
-  }, [createdRoomCode]);
+  }, [createdRoomCode, sessionId]);
 
   const handleCreateRoom = async () => {
     if (!playerName.trim()) {
@@ -145,13 +244,25 @@ const MainMenu: React.FC = () => {
       });
 
       const data = await response.json();
-      if (data.success) {
-        setCreatedRoomCode(data.code);
-        localStorage.setItem('patacon_room_code', data.code);
-        setScreen('create');
-      } else {
+      
+      if (!response.ok || !data.success) {
+        console.error('[CreateRoom] Error response:', data);
         alert(`❌ ${data.error || 'Error al crear la sala'}`);
+        return;
       }
+      
+      // Sincronizar con el servidor REST inmediatamente
+      const roomRes = await fetch(`/api/rooms/${data.code}?session_id=${encodeURIComponent(sessionId)}`);
+      const roomData = await roomRes.json();
+      
+      if (roomData.success && roomData.room) {
+        // Establecer isHost desde el backend inmediatamente
+        setIsHost(!!roomData.room.isHost);
+      }
+      
+      setCreatedRoomCode(data.code);
+      localStorage.setItem('patacon_room_code', data.code);
+      setScreen('create');
     } catch (error) {
       console.error('Error creating room:', error);
       alert('❌ Error al crear la sala');
@@ -184,7 +295,16 @@ const MainMenu: React.FC = () => {
       const data = await response.json();
       if (data.success) {
         console.log('Joined room:', data);
-        // Guardar código y navegar al lobby del creador
+        
+        // Sincronizar con el servidor REST para obtener isHost
+        const roomRes = await fetch(`/api/rooms/${data.code}?session_id=${encodeURIComponent(sessionId)}`);
+        const roomData = await roomRes.json();
+        
+        if (roomData.success && roomData.room) {
+          setIsHost(!!roomData.room.isHost);
+        }
+        
+        // Guardar código y navegar al lobby
         localStorage.setItem('patacon_room_code', data.code);
         setCreatedRoomCode(data.code);
         setScreen('create');
@@ -315,26 +435,26 @@ const MainMenu: React.FC = () => {
                   <div className="players-list">
                     <h4>Jugadores Conectados</h4>
                     <ul>
-                      <li className="player1">
+                      <li className={`player1 ${playerNumber === 1 ? 'you' : ''}`}>
                         <div>
                           <span className="player-name">{player1DisplayName}</span>
-                          <span className="player-role"> (Tú)</span>
+                          <span className="player-role">{playerNumber === 1 ? ' (Tú)' : ''}</span>
                         </div>
-                        <div className={`player-status ${playerReady ? 'ready' : 'waiting'}`}>
-                          <span className="status-icon">{playerReady ? '✓' : '○'}</span>
-                          <span>{playerReady ? 'LISTO' : 'Esperando'}</span>
+                        <div className={`player-status ${(playerNumber === 1 ? playerReady : opponentReady) ? 'ready' : 'waiting'}`}>
+                          <span className="status-icon">{playerNumber === 1 ? playerReady : opponentReady ? '✓' : '○'}</span>
+                          <span>{playerNumber === 1 ? playerReady : opponentReady ? 'LISTO' : 'Esperando'}</span>
                         </div>
                       </li>
-                      <li className={`player2 ${opponentConnected ? 'connected' : ''}`}>
+                      <li className={`player2 ${playerNumber === 2 ? 'you' : ''} ${opponentConnected ? 'connected' : ''}`}>
                         <div>
                           <span className="player-name">
                             {opponentConnected ? player2DisplayName : 'Esperando oponente...'}
                           </span>
-                          {opponentConnected && <span className="player-role"> (Oponente)</span>}
+                          <span className="player-role">{playerNumber === 2 ? ' (Tú)' : opponentConnected ? ' (Oponente)' : ''}</span>
                         </div>
-                        <div className={`player-status ${opponentReady ? 'ready' : 'waiting'}`}>
-                          <span className="status-icon">{opponentReady ? '✓' : opponentConnected ? '○' : '...'}</span>
-                          <span>{opponentReady ? 'LISTO' : opponentConnected ? 'Esperando' : 'Conectando...'}</span>
+                        <div className={`player-status ${(playerNumber === 2 ? playerReady : opponentReady) ? 'ready' : 'waiting'}`}>
+                          <span className="status-icon">{playerNumber === 2 ? playerReady : opponentReady ? '✓' : opponentConnected ? '○' : '...'}</span>
+                          <span>{playerNumber === 2 ? playerReady : opponentReady ? 'LISTO' : opponentConnected ? 'Esperando' : 'Conectando...'}</span>
                         </div>
                       </li>
                     </ul>
