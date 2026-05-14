@@ -296,10 +296,30 @@ const MainMenu: React.FC = () => {
                     Tu oponente debe ingresar el código<br />para unirse a esta sala
                   </p>
                   <div className="players-list">
-                    <h4>Jugadores conectados</h4>
+                    <h4>Jugadores Conectados</h4>
                     <ul>
-                      <li>{player1DisplayName} {playerReady ? ' - Listo' : ''}</li>
-                      <li>{opponentConnected ? player2DisplayName : 'Esperando oponente...'} {opponentReady ? ' - Listo' : ''}</li>
+                      <li className="player1">
+                        <div>
+                          <span className="player-name">{player1DisplayName}</span>
+                          <span className="player-role"> (Tú)</span>
+                        </div>
+                        <div className={`player-status ${playerReady ? 'ready' : 'waiting'}`}>
+                          <span className="status-icon">{playerReady ? '✓' : '○'}</span>
+                          <span>{playerReady ? 'LISTO' : 'Esperando'}</span>
+                        </div>
+                      </li>
+                      <li className={`player2 ${opponentConnected ? 'connected' : ''}`}>
+                        <div>
+                          <span className="player-name">
+                            {opponentConnected ? player2DisplayName : 'Esperando oponente...'}
+                          </span>
+                          {opponentConnected && <span className="player-role"> (Oponente)</span>}
+                        </div>
+                        <div className={`player-status ${opponentReady ? 'ready' : 'waiting'}`}>
+                          <span className="status-icon">{opponentReady ? '✓' : opponentConnected ? '○' : '...'}</span>
+                          <span>{opponentReady ? 'LISTO' : opponentConnected ? 'Esperando' : 'Conectando...'}</span>
+                        </div>
+                      </li>
                     </ul>
                   </div>
                   <div className="loading-bar"></div>

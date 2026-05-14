@@ -459,9 +459,109 @@
   }
 }
 
+/* Players List - Lista de jugadores */
+.players-list {
+  margin-top: 16px;
+  padding: 16px;
+  background: #161616;
+  border: 1px solid #333;
+  border-radius: 4px;
+}
+
+.players-list h4 {
+  font-size: 11px;
+  color: #888;
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.players-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.players-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #1a1a1a;
+  border-radius: 4px;
+  border-left: 3px solid #4a4a4a;
+  transition: all 0.3s ease;
+}
+
+.players-list li.player1 {
+  border-left-color: #E10600;
+}
+
+.players-list li.player2 {
+  border-left-color: #4a4a4a;
+}
+
+.players-list li.player2.connected {
+  border-left-color: #3498db;
+}
+
+.player-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f5f5f5;
+}
+
+.player-role {
+  font-size: 9px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.player-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.player-status.waiting {
+  color: #888;
+}
+
+.player-status.ready {
+  color: #2ECC71;
+}
+
+.player-status .status-icon {
+  font-size: 14px;
+}
+
 .timeout-text {
   font-size: 10px;
   color: #999;
+}
+
+/* Lobby Actions - Botones de la sala */
+.lobby-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 8px;
+  margin-top: 20px;
+  margin-bottom: 16px;
+}
+
+.lobby-actions .btn {
+  width: 100%;
+  justify-content: center;
+  padding: 14px 20px;
 }
 
 /* Footer */
