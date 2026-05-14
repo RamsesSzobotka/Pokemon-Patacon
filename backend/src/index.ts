@@ -3,7 +3,9 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { connectDB, disconnectDB } from './db/mongodb';
 import { pokemonService } from './services/pokemonService';
+import { initializeRoomsIndexes } from './db/rooms';
 import pokemonRoutes from './routes/pokemon';
+import roomRoutes from './routes/rooms';
 
 // Initialize Hono app
 const app = new Hono();
@@ -45,6 +47,8 @@ app.get('/', (c) => {
       types: '/api/pokemon/meta/types',
       generations: '/api/pokemon/meta/generations',
       rooms: '/api/rooms',
+      roomJoin: '/api/rooms/:code/join',
+      roomTeam: '/api/rooms/:code/team',
       battle: 'ws://localhost:3000/battle/:room_code'
     }
   });
@@ -52,6 +56,9 @@ app.get('/', (c) => {
 
 // Mount Pokémon routes
 app.route('/api/pokemon', pokemonRoutes);
+
+// Mount Room routes
+app.route('/api/rooms', roomRoutes);
 
 // 404 handler
 app.notFound((c) => {
@@ -79,6 +86,9 @@ async function startServer() {
   try {
     // Conectar a MongoDB
     await connectDB();
+    
+    // Inicializar índices de rooms
+    await initializeRoomsIndexes();
     
     // Inicializar servicio de Pokémon
     await pokemonService.initialize();

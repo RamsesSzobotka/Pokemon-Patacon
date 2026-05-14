@@ -16,6 +16,20 @@ const MainMenu: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
+  const [sessionId, setSessionId] = useState<string>(() => {
+    const saved = localStorage.getItem('patacon_session_id');
+    if (saved) return saved;
+    const gen = crypto.randomUUID();
+    localStorage.setItem('patacon_session_id', gen);
+    return gen;
+  });
+  const [opponentName, setOpponentName] = useState<string | null>(null);
+  const [opponentConnected, setOpponentConnected] = useState(false);
+  const [playerReady, setPlayerReady] = useState(false);
+  const [opponentReady, setOpponentReady] = useState(false);
+  const [isHost, setIsHost] = useState(false);
+  const [player1DisplayName, setPlayer1DisplayName] = useState<string>('Jugador 1');
+  const [player2DisplayName, setPlayer2DisplayName] = useState<string>('Esperando oponente...');
 
   // Check backend health on mount
   useEffect(() => {
@@ -37,6 +51,69 @@ const MainMenu: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Si ya había creado o entrado en una sala, restaurar código
+  useEffect(() => {
+    const savedCode = localStorage.getItem('patacon_room_code');
+    if (savedCode) {
+      setCreatedRoomCode(savedCode);
+      setScreen('create');
+    }
+  }, []);
+
+  // Poll room status when in lobby (createdRoomCode present)
+  useEffect(() => {
+    let timer: any = null;
+    async function poll() {
+      if (!createdRoomCode) return;
+      try {
+        const res = await fetch(`/api/rooms/${createdRoomCode}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.success && data.room) {
+          const room = data.room as any;
+          // player2 connected if session_id present
+          const p2 = room.players?.player2;
+          const p1 = room.players?.player1;
+          // determine if current session is host
+          if (p1 && p1.session_id && p1.session_id !== 'masked') {
+            // p1.session_id is masked in sanitized response; instead check local sessionId equality by separate fetch? fallback: if our sessionId equals stored patacon_session_id and matches created host name => setIsHost
+          }
+          if (p2 && p2.session_id) {
+            setOpponentConnected(true);
+            setOpponentName(p2.player_name || 'Jugador 2');
+            setOpponentReady(!!p2.ready);
+          } else {
+            setOpponentConnected(false);
+            setOpponentName(null);
+            setOpponentReady(false);
+          }
+
+          // set player ready from server (player1)
+          if (p1) {
+            setPlayerReady(!!p1.ready);
+            setPlayer1DisplayName(p1.player_name || 'Jugador 1');
+            setIsHost(p1.player_name === playerName || p1.session_id === 'masked');
+          }
+
+          if (p2 && p2.player_name) {
+            setPlayer2DisplayName(p2.player_name);
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    if (createdRoomCode) {
+      poll();
+      timer = setInterval(poll, 2000);
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [createdRoomCode]);
+
   const handleCreateRoom = async () => {
     if (!playerName.trim()) {
       alert('Por favor ingresa tu nombre');
@@ -48,13 +125,19 @@ const MainMenu: React.FC = () => {
       const response = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerName })
+        body: JSON.stringify({ 
+          session_id: sessionId,
+          player_name: playerName.trim()
+        })
       });
 
       const data = await response.json();
       if (data.success) {
-        setCreatedRoomCode(data.data.room_code);
-        // Update to create screen shows room code
+        setCreatedRoomCode(data.code);
+        localStorage.setItem('patacon_room_code', data.code);
+        setScreen('create');
+      } else {
+        alert(`❌ ${data.error || 'Error al crear la sala'}`);
       }
     } catch (error) {
       console.error('Error creating room:', error);
@@ -76,18 +159,25 @@ const MainMenu: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/rooms/${roomCode}`, {
+      const response = await fetch(`/api/rooms/${roomCode}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerName })
+        body: JSON.stringify({ 
+          session_id: sessionId,
+          player_name: playerName.trim()
+        })
       });
 
       const data = await response.json();
       if (data.success) {
-        console.log('Joined room:', data.data);
-        // Aquí se redireccionaría a la sala de batalla
+        console.log('Joined room:', data);
+        // Guardar código y navegar al lobby del creador
+        localStorage.setItem('patacon_room_code', data.code);
+        setCreatedRoomCode(data.code);
+        setScreen('create');
+        alert(`✅ Te uniste a la sala ${data.code} como Jugador ${data.player_number}`);
       } else {
-        alert('❌ Sala no encontrada o llena');
+        alert(`❌ ${data.error || 'Sala no encontrada o llena'}`);
       }
     } catch (error) {
       console.error('Error joining room:', error);
@@ -183,7 +273,7 @@ const MainMenu: React.FC = () => {
               <button className="back-btn" onClick={() => setScreen('menu')}>
                 ◀ VOLVER
               </button>
-              <span>CREAR SALA</span>
+              <span>{createdRoomCode ? 'LOBBY' : 'CREAR SALA'}</span>
               <div style={{ width: '60px' }}></div>
             </div>
 
@@ -205,21 +295,84 @@ const MainMenu: React.FC = () => {
                   <p className="waiting-hint">
                     Tu oponente debe ingresar el código<br />para unirse a esta sala
                   </p>
+                  <div className="players-list">
+                    <h4>Jugadores conectados</h4>
+                    <ul>
+                      <li>{player1DisplayName} {playerReady ? ' - Listo' : ''}</li>
+                      <li>{opponentConnected ? player2DisplayName : 'Esperando oponente...'} {opponentReady ? ' - Listo' : ''}</li>
+                    </ul>
+                  </div>
                   <div className="loading-bar"></div>
                   <p className="timeout-text">Timeout: 5 min</p>
                 </div>
 
                 <div className="divider"></div>
 
-                <button
-                  className="btn btn-danger"
-                  onClick={() => {
-                    setCreatedRoomCode('');
-                    setScreen('menu');
-                  }}
-                >
-                  ABANDONAR SALA
-                </button>
+                <div className="lobby-actions">
+                  <button
+                    className={`btn ${playerReady ? 'btn-success' : 'btn-primary'}`}
+                    onClick={async () => {
+                      // toggle ready
+                      const newReady = !playerReady;
+                      setPlayerReady(newReady);
+                      try {
+                        await fetch(`/api/rooms/${createdRoomCode}/ready`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ session_id: sessionId, ready: newReady })
+                        });
+                      } catch (e) {}
+                    }}
+                  >
+                    {playerReady ? '✅ Listo' : 'Listo'}
+                  </button>
+
+                  {isHost ? (
+                    <button
+                      className="btn btn-danger"
+                      onClick={async () => {
+                        // boton para iniciar draft (estético por ahora)
+                        try {
+                          const res = await fetch(`/api/rooms/${createdRoomCode}/state`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ session_id: sessionId, state: 'in_draft' })
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            alert('🚀 Draft iniciado (estético)');
+                            // aqui podríamos navegar al draft más tarde
+                          } else {
+                            alert(`❌ ${data.error || 'No se pudo iniciar'}`);
+                          }
+                        } catch (e) { console.error(e); }
+                      }}
+                    >
+                      INICIAR PARTIDA
+                    </button>
+                  ) : null}
+
+                  <button
+                    className="btn btn-back"
+                    onClick={async () => {
+                      // abandonar sala
+                      try {
+                        await fetch(`/api/rooms/${createdRoomCode}/leave`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ session_id: sessionId })
+                        });
+                      } catch (e) {}
+                      setCreatedRoomCode('');
+                      localStorage.removeItem('patacon_room_code');
+                      setOpponentConnected(false);
+                      setOpponentName(null);
+                      setScreen('menu');
+                    }}
+                  >
+                    ABANDONAR SALA
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="form-container">

@@ -135,7 +135,7 @@ Se excluyen:
   "code": "AB12CD",                         // Código 4-6 caracteres (único)
   "created_at": ISODate("2026-05-13T12:00:00Z"),
   "expires_at": ISODate("2026-05-13T12:30:00Z"),  // TTL para limpieza
-  "state": "waiting",                       // "waiting" | "draft" | "battle" | "finished"
+  "state": "waiting",                       // "waiting" | "in_draft" | "in_battle" | "finished"
   "players": {
     "player1": {
       "session_id": "uuid-here",
@@ -145,11 +145,32 @@ Se excluyen:
     "player2": {
       "session_id": "uuid-here",
       "joined_at": ISODate("2026-05-13T12:05:00Z"),
-      "ready": true
+      "ready": false
     }
   },
+  // Equipos seleccionados durante fase draft (6 Pokémon cada uno)
+  // Cada Pokémon: pokeapi_id + 4 movimientos seleccionados del movepool disponible
+  // Validación: máximo 1 legendario por equipo (míticos sin límite)
+  "team_1": [
+    {
+      "pokeapi_id": 25,                     // ID de PokeAPI
+      "selected_moves": [25, 87, 93, 98]    // 4 move_ids seleccionados
+    },
+    { "pokeapi_id": 6, "selected_moves": [34, 98, 102, 156] },
+    { "pokeapi_id": 150, "selected_moves": [7, 15, 25, 118] },
+    { "pokeapi_id": 94, "selected_moves": [85, 87, 103, 251] },
+    { "pokeapi_id": 65, "selected_moves": [94, 95, 100, 248] },
+    { "pokeapi_id": 3, "selected_moves": [33, 73, 74, 202] }
+  ],
+  "team_2": [
+    // Misma estructura que team_1
+    // ...
+  ],
   "max_players": 2,
-  "battle_id": ObjectId || null            // Referencia a battle_state cuando inicia
+  "battle_id": ObjectId || null,           // Referencia a battles cuando inicia
+  "winner": null,                          // null | "player1" | "player2"
+  "started_at": null,                     // null | ISODate (cuando inicia battle)
+  "finished_at": null                     // null | ISODate (cuando termina)
 }
 ```
 
@@ -336,6 +357,9 @@ await db.collection('moves').createIndex({ power: 1, accuracy: 1 });  // Optimiz
 await db.collection('rooms').createIndex({ code: 1 }, { unique: true });
 await db.collection('rooms').createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
 await db.collection('rooms').createIndex({ state: 1 });
+await db.collection('rooms').createIndex({ 'players.session_id': 1 });  // Buscar sala por sesión
+await db.collection('rooms').createIndex({ 'team_1.pokeapi_id': 1 });   // Validar equipo P1
+await db.collection('rooms').createIndex({ 'team_2.pokeapi_id': 1 });   // Validar equipo P2
 
 // === COLECCIÓN BATTLES ===
 await db.collection('battles').createIndex({ room_code: 1 }, { unique: true });
@@ -369,6 +393,73 @@ db.type_matchups.findOne({ attacker_type: "electric", defender_type: "water" })
 ### Limpiar salas expiradas
 ```javascript
 // Automático con TTL index
+```
+
+### Obtener sala por código
+```javascript
+db.rooms.findOne({ code: "AB12CD" })
+```
+
+### Unirse a sala (player2)
+```javascript
+db.rooms.updateOne(
+  { code: "AB12CD", state: "waiting" },
+  {
+    $set: {
+      "players.player2.session_id": "uuid-new-player",
+      "players.player2.joined_at": ISODate(),
+      state: "in_draft"
+    }
+  }
+)
+```
+
+### Actualizar equipo durante draft (seleccionar Pokémon + 4 movimientos)
+```javascript
+db.rooms.updateOne(
+  { code: "AB12CD" },
+  {
+    $set: {
+      "team_1": [
+        { pokeapi_id: 25, selected_moves: [25, 87, 93, 98] },
+        { pokeapi_id: 6, selected_moves: [34, 98, 102, 156] },
+        { pokeapi_id: 150, selected_moves: [7, 15, 25, 118] },
+        { pokeapi_id: 94, selected_moves: [85, 87, 103, 251] },
+        { pokeapi_id: 65, selected_moves: [94, 95, 100, 248] },
+        { pokeapi_id: 3, selected_moves: [33, 73, 74, 202] }
+      ]
+    }
+  }
+)
+```
+
+### Confirmar equipo (ready)
+```javascript
+db.rooms.updateOne(
+  { code: "AB12CD" },
+  { $set: { "players.player1.ready": true } }
+)
+```
+
+### Iniciar batalla (ambos ready)
+```javascript
+db.rooms.updateOne(
+  { code: "AB12CD", "players.player1.ready": true, "players.player2.ready": true },
+  {
+    $set: {
+      state: "in_battle",
+      started_at: ISODate()
+    }
+  }
+)
+```
+
+### Validar legendary (máximo 1 por equipo)
+```javascript
+// Verificar que team_1 no tenga más de 1 legendario
+const team1Ids = team_1.map(t => t.pokeapi_id);
+const legendaries = await db.pokemon.find({ pokeapi_id: { $in: team1Ids }, is_legendary: true }).toArray();
+// Si legendaries.length > 1 → reject
 ```
 
 ### Obtener estado de batalla actual
