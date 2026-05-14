@@ -169,7 +169,7 @@ const PokédexView: React.FC = () => {
         >
           ◀
         </button>
-        <h1>📖 POKÉDEX - 493 POKÉMON (GEN I-V)</h1>
+        <h1>📖 POKÉDEX - 649 POKÉMON (GEN I-V)</h1>
         <p className="subtitle">Explora todos los Pokémon disponibles en batalla</p>
       </div>
 
@@ -396,7 +396,7 @@ const PokédexView: React.FC = () => {
               ◀ Anterior
             </button>
             <span className="page-info">
-              Página {currentPage} de {Math.ceil(493 / pageSize)}
+              Página {currentPage} de {Math.ceil(649 / pageSize)}
             </span>
             <button
               onClick={() => setCurrentPage(prev => prev + 1)}

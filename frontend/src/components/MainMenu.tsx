@@ -217,22 +217,19 @@ const MainMenu: React.FC = () => {
   return (
     <div className="main-menu-container">
       <div className="menu-card">
-        {/* Pokemon Logo */}
+        {/* Pokemon Logo / Title Image */}
         <div className="logo-container">
           <img
-            src="/assets/title.png"
+            src="/assets/Title.png"
             alt="Pokémon Patacon"
-            className="pokemon-logo"
+            className="title-image"
             onError={(e) => {
               const elem = e.target as HTMLImageElement;
               elem.style.display = 'none';
             }}
           />
+          <h2 className="league-title">LIGA PATACON</h2>
         </div>
-
-        <h1 className="title">POKÉMON PATACON</h1>
-        <div className="title-separator"></div>
-        <p className="subtitle">1v1 Batalla Multijugador - Generación V</p>
 
         {screen === 'menu' && (
           <>
@@ -261,7 +258,7 @@ const MainMenu: React.FC = () => {
               </button>
               <button className="btn btn-tertiary" onClick={() => navigate('/pokedex')}>
                 📖 VER POKÉDEX
-                <span className="btn-hint">493 Pokémon disponibles</span>
+                <span className="btn-hint">649 Pokémon disponibles</span>
               </button>
             </div>
           </>

@@ -40,12 +40,51 @@
 
 .logo-container {
   text-align: center;
-  margin-bottom: 30px;
-  min-height: 100px;
+  margin-bottom: 20px;
+  min-height: 80px;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   animation: slideDown 0.8s ease-out;
+}
+
+.title-image {
+  max-width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+}
+
+.league-title {
+  font-family: 'Cinzel', 'Trajan Pro', 'Montserrat', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #f5f5f5;
+  text-align: center;
+  margin: 10px 0 0 0;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  text-shadow: 
+    0 0 10px rgba(225, 6, 0, 0.5),
+    0 0 20px rgba(225, 6, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.8);
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    text-shadow: 
+      0 0 10px rgba(225, 6, 0, 0.5),
+      0 0 20px rgba(225, 6, 0, 0.3),
+      0 2px 4px rgba(0, 0, 0, 0.8);
+  }
+  to {
+    text-shadow: 
+      0 0 15px rgba(225, 6, 0, 0.7),
+      0 0 30px rgba(225, 6, 0, 0.4),
+      0 2px 4px rgba(0, 0, 0, 0.8);
+  }
 }
 
 @keyframes slideDown {
