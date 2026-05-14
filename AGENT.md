@@ -50,7 +50,7 @@ Pokémon Patacon es un videojuego de batallas Pokémon en tiempo real donde dos 
 
 - **Generación V (Unova natives):** 156 Pokémon nuevos (Victini, Snivy, Tepig, Oshawott, ... Genesect)
 - **Generaciones anteriores:** Compatibilidad con Pokémon de Gen I-IV que pueden evolucionar en Gen V
-- **Total disponible:** 493 Pokémon de Gen I-V (priorizando Gen V en UI)
+- **Total disponible:** 649 Pokémon de Gen I-V (todas las generaciones disponibles)
 - **Legendarios:** Máximo 1 legendario por equipo
 - **Sprites Black/White:** Todos los Pokémon mostrarán sus sprites .gif animados de Black/White desde PokeAPI
 - **Movepool:** Se usa el movepool de Generación V para cada Pokémon
@@ -887,7 +887,7 @@ GET https://pokeapi.co/api/v2/pokemon/?limit=300&offset=0
 
 ### 9.2 Estrategia de Caché
 
-1. **Inicialización:** Pre-cargar todos los 493 Pokémon de Gen I-V desde PokeAPI
+1. **Inicialización:** Pre-cargar todos los 649 Pokémon de Gen I-V desde PokeAPI
 2. **Storage:** Almacenar en MongoDB con sprites de Black/White
 3. **Prioridad:** Mostrar siempre sprites gen-v (si PokeAPI lo proporciona)
 4. **TTL (Time To Live):** Actualizar cada 30 días

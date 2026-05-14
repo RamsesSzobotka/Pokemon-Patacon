@@ -1,0 +1,208 @@
+/* 🎮 Pokémon Patacon - Base Styles */
+
+/* Importar fuente Montserrat */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
+
+/* CSS Variables - Paleta B&W Pokémon */
+:root {
+  /* Colores Primarios */
+  --color-deep-black: #0D0D0D;
+  --color-black: #1a1a1a;
+  --color-dark-gray: #2d2d2d;
+  --color-gray: #4a4a4a;
+  --color-light-gray: #B3B3B3;
+  --color-white: #f5f5f5;
+  --color-pure-white: #ffffff;
+
+  /* Acentos */
+  --color-red-pokemon: #E10600;
+  --color-red-dark: #cc0d0d;
+  --color-red-light: #ff4444;
+  --color-green-success: #2ECC71;
+  --color-yellow-warning: #FFB90F;
+  --color-blue-zekrom: #00BFFF;
+  --color-cyan-glow: #00E5FF;
+
+  /* Espaciado */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* Border Radius */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.8);
+
+  /* Transiciones */
+  --transition-fast: 0.15s ease-out;
+  --transition-base: 0.3s ease-out;
+  --transition-slow: 0.5s ease-out;
+
+  /* Tipografía */
+  --font-family: 'Montserrat', 'Segoe UI', sans-serif;
+  --font-size-xs: 10px;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 32px;
+
+  /* Line Heights */
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.8;
+}
+
+/* Reset & Base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  color: var(--color-white);
+  background: linear-gradient(
+    135deg,
+    var(--color-deep-black) 0%,
+    var(--color-black) 50%,
+    var(--color-dark-gray) 100%
+  );
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Tipografía */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: var(--line-height-tight);
+  color: var(--color-white);
+}
+
+h1 {
+  font-size: var(--font-size-3xl);
+}
+
+h2 {
+  font-size: var(--font-size-2xl);
+}
+
+h3 {
+  font-size: var(--font-size-xl);
+}
+
+h4 {
+  font-size: var(--font-size-lg);
+}
+
+h5, h6 {
+  font-size: var(--font-size-base);
+}
+
+p {
+  margin-bottom: var(--spacing-sm);
+}
+
+a {
+  color: var(--color-red-pokemon);
+  text-decoration: none;
+  transition: color var(--transition-base);
+}
+
+a:hover {
+  color: var(--color-red-light);
+  text-decoration: underline;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-gray);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-light-gray);
+}
+
+/* Selection */
+::selection {
+  background-color: var(--color-red-pokemon);
+  color: var(--color-white);
+}
+
+::-moz-selection {
+  background-color: var(--color-red-pokemon);
+  color: var(--color-white);
+}
+
+/* Focus Visible */
+:focus-visible {
+  outline: 2px solid var(--color-red-pokemon);
+  outline-offset: 2px;
+}
+
+/* Placeholder */
+::placeholder {
+  color: var(--color-light-gray);
+  opacity: 0.8;
+}
+
+::-moz-placeholder {
+  color: var(--color-light-gray);
+  opacity: 0.8;
+}
+
+/* Print Styles */
+@media print {
+  body {
+    background: var(--color-pure-white);
+    color: #000;
+  }
+
+  a {
+    color: #0066cc;
+  }
+}
+
+/* Dark Mode (Default) */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: linear-gradient(
+      135deg,
+      var(--color-deep-black) 0%,
+      var(--color-black) 50%,
+      var(--color-dark-gray) 100%
+    );
+    color: var(--color-white);
+  }
+}

@@ -79,7 +79,7 @@ Obtener datos completos de un Pokémon específico.
 **Path Parameters:**
 | Parámetro | Tipo | Descripción |
 |-----------|------|-------------|
-| `id` | number | ID de PokeAPI (1-493) |
+| `id` | number | ID de PokeAPI (1-649) |
 
 **Request:**
 ```bash

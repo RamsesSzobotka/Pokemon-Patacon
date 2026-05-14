@@ -40,7 +40,7 @@
 
 **P: ¿Qué pasa si un Pokémon tiene <4 movimientos válidos en Gen V?**
 
-**R:** Todos los 493 Pokémon del pool tienen exactamente 4+ movimientos válidos. Validación en seed de datos. Si alguno falla: **se excluye del pool** (no ocurre en JSON actual).
+**R:** Todos los 649 Pokémon del pool tienen exactamente 4+ movimientos válidos. Validación en seed de datos. Si alguno falla: **se excluye del pool** (no ocurre en JSON actual).
 
 **Código Backend:**
 ```typescript
@@ -172,7 +172,7 @@ if (move.damageClass === 'physical' && attacker.status.type === 'burn') {
 
 Usar este checklist durante desarrollo para confirmar que se cumple cada clarificación:
 
-- [ ] Seed de datos valida: todos los 493 tienen 4+ movimientos
+- [ ] Seed de datos valida: todos los 649 tienen 4+ movimientos
 - [ ] Efectos: solo decrementa en Pokémon activo
 - [ ] Cambio: limpia TODOS los efectos
 - [ ] IVs: generados en `battle:start`, inmutables

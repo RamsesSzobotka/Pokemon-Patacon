@@ -139,7 +139,7 @@ Pokémon considerados **mythical** por PokeAPI (eventos especiales, no capturabl
 | **Legendarios totales** | 35 |
 | **Mythicals totales** | 13 |
 | **Total especial** | 48 |
-| **Porcentaje del pool** | 48 / 493 = 9.7% |
+| **Porcentaje del pool** | 48 / 649 = 7.4% |
 
 ---
 

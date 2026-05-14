@@ -1,128 +1,186 @@
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                                                                               ║
-║                   🎮 POKÉMON PATACON - WIREFRAME MENU 🎮                      ║
-║                                                                               ║
-║                          Battle Arena - Generación V                          ║
-║                                                                               ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
+╔═════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                 ║
+║              🎮 POKÉMON PATACON - WIREFRAME REDESIGN (Black & White) 🎮         ║
+║                                                                                 ║
+║                    Tema: Pokémon Black and White Generation V                   ║
+║                                                                                 ║
+╚═════════════════════════════════════════════════════════════════════════════════╝
 
 
-═══════════════════════════════════════════════════════════════════════════════
+═════════════════════════════════════════════════════════════════════════════════
+ PALETA DE COLORES - BLACK & WHITE THEME
+═════════════════════════════════════════════════════════════════════════════════
+
+COLORES PRINCIPALES:
+  🟫 Negro Profundo:        #1a1a1a (Fondo principal)
+  ⬜ Blanco Limpio:         #f5f5f5 (Texto principal)
+  🟦 Gris Oscuro:           #2d2d2d (Bordes, separadores)
+  🟧 Gris Medio:            #4a4a4a (Elementos secundarios)
+  🔴 Rojo Pokémon:          #ee1515 (Acentos, acciones principales)
+  ⚫ Negro Interfaz:        #0f0f0f (Botones fondo oscuro)
+  ⚪ Blanco Interfaz:       #ffffff (Texto en botones dark)
+
+GRADIENTES:
+  - Fondo: Negro (#1a1a1a) a Gris Oscuro (#2d2d2d)
+  - Botones Rojo: #ee1515 a #cc0d0d (hover más oscuro)
+  - Bordes: Gris a Negro suave
+
+
+═════════════════════════════════════════════════════════════════════════════════
  PANTALLA 1: MENÚ PRINCIPAL
-═══════════════════════════════════════════════════════════════════════════════
+═════════════════════════════════════════════════════════════════════════════════
 
-    ╔───────────────────────────────────────────────────────────────╗
-    │                                                               │
-    │                    POKÉMON PATACON                           │
-    │                    Battle Arena                              │
-    │                    Generación V                              │
-    │                                                               │
-    │  ╔═══════════════════════════════════════════════════════╗  │
-    │  ║                                                       ║  │
-    │  ║              ➕ CREAR SALA                           ║  │
-    │  ║              Genera código único                     ║  │
-    │  ║                                                       ║  │
-    │  ╚═══════════════════════════════════════════════════════╝  │
-    │                                                               │
-    │  ╔═══════════════════════════════════════════════════════╗  │
-    │  ║                                                       ║  │
-    │  ║              🔗 UNIRSE A SALA                        ║  │
-    │  ║              Ingresa código                          ║  │
-    │  ║                                                       ║  │
-    │  ╚═══════════════════════════════════════════════════════╝
-    │  ╔═══════════════════════════════════════════════════════╗  │
-    │  ║                                                       ║  │
-    │  ║              Pokedex                                  ║  │
-    │  ║                                                       ║  │
-    │  ╚═══════════════════════════════════════════════════════╝  │
-    │                                                               │
-    │  ┌───────────────────────────────────────────────────────┐  │
-    │  │ 📋 Historial de Salas:                              │  │
-    │  │                                                       │  │
-    │  │  • AB3F2K         hace 5 minutos                    │  │
-    │  │  • XY7K2L         hace 1 hora                       │  │
-    │  │  • ZA9B1M         hace 3 horas                      │  │
-    │  │                                                       │  │
-    │  └───────────────────────────────────────────────────────┘  │
-    │                                                               │
-    │              Pokémon Patacon v1.0 | Sin login               │
-    │                                                               │
-    ╚───────────────────────────────────────────────────────────────╝
+    ┌─────────────────────────────────────────────────────────────┐
+    │                                                             │
+    │            [POKÉMON LOGO - title.png centered]             │
+    │                                                             │
+    │                  ─────────────────────                      │
+    │                  POKÉMON PATACON                           │
+    │                  1v1 Battle Arena                          │
+    │                  ─────────────────────                      │
+    │                                                             │
+    ├─────────────────────────────────────────────────────────────┤
+    │                                                             │
+    │   ┌────────────────────────────────────────────────────┐   │
+    │   │                                                    │   │
+    │   │  🔴 CREAR NUEVA SALA                             │   │
+    │   │  Genera un código único para tu oponente          │   │
+    │   │                                                    │   │
+    │   └────────────────────────────────────────────────────┘   │
+    │                                                             │
+    │   ┌────────────────────────────────────────────────────┐   │
+    │   │                                                    │   │
+    │   │  ⚪ UNIRSE A SALA                                 │   │
+    │   │  Ingresa el código de tu oponente                  │   │
+    │   │                                                    │   │
+    │   └────────────────────────────────────────────────────┘   │
+    │                                                             │
+    │   ┌────────────────────────────────────────────────────┐   │
+    │   │                                                    │   │
+    │   │  📖 VER POKÉDEX                                   │   │
+    │   │  Explora los 493 Pokémon disponibles              │   │
+    │   │                                                    │   │
+    │   └────────────────────────────────────────────────────┘   │
+    │                                                             │
+    ├─────────────────────────────────────────────────────────────┤
+    │                                                             │
+    │  🎮 Pokémon Patacon v1.0                  📡 Conectado     │
+    │                                                             │
+    └─────────────────────────────────────────────────────────────┘
 
-    CARACTERÍSTICAS:
-    ✨ Animación slide-down del logo (0.8s)
-    ✨ Animación slide-up de botones (staggered 0.2s)
-    ✨ Hover effects con elevación (-3px)
-   ✨ Colores: Monocromia + acentos azul/rojo
-    ✨ Responsive: Full-width mobile, centrado desktop
-
-
-═══════════════════════════════════════════════════════════════════════════════
- PANTALLA 2: CREAR SALA
-═══════════════════════════════════════════════════════════════════════════════
-
-    ╔───────────────────────────────────────────────────────────────╗
-    │ ← Volver al Menú                                              │
-    │                                                               │
-   │                    CREAR SALA                                │
-   │                                                               │
-   │  Codigo de la Sala:                                          │
-    │                                                               │
-    │  ┌──────────────────────────┐    ┌──────────────┐           │
-    │  │       AB3F2K            │    │ 📋 Copiar   │           │
-    │  └──────────────────────────┘    └──────────────┘           │
-    │  (Monospace, Verde #2ECC71, Bold, 18px, Letter-spacing 3px) │
-    │                                                               │
-    │  ╔═══════════════════════════════════════════════════════╗  │
-    │  ║           [QR Code Placeholder]                       ║  │
-    │  ║                                                       ║  │
-   │  ║         Comparte este codigo con tu oponente         ║  │
-    │  ║                                                       ║  │
-    │  ╚═══════════════════════════════════════════════════════╝  │
-    │                                                               │
-    │  ⏳ Esperando jugador...                                     │
-   │  Tu oponente debe ingresar el codigo para                   │
-   │  unirse a la sala                                            │
-    │                                                               │
-    ╚───────────────────────────────────────────────────────────────╝
-
-   CARACTERÍSTICAS:
-   ✨ Codigo mostrado con Font: 'Courier New'
-   ✨ Borde Verde (#2ECC71)
-   ✨ Boton copiar con hover effect
-   ✨ Placeholder para QR code
-   ✨ Status indicator (⏳ Esperando...)
-   ✨ Hint text con instrucciones
+    CARACTERÍSTICAS B&W:
+    ✨ Fondo: Gradiente Negro → Gris (#1a1a1a → #2d2d2d)
+    ✨ Texto Principal: Blanco (#f5f5f5)
+    ✨ Botón Principal (Crear): Rojo (#ee1515) con borde negro
+    ✨ Botones Secundarios: Gris oscuro (#2d2d2d) con borde (#4a4a4a)
+    ✨ Separadores: Líneas grises simples
+    ✨ Animación: Slide-up suave con delay staggered
+    ✨ Tipografía: Montserrat Bold para títulos, Regular para descripciones
+    ✨ Bordes: Rectángulos geométricos, sin roundness excesiva
+    ✨ Responsive: Mobile full-width con padding, Desktop 540px max-width centrado
 
 
-═══════════════════════════════════════════════════════════════════════════════
- PANTALLA 3: UNIRSE A SALA
-═══════════════════════════════════════════════════════════════════════════════
 
-    ╔───────────────────────────────────────────────────────────────╗
-    │ ← Volver al Menú                                              │
-    │                                                               │
-   │                    UNIRSE A SALA                             │
-   │                                                               │
-   │  Ingresa el codigo de la sala para unirte                    │
-    │                                                               │
-    │  ┌───────────────────────────────────────────────────────┐  │
-    │  │ AB3F2K                          ┌──────────────────┐ │  │
-    │  │  (Input vacío)                  │    UNIRSE       │ │  │
-    │  │                                 │  (deshabilitado) │ │  │
-    │  │                                 └──────────────────┘ │  │
-    │  └───────────────────────────────────────────────────────┘  │
-    │                                                               │
-   │  El codigo debe tener 6 caracteres                           │
-    │                                                               │
-    ╚───────────────────────────────────────────────────────────────╝
 
-    VALIDACIÓN:
-    ✓ Input solo acepta 6 caracteres
-    ✓ Botón deshabilitado (gris) hasta que tenga 6 chars
-    ✓ Al escribir el 6to carácter → Botón se habilita (naranja)
-    ✓ Permite solo letras y números (0-9, A-Z)
-    ✓ Convierte a mayúsculas automáticamente
+═════════════════════════════════════════════════════════════════════════════════
+ PANTALLA 2: CREAR SALA (NEGRO & BLANCO)
+═════════════════════════════════════════════════════════════════════════════════
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │                                                             │
+    │  ◀ VOLVER                  CREAR SALA                      │
+    │                                                             │
+    ├─────────────────────────────────────────────────────────────┤
+    │                                                             │
+    │           CÓDIGO DE SALA                                   │
+    │                                                             │
+    │   ┌────────────────────────────────────────────────────┐   │
+    │   │                                                    │   │
+    │   │    AB3F2K                    [Copiar al Portapapeles]  │
+    │   │                              ──────────────────────   │
+    │   │  Monospace Bold, #FFFFFF, 24px, Letter-spacing 4px   │
+    │   │                                                    │   │
+    │   └────────────────────────────────────────────────────┘   │
+    │                                                             │
+    │  Comparte este código con tu oponente                     │
+    │                                                             │
+    ├─────────────────────────────────────────────────────────────┤
+    │                                                             │
+    │  ⏳ ESPERANDO JUGADOR...                                   │
+    │                                                             │
+    │  Tu oponente debe ingresar el código                      │
+    │  para unirse a esta sala.                                 │
+    │                                                             │
+    │  [Barra de progreso animada]                              │
+    │  ────────────────────────────────────                      │
+    │                                                             │
+    │  Timeout: 5 min | Si no llega, sala se cierra              │
+    │                                                             │
+    ├─────────────────────────────────────────────────────────────┤
+    │ 🎮 Esperando... #AB3F2K          [ABANDONAR SALA]         │
+    │                                                             │
+    └─────────────────────────────────────────────────────────────┘
+
+    CARACTERÍSTICAS B&W PANTALLA 2:
+    ✨ Fondo: Negro profundo (#0D0D0D)
+    ✨ Tarjeta: Gris oscuro (#2C2F33) con borde gris (#4a4a4a)
+    ✨ Código: Monospace blanco (#FFFFFF), muy visible
+    ✨ Botón Copiar: Rojo (#E10600) con hover brillo
+    ✨ Botón Abandonar: Gris (#4a4a4a) con borde rojo
+    ✨ Estado: Animación pulsante "ESPERANDO..."
+    ✨ Línea separadora: Gris (#666666)
+    ✨ Timer: Amarillo si queda <1 min
+
+
+═════════════════════════════════════════════════════════════════════════════════
+ PANTALLA 3: UNIRSE A SALA (NEGRO & BLANCO)
+═════════════════════════════════════════════════════════════════════════════════
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │                                                             │
+    │  ◀ VOLVER                  UNIRSE A SALA                   │
+    │                                                             │
+    ├─────────────────────────────────────────────────────────────┤
+    │                                                             │
+    │  INGRESA EL CÓDIGO DE LA SALA                              │
+    │                                                             │
+    │   ┌────────────────────────────────────────────────────┐   │
+    │   │                                                    │   │
+    │   │  [AB3F2K__]  (Input: 6 caracteres, mayúscula)    │   │
+    │   │                                                    │   │
+    │   │  Solo letras (A-Z) y números (0-9)               │   │
+    │   │                                                    │   │
+    │   └────────────────────────────────────────────────────┘   │
+    │                                                             │
+    │   ┌────────────────────────────────────────────────────┐   │
+    │   │                                                    │   │
+    │   │  🔴 UNIRSE A SALA                                 │   │
+    │   │  (Deshabilitado si input < 6 chars)              │   │
+    │   │                                                    │   │
+    │   └────────────────────────────────────────────────────┘   │
+    │                                                             │
+    │   VALIDACIÓN EN TIEMPO REAL:                              │
+    │   ✓ 0 chars:  Gris deshabilitado                           │
+    │   ✓ 1-5 chars: Gris deshabilitado                          │
+    │   ✓ 6 chars:  Rojo habilitado (#E10600) + glow             │
+    │   ✓ Auto-mayúsculas: entrada → AB3F2K                      │
+    │   ✓ Error si sala no existe: Borde rojo pulsante           │
+    │                                                             │
+    ├─────────────────────────────────────────────────────────────┤
+    │ 🎮 Pokémon Patacon v1.0            📡 Conectado           │
+    │                                                             │
+    └─────────────────────────────────────────────────────────────┘
+
+    CARACTERÍSTICAS B&W PANTALLA 3:
+    ✨ Fondo: Negro profundo (#0D0D0D)
+    ✨ Input: Fondo oscuro (#1A1A1A), borde gris (#4a4a4a)
+    ✨ Input Focus: Borde rojo (#E10600), glow sutil
+    ✨ Input Valid (6 chars): Borde verde (#2ECC71)
+    ✨ Input Error: Borde rojo pulsante
+    ✨ Botón Deshabilitado: Gris (#4a4a4a), opacidad 0.5
+    ✨ Botón Habilitado: Rojo (#E10600) + box-shadow naranja
+    ✨ Cursor: Punto rojo pulsante en input
+    ✨ Transición: Fade smooth 0.3s
 
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -222,99 +280,107 @@ INTERACCIÓN:
 └──────────────────────────────────────────────────────────────────────────┘
 
 
-═══════════════════════════════════════════════════════════════════════════════
- COMPONENTES SVELTE IMPLEMENTADOS
-═══════════════════════════════════════════════════════════════════════════════
+═════════════════════════════════════════════════════════════════════════════════
+ COMPONENTES REACT IMPLEMENTADOS
+═════════════════════════════════════════════════════════════════════════════════
 
-✅ MainMenu.svelte (250 líneas)
-   - Logo con animación
-   - 2 botones principales
-   - Historial de salas
-   - Eventos: on:createRoom, on:joinRoom
+✅ MainMenu.tsx (400+ líneas)
+   - 3 pantallas: menu, create, join
+   - Logo con animación float
+   - Health check backend en tiempo real
+   - Generador de código de sala
+   - Validación de entrada en tiempo real
+   - Eventos: handleCreateRoom, handleJoinRoom
+   - Estado: screen, playerName, roomCode, loading, backendStatus
 
-✅ CreateRoom.svelte (nuevo)
-   - Codigo generado automaticamente
-   - Mostrar QR + esperar
-   - Boton copiar
-   - Evento: on:back
+✅ Pantalla Menu:
+   - 3 botones principales (Crear, Unirse, Pokédex)
+   - Animación staggered slideUp (0.5s, 0.6s, 0.7s)
+   - Descripción de cada botón en subtítulo
 
-✅ JoinRoom.svelte (nuevo)
-   - Input de codigo
-   - Validacion (6 chars)
-   - Evento: on:back
+✅ Pantalla Create:
+   - Header bar con botón volver
+   - Muestra código de 6 caracteres (monospace)
+   - Botón copiar al portapapeles
+   - Estado esperando con animación pulsante
+   - Botón abandonar sala
+   - Barra de carga animada
 
-✅ App.svelte
-   - Router de pantallas
-   - Gestión de estado currentScreen
+✅ Pantalla Join:
+   - Inputs para nombre y código
+   - Contador de caracteres (0/6)
+   - Validación en tiempo real
+   - Botón habilitado/deshabilitado según validación
+   - Mensajes de validación dinámicos
 
 🔄 Stubs (Para próximas fases):
-   - Battle.svelte
-   - DraftSelector.svelte
-   - ActionPanel.svelte
-   - PokemonSprite.svelte
-   - ObjectsMenu.svelte
+   - DraftSelector.tsx (Selección de 6 Pokémon)
+   - Battle.tsx (Interfaz de batalla)
+   - PokemonCard.tsx (Tarjeta Pokémon)
+   - BattleLog.tsx (Historial de acciones)
+   - PokédexView.tsx (Explorador de Pokémon 493)
 
 
-═══════════════════════════════════════════════════════════════════════════════
- STORES (GESTIÓN DE ESTADO)
-═══════════════════════════════════════════════════════════════════════════════
+═════════════════════════════════════════════════════════════════════════════════
+ SISTEMA DE ESTILOS CSS-IN-JS
+═════════════════════════════════════════════════════════════════════════════════
 
-✅ battleStore (src/store/battle.js)
-   - Estado de batalla
-   - Código de sala
-   - Equipos
-   - Turnos actuales
+✅ base.css - Variables CSS globales
+   - Colores (--color-deep-black, --color-red-pokemon, etc)
+   - Espaciado (--spacing-xs, --spacing-md, etc)
+   - Tipografía (--font-size-base, --font-family)
+   - Sombras predefinidas
+   - Transiciones estándar
 
-✅ roomStore (src/store/room.js)
-   - Información de sala
-   - Jugadores
-   - Status
+✅ main.css - Estilos globales
+   - Reset (*) box-sizing
+   - Estilos body/html B&W
+   - Inputs personalizados
+   - Scrollbar negro
+   - Labels y placeholders
 
-✅ pokemonStore (src/store/pokemon.js)
-   - Caché de Pokémon
-   - Loading states
-   - Error handling
+✅ MainMenu.css - Componente menu (600+ líneas)
+   - .main-menu-container (flex center)
+   - .menu-card (tarjeta principal)
+   - .btn-primary, .btn-secondary, .btn-tertiary
+   - .form-container (formularios)
+   - .bw-input (inputs estilizados)
+   - Animaciones: slideIn, slideDown, float, pulse, slideBar
 
-
-═══════════════════════════════════════════════════════════════════════════════
- SERVICIOS
-═══════════════════════════════════════════════════════════════════════════════
-
-✅ WebSocketService (src/services/websocket.js)
-   - connect() → Conectar a servidor
-   - send(event, data) → Enviar eventos
-   - on(event, callback) → Escuchar eventos
-   - disconnect() → Cerrar conexión
-
-✅ REST API Client (src/services/pokemonApi.js)
-   - pokemonApi.search(query)
-   - pokemonApi.getById(id)
-   - roomApi.create()
-   - roomApi.get(code)
-
-✅ SyncManager (src/services/sync.js)
-   - shouldUpdate() → Throttle updates
-   - calculateDelta(old, new) → Solo cambios
+✅ App.css - Estilos raíz
+   - .app (contenedor principal)
+   - .container (wrapper max-width)
+   - Utility classes (text-, mt-, mb-, p-, flex-, grid-)
+   - Color/text utilities
 
 
-═══════════════════════════════════════════════════════════════════════════════
- UTILIDADES
-═══════════════════════════════════════════════════════════════════════════════
+═════════════════════════════════════════════════════════════════════════════════
+ ARQUITECTURA ACTUAL
+═════════════════════════════════════════════════════════════════════════════════
 
-✅ damage.js
-   - calculateDamage(power, defense, multiplier)
-   - TypeChart (Tabla tipos Gen V)
-   - getTypeMultiplier(attackType, defendType)
-
-✅ typeChart.js
-   - Tabla completa de tipos
-   - TypeColors (Colores por tipo)
-
-✅ spriteRenderer.js
-   - SpriteRenderer class
-   - loadSprite(url)
-   - startAnimation()
-   - stopAnimation()
+frontend/
+├── src/
+│   ├── main.tsx              ✅ Entry point (importa base.css → main.css → App.css)
+│   ├── App.tsx               ✅ Root component con BrowserRouter
+│   ├── App.css               ✅ Estilos raíz + utilities
+│   ├── components/
+│   │   └── MainMenu.tsx      ✅ 3 pantallas (menu, create, join)
+│   ├── styles/
+│   │   ├── base.css          ✅ Variables CSS + reset global
+│   │   ├── main.css          ✅ Estilos base (body, inputs, buttons)
+│   │   ├── MainMenu.css      ✅ Estilos componente (600+ líneas)
+│   │   └── [Próximos: Battle.css, Draft.css, etc]
+│   ├── services/
+│   │   ├── api.ts            🔄 Cliente REST (Por implementar)
+│   │   ├── websocket.ts      🔄 Cliente WebSocket (Por implementar)
+│   └── types/
+│       └── game.ts           🔄 Tipos TypeScript (Por implementar)
+├── public/
+│   └── assets/
+│       └── title.png         📍 Logo Pokémon
+├── index.html                ✅ HTML5 template
+├── vite.config.ts            ✅ Proxy a backend
+└── tsconfig.json             ✅ Configuración TypeScript
 
 
 ═══════════════════════════════════════════════════════════════════════════════

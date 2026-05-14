@@ -20,7 +20,7 @@
 ```javascript
 {
   "_id": ObjectId,                          // MongoDB ID único
-  "pokeapi_id": 1,                          // ID de PokeAPI (1-493)
+  "pokeapi_id": 1,                          // ID de PokeAPI (1-649)
   "name": "bulbasaur",
   "generation": 1,                          // 1-5 (Gen I-V)
   "types": ["grass", "poison"],             // Array de tipos (1-2)
@@ -300,7 +300,7 @@ db.battles.findOne({ room_code: "AB12CD" })
 
 Al iniciar la aplicación por primera vez:
 
-1. Descargar 493 Pokémon desde PokeAPI v2
+1. Descargar 649 Pokémon desde PokeAPI v2
 2. Insertar en colección `pokemon`
 3. Descargar tabla de tipos (18×18 matchups)
 4. Insertar en colección `type_matchups`

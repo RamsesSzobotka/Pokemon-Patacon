@@ -15,7 +15,7 @@
 **Generación:** Pokémon Black/White (Generación V)  
 **Estilo de Referencia:** Pokémon Stadium, Pokémon Champions
 
-Pokémon Patacon es un videojuego de batallas Pokémon en tiempo real donde dos jugadores compiten simultáneamente en partidas 1v1 a través de una interfaz moderna. Basado en la **Generación V (Black/White)**, incluirá los 156 Pokémon de esta generación + evoluciones de generaciones anteriores, utilizando los **sprites animados .gif** característicos de Black/White. El juego utiliza la API oficial de Pokémon (PokeAPI v2) para obtener datos, almacenándolos en una base de datos local para mejor rendimiento.
+Pokémon Patacon es un videojuego de batallas Pokémon en tiempo real donde dos jugadores compiten simultáneamente en partidas 1v1 a través de una interfaz moderna. Basado en la **Generación V (Black/White)**, incluirá todos los **649 Pokémon de Generaciones I-V**, utilizando los **sprites animados .gif** característicos de Black/White. El juego utiliza la API oficial de Pokémon (PokeAPI v2) para obtener datos, almacenándolos en una base de datos local para mejor rendimiento.
 
 ---
 
@@ -24,7 +24,7 @@ Pokémon Patacon es un videojuego de batallas Pokémon en tiempo real donde dos 
 - ✅ Crear un sistema de batallas Pokémon competitivo, fluido y sin lag
 - ✅ Permitir multijugador en tiempo real con salas de juego
 - ✅ Acceso sin requerimiento de autenticación (inicio de sesión)
-- ✅ Soportar mínimo 300 Pokémon con sus habilidades y stats
+- ✅ Soportar todos los 649 Pokémon de Gen I-V con sus habilidades y stats
 - ✅ Crear una experiencia visualmente atractiva con animaciones y sonidos
 - ✅ Implementar un sistema de balanceo basado en tipos y efectos de estado
 
@@ -46,17 +46,20 @@ Pokémon Patacon es un videojuego de batallas Pokémon en tiempo real donde dos 
 
 ### 3.2 Pokédex Disponible (Generación V - Pool Fijo)
 
-**Pool de Pokémon:** Exactamente **493 Pokémon** (Gen I-V, fijo del proyecto)
+**Pool de Pokémon:** Exactamente **649 Pokémon** (Gen I-V, fijo del proyecto)
 
-- **Generación V (Unova natives):** 156 Pokémon nuevos (Victini, Snivy, Tepig, Oshawott, ... Genesect)
-- **Generaciones anteriores:** 337 Pokémon de Gen I-IV que evolucionan en Gen V o tienen movepool compatible con Gen V
-- **Total disponible:** **493 Pokémon de ID 1-649** (excluidos: Pokémon Gen VI+)
+- **Generación I (Kanto):** 151 Pokémon (Bulbasaur #1 - Mew #151)
+- **Generación II (Johto):** 100 Pokémon nuevos (Chikorita #152 - Ho-Oh #251)
+- **Generación III (Hoenn):** 135 Pokémon nuevos (Treecko #252 - Deoxys #386)
+- **Generación IV (Sinnoh):** 107 Pokémon nuevos (Turtwig #387 - Arceus #493)
+- **Generación V (Unova):** 156 Pokémon nuevos (Victini #494 - Genesect #649)
+- **Total disponible:** **649 Pokémon de ID 1-649** (todas las generaciones hasta Gen V)
 - **Legendarios:** Máximo 1 por equipo. Lista validada: ~48 legendarios incluidos Victini, Reshiram, Zekrom, Kyurem, etc. *(ver LEGENDARIOS.md para lista completa)*
-- **Sprites Black/White:** Todos los 493 mostrarán sprites .gif animados de Pokémon Black/White desde PokeAPI:
+- **Sprites Black/White:** Todos los 649 mostrarán sprites .gif animados de Pokémon Black/White desde PokeAPI:
   - URL oficial: `https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/versions/generation-v/black-white/animated/{id}.gif`
   - Fallback a PNG si .gif no disponible
 - **Movepool:** Cada Pokémon tiene exactamente 4 movimientos válidos en Gen V (validados en PokeAPI)
-- **Validación:** Todos los 493 tienen 4+ movimientos válidos; ninguno se excluye por falta de movimientos
+- **Validación:** Todos los 649 tienen 4+ movimientos válidos; ninguno se excluye por falta de movimientos
 - **Data:** Importada desde PokeAPI v2 al iniciar; persistida en MongoDB para caché local (no hardcodeada)
 
 ### 3.3 Selección de Equipo
@@ -902,7 +905,7 @@ GET https://pokeapi.co/api/v2/pokemon/?limit=300&offset=0
 
 ### 9.2 Estrategia de Caché
 
-1. **Inicialización:** Pre-cargar todos los 493 Pokémon de Gen I-V desde PokeAPI
+1. **Inicialización:** Pre-cargar todos los 649 Pokémon de Gen I-V desde PokeAPI
 2. **Storage:** Almacenar en MongoDB con sprites de Black/White
 3. **Prioridad:** Mostrar siempre sprites gen-v (si PokeAPI lo proporciona)
 4. **TTL (Time To Live):** Actualizar cada 30 días

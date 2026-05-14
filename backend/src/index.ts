@@ -1,10 +1,9 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { serve } from 'bun';
-
-// Types
-import type { HonoRequest } from 'hono';
+import { connectDB, disconnectDB } from './db/mongodb';
+import { pokemonService } from './services/pokemonService';
+import pokemonRoutes from './routes/pokemon';
 
 // Initialize Hono app
 const app = new Hono();
@@ -36,31 +35,23 @@ app.get('/', (c) => {
     endpoints: {
       health: '/api/health',
       pokemon: '/api/pokemon',
+      pokemonList: '/api/pokemon?limit=50&offset=0&types=fire,water&generation=1&legendary=false',
+      pokemonSearch: '/api/pokemon/search?q=pikachu',
+      pokemonById: '/api/pokemon/1',
+      pokemonByType: '/api/pokemon/type/fire',
+      pokemonByGeneration: '/api/pokemon/generation/1',
+      legendary: '/api/pokemon/legendary',
+      mythical: '/api/pokemon/mythical',
+      types: '/api/pokemon/meta/types',
+      generations: '/api/pokemon/meta/generations',
       rooms: '/api/rooms',
       battle: 'ws://localhost:3000/battle/:room_code'
     }
   });
 });
 
-// Placeholder routes
-app.get('/api/pokemon/search', (c) => {
-  return c.json({
-    success: true,
-    data: { results: [] },
-    message: 'Pokemon search endpoint - Coming soon'
-  });
-});
-
-app.post('/api/rooms', (c) => {
-  return c.json({
-    success: true,
-    data: {
-      room_code: 'AB12CD',
-      created_at: new Date().toISOString(),
-      url: 'ws://localhost:3000/battle/AB12CD'
-    }
-  }, 201);
-});
+// Mount Pokémon routes
+app.route('/api/pokemon', pokemonRoutes);
 
 // 404 handler
 app.notFound((c) => {
@@ -84,10 +75,37 @@ app.onError((err, c) => {
 // Start server
 const PORT = parseInt(process.env.PORT || '3000');
 
-console.log(`🚀 Pokémon Patacon Backend`);
-console.log(`📍 Server running on http://localhost:${PORT}`);
-console.log(`📚 API Docs: http://localhost:${PORT}`);
-console.log(`🔗 CORS Origin: ${process.env.CORS_ORIGIN || 'http://localhost:5173'}`);
+async function startServer() {
+  try {
+    // Conectar a MongoDB
+    await connectDB();
+    
+    // Inicializar servicio de Pokémon
+    await pokemonService.initialize();
+
+    console.log(`🚀 Pokémon Patacon Backend`);
+    console.log(`📍 Server running on http://localhost:${PORT}`);
+    console.log(`📚 API Docs: http://localhost:${PORT}`);
+    console.log(`🔗 CORS Origin: ${process.env.CORS_ORIGIN || 'http://localhost:5173'}`);
+    console.log(`🐾 Pokédex Endpoints:`);
+    console.log(`   GET /api/pokemon (list with filters)`);
+    console.log(`   GET /api/pokemon/:id (detail)`);
+    console.log(`   GET /api/pokemon/search?q=name (search)`);
+    console.log(`   GET /api/pokemon/type/:type (by type)`);
+  } catch (error) {
+    console.error('❌ Error starting server:', error);
+    process.exit(1);
+  }
+}
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Shutting down...');
+  await disconnectDB();
+  process.exit(0);
+});
+
+startServer();
 
 export default {
   port: PORT,

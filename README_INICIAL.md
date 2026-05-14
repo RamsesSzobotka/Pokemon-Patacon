@@ -22,7 +22,7 @@ Pokémon Patacon es un juego de batallas 1v1 multijugador en tiempo real basado 
 
 ### Datos
 - **API Principal**: [PokeAPI v2](https://pokeapi.co/api/v2/) - Datos oficiales de Pokémon
-- **Pool de Pokémon**: Exactamente 493 (Generaciones I-V)
+- **Pool de Pokémon**: Exactamente 649 (Generaciones I-V completas)
 - **Cache Local**: MongoDB para reducir llamadas a PokeAPI
 
 ## 📁 Estructura del Proyecto
@@ -263,7 +263,7 @@ MongoDB (por configurar):
 
 ```javascript
 // 5 colecciones:
-1. pokemon          // 493 Pokémon cache (preload desde PokeAPI)
+1. pokemon          // 649 Pokémon cache (preload desde PokeAPI)
 2. rooms            // Salas activas (TTL 30 min)
 3. battles          // Histórico de batallas
 4. type_matchups    // Tabla de efectividad 18×18
@@ -371,7 +371,7 @@ Sigue la estructura de carpetas. Para añadir nuevas rutas:
 Un cliente web progresivo accesible desde cualquier navegador donde 2 jugadores pueden:
 1. Crear una sala con código (4-6 caracteres)
 2. Compartir código y que otros se unan
-3. Seleccionar 6 Pokémon de 493 posibles (Gen I-V)
+3. Seleccionar 6 Pokémon de 649 posibles (Gen I-V)
 4. Máximo 1 Pokémon legendario por equipo
 5. Batallar en turnos en tiempo real via WebSocket
 6. Ver cambios de estado, daño, efectos instantáneamente
