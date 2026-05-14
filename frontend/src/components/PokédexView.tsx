@@ -21,6 +21,7 @@ const PokédexView: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonType | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [showAllMoves, setShowAllMoves] = useState(false);
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -123,6 +124,7 @@ const PokédexView: React.FC = () => {
 
   const closeDetail = () => {
     setIsDetailOpen(false);
+    setShowAllMoves(false);
   };
 
   return (
@@ -446,21 +448,66 @@ const PokédexView: React.FC = () => {
                   ))}
                 </div>
 
-                {/* Movimientos */}
+                {/* Movimientos - Lista Scroll con detalles completos */}
                 <div className="detail-moves">
                   <h3>MOVIMIENTOS</h3>
-                  <div className="moves-list">
-                    {selectedPokemon.moves.map(move => (
-                      <div key={move.name} className="move-item">
-                        <span className="move-name">{move.name.toUpperCase()}</span>
-                        <span className="move-type" style={{ backgroundColor: TYPE_COLORS[move.type] }}>
-                          {move.type}
-                        </span>
-                        <span className="move-power">Pow: {move.power || '-'}</span>
-                        <span className="move-acc">Acc: {move.accuracy || '-'}</span>
+                  
+                  {/* Botón para mostrar/ocultar todos los ataques */}
+                  <button 
+                    className="view-all-moves-btn"
+                    onClick={() => setShowAllMoves(!showAllMoves)}
+                  >
+                    {showAllMoves 
+                      ? '🔼 Ocultar movimientos' 
+                      : `🔍 Ver ${selectedPokemon.moves.length} ataques disponibles`
+                    }
+                  </button>
+
+                  {/* Lista de movimientos con scroll */}
+                  <div className={`moves-scroll-container ${showAllMoves ? 'expanded' : 'collapsed'}`}>
+                    {selectedPokemon.moves.map((move, index) => (
+                      <div key={`${move.name}-${index}`} className="move-card">
+                        <div className="move-header">
+                          <span className="move-name">{move.name.toUpperCase()}</span>
+                          <span 
+                            className="move-type-badge" 
+                            style={{ backgroundColor: TYPE_COLORS[move.type] || '#999' }}
+                          >
+                            {move.type.toUpperCase()}
+                          </span>
+                        </div>
+                        
+                        <div className="move-details">
+                          <div className="move-stat">
+                            <span className="stat-label">PODER</span>
+                            <span className="stat-value">{move.power !== null ? move.power : '—'}</span>
+                          </div>
+                          <div className="move-stat">
+                            <span className="stat-label">PRECISIÓN</span>
+                            <span className="stat-value">{move.accuracy !== null ? `${move.accuracy}%` : '—'}</span>
+                          </div>
+                          <div className="move-stat">
+                            <span className="stat-label">PRIORIDAD</span>
+                            <span className="stat-value">{move.priority >= 0 ? `+${move.priority}` : move.priority}</span>
+                          </div>
+                          <div className="move-stat">
+                            <span className="stat-label">TIPO</span>
+                            <span className={`damage-class ${move.damage_class}`}>
+                              {move.damage_class === 'physical' ? 'FÍSICO' : 
+                               move.damage_class === 'special' ? 'ESPECIAL' : 'ESTADO'}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
+
+                  {/* Indicador de más movimientos */}
+                  {!showAllMoves && selectedPokemon.moves.length > 4 && (
+                    <p className="moves-hint">
+                      + {selectedPokemon.moves.length - 4} ataques más. Haz clic en "Ver ataques" para ver todos.
+                    </p>
+                  )}
                 </div>
 
                 {/* Info adicional */}

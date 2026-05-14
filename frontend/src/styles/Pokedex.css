@@ -610,10 +610,177 @@
   text-align: right;
 }
 
-/* Movimientos */
-.moves-list {
-  display: grid;
+/* Movimientos - Lista Scroll */
+.detail-moves {
+  padding: 12px;
+  background: #1a1a1a;
+  border-radius: 3px;
+}
+
+.detail-moves h3 {
+  font-size: 12px;
+  color: #B3B3B3;
+  text-transform: uppercase;
+  margin: 0 0 12px 0;
+  letter-spacing: 0.5px;
+}
+
+/* Botón Ver ataques */
+.view-all-moves-btn {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
+  border: 2px solid #E10600;
+  color: #f5f5f5;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
+}
+
+.view-all-moves-btn:hover {
+  background: linear-gradient(135deg, #E10600 0%, #cc0d0d 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(225, 6, 0, 0.4);
+}
+
+/* Contenedor scroll de movimientos */
+.moves-scroll-container {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease-out;
+}
+
+.moves-scroll-container.expanded {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.moves-scroll-container.collapsed {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Scrollbar personalizada */
+.moves-scroll-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.moves-scroll-container::-webkit-scrollbar-track {
+  background: #0f0f0f;
+  border-radius: 4px;
+}
+
+.moves-scroll-container::-webkit-scrollbar-thumb {
+  background: #4a4a4a;
+  border-radius: 4px;
+}
+
+.moves-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #E10600;
+}
+
+/* Tarjeta de movimiento */
+.move-card {
+  background: #0f0f0f;
+  border: 1px solid #2d2d2d;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+}
+
+.move-card:hover {
+  border-color: #E10600;
+  background: #151515;
+}
+
+.move-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.move-name {
+  font-weight: 700;
+  color: #f5f5f5;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.move-type-badge {
+  color: #000;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.move-details {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.move-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.move-stat .stat-label {
+  font-size: 9px;
+  color: #666;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.move-stat .stat-value {
+  font-size: 12px;
+  color: #B3B3B3;
+  font-weight: 600;
+}
+
+/* Clase de daño */
+.damage-class {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.damage-class.physical {
+  background: rgba(225, 6, 0, 0.2);
+  color: #ff6666;
+}
+
+.damage-class.special {
+  background: rgba(104, 144, 240, 0.2);
+  color: #6890F0;
+}
+
+.damage-class.status {
+  background: rgba(168, 120, 120, 0.2);
+  color: #A87878;
+}
+
+/* Hint de más movimientos */
+.moves-hint {
+  text-align: center;
+  padding: 12px;
+  color: #666;
+  font-size: 11px;
+  font-style: italic;
+  margin: 8px 0 0 0;
 }
 
 .move-item {

@@ -436,35 +436,46 @@ export class PokemonService {
   }
 
   /**
-   * Obtiene movimientos válidos
+   * Obtiene TODOS los movimientos disponibles para un Pokémon (incluye MT/MO)
+   * Guarda todos los movimientos, incluyendo los de estado (sin poder)
    */
   private async getValidMoves(moves: any[]): Promise<Pokemon['moves']> {
     const validMoves: Pokemon['moves'] = [];
+    const seenMoves = new Set<string>();
 
-    for (const moveData of moves.slice(0, 20)) {
+    // Procesar TODOS los movimientos disponibles (no limitar a 20)
+    for (const moveData of moves) {
       try {
         const moveResponse = await axios.get(moveData.move.url, {
           timeout: 5000
         });
 
         const move = moveResponse.data;
-        if (move.power && move.accuracy) {
-          validMoves.push({
-            name: move.name.replace('-', ' '),
-            type: move.type.name.toLowerCase(),
-            power: move.power,
-            accuracy: move.accuracy,
-            priority: move.priority,
-            damage_class: move.damage_class.name
-          });
+        const moveName = move.name.replace(/-/g, ' ').toLowerCase();
 
-          if (validMoves.length >= 4) break;
-        }
+        // Evitar duplicados
+        if (seenMoves.has(moveName)) continue;
+        seenMoves.add(moveName);
+
+        // Guardar TODOS los movimientos (incluye status moves sin power)
+        validMoves.push({
+          name: moveName,
+          type: move.type.name.toLowerCase(),
+          power: move.power || null,
+          accuracy: move.accuracy || null,
+          priority: move.priority,
+          damage_class: move.damage_class?.name || 'status'
+        });
       } catch (error) {
-        // Continuar
+        // Continuar con el siguiente movimiento
+        console.warn(`⚠️ Error fetching move: ${moveData.move.name}`);
       }
     }
 
+    // Ordenar por nombre para mejor visualización
+    validMoves.sort((a, b) => a.name.localeCompare(b.name));
+
+    console.log(`✅ ${validMoves.length} movimientos guardados para este Pokémon`);
     return validMoves;
   }
 
