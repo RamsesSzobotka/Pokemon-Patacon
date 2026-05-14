@@ -267,14 +267,17 @@ export async function updateRoomState(code: string, newState: Room['state']): Pr
     update.finished_at = new Date();
   }
   
-  const result = await collection.findOneAndUpdate(
+  const updateResult = await collection.updateOne(
     { code },
-    { $set: update },
-    { returnDocument: 'after' }
+    { $set: update }
   );
-  
-  if (!result || !('value' in result)) return null;
-  return result.value as Room | null;
+
+  if (!updateResult || updateResult.matchedCount === 0) return null;
+
+  const updatedRoom = await collection.findOne({ code }) as Room | null;
+  if (!updatedRoom) return null;
+
+  return updatedRoom;
 }
 
 /**

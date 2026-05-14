@@ -1,133 +1,234 @@
 /**
- * WebSocket Room Manager
- * Gestiona conexiones WebSocket por sala
+ * WebSocket Room Manager (NUEVA ARQUITECTURA)
+ * Gestiona conexiones WebSocket persistentes por cliente
+ * Las salas son estructuras lógicas, no sockets independientes
  */
 
 export interface RoomConnection {
   ws: WebSocket;
   sessionId: string;
-  roomCode: string;
   playerName: string;
   joinedAt: Date;
 }
 
-interface WebSocket {
+export interface Room {
+  id: string;
+  players: string[]; // sessionIds de jugadores en la sala
+  state: string; // 'waiting', 'in_draft', 'in_battle', 'finished'
+}
+
+// Tipos para WebSocket de Bun
+interface BunWebSocket {
   send(data: string | ArrayBuffer | Blob): void;
   close(code?: number, reason?: string): void;
   readyState: number;
 }
 
-// Mapa: room_code -> Set<WebSocket connections>
-const rooms = new Map<string, Set<RoomConnection>>();
+// Mapa de conexiones: sessionId -> WebSocket
+// UNA sola conexión por cliente
+export const connections = new Map<string, BunWebSocket>();
 
-// Mapa inverso: WebSocket -> RoomConnection
-const connections = new Map<WebSocket, RoomConnection>();
+// Mapa de salas: roomId -> Room
+// Las salas son estructuras lógicas en memoria
+export const rooms = new Map<string, Room>();
+
+// Mapa inverso: sessionId -> roomCode (para saber en qué sala está cada jugador)
+export const sessionToRoom = new Map<string, string>();
 
 // Heartbeat: verificar conexiones vivas
 const HEARTBEAT_INTERVAL = 30000; // 30 segundos
 const HEARTBEAT_TIMEOUT = 10000; // 10 segundos para responder
-
-const heartbeatTimers = new Map<WebSocket, NodeJS.Timeout>();
+const heartbeatTimers = new Map<string, NodeJS.Timeout>();
 
 /**
- * Registrar un cliente en una sala
+ * Registrar un cliente con su sessionId
+ * NO associated a ninguna sala todavía
  */
-export function joinRoom(
-  ws: WebSocket,
-  roomCode: string,
-  sessionId: string,
-  playerName: string
-): void {
-  const upperCode = roomCode.toUpperCase();
-  
-  // Crear entrada de conexión
-  const connection: RoomConnection = {
-    ws,
-    sessionId,
-    roomCode: upperCode,
-    playerName,
-    joinedAt: new Date()
-  };
-  
-  // Agregar a la sala
-  if (!rooms.has(upperCode)) {
-    rooms.set(upperCode, new Set());
+export function registerConnection(sessionId: string, ws: BunWebSocket): void {
+  // Cerrar conexión existente si hay una
+  const existing = connections.get(sessionId);
+  if (existing && existing !== ws) {
+    try {
+      existing.close(1000, 'New connection from same session');
+    } catch {}
   }
-  rooms.get(upperCode)!.add(connection);
-  
-  // Mapa inverso para búsquedas rápidas
-  connections.set(ws, connection);
-  
-  // Iniciar heartbeat para esta conexión
-  startHeartbeat(ws);
-  
-  console.log(`[WS] Cliente joined: ${playerName} (${sessionId}) -> sala ${upperCode}`);
+
+  connections.set(sessionId, ws);
+  startHeartbeat(sessionId, ws);
+
+  console.log(`[WS] Cliente registrado: ${sessionId}`);
 }
 
 /**
- * Remover un cliente de su sala
+ * Remover conexión completamente
  */
-export function leaveRoom(ws: WebSocket): { roomCode: string; sessionId: string; playerName: string } | null {
-  const connection = connections.get(ws);
-  if (!connection) return null;
-  
-  const { roomCode, sessionId, playerName } = connection;
-  
-  // Remover del mapa
-  connections.delete(ws);
-  stopHeartbeat(ws);
-  
-  // Remover de la sala
+export function removeConnection(sessionId: string): void {
+  const roomCode = sessionToRoom.get(sessionId);
+
+  // Si estaba en una sala, notificamos a los demás
+  if (roomCode) {
+    const room = rooms.get(roomCode);
+    if (room) {
+      room.players = room.players.filter(p => p !== sessionId);
+
+      // Notificar a los demás jugadores
+      broadcast(roomCode, {
+        type: 'player:left',
+        data: { session_id: sessionId }
+      }, sessionId);
+
+      // Si la sala quedó vacía, eliminarla
+      if (room.players.length === 0) {
+        rooms.delete(roomCode);
+        console.log(`[WS] Sala ${roomCode} vacía, eliminada`);
+      }
+    }
+
+    sessionToRoom.delete(sessionId);
+  }
+
+  // Limpiar heartbeat
+  stopHeartbeat(sessionId);
+
+  // Remover conexión
+  connections.delete(sessionId);
+
+  console.log(`[WS] Conexión removida: ${sessionId}`);
+}
+
+/**
+ * Unir a un jugador a una sala (sin cerrar socket)
+ */
+export function joinRoom(sessionId: string, roomCode: string, playerName: string): boolean {
+  const ws = connections.get(sessionId);
+  if (!ws) {
+    console.warn(`[WS] No se puede unir: conexión ${sessionId} no existe`);
+    return false;
+  }
+
+  const upperCode = roomCode.toUpperCase();
+
+  // Si ya está en otra sala, salir primero
+  const currentRoom = sessionToRoom.get(sessionId);
+  if (currentRoom && currentRoom !== upperCode) {
+    leaveRoom(sessionId, false); // false = no notificar, lo haremos abajo
+  }
+
+  // Crear sala si no existe
+  if (!rooms.has(upperCode)) {
+    rooms.set(upperCode, {
+      id: upperCode,
+      players: [],
+      state: 'waiting'
+    });
+    console.log(`[WS] Sala creada: ${upperCode}`);
+  }
+
+  const room = rooms.get(upperCode)!;
+
+  // Verificar si ya está en la sala
+  if (!room.players.includes(sessionId)) {
+    room.players.push(sessionId);
+  }
+
+  // Mapear sesión a sala
+  sessionToRoom.set(sessionId, upperCode);
+
+  console.log(`[WS] Jugador ${playerName} (${sessionId}) unido a sala ${upperCode}`);
+
+  return true;
+}
+
+/**
+ * Sacar a un jugador de su sala actual
+ * @param notifyOthers si true, notifica a los demás jugadores
+ */
+export function leaveRoom(sessionId: string, notifyOthers: boolean = true): string | null {
+  const roomCode = sessionToRoom.get(sessionId);
+  if (!roomCode) return null;
+
   const room = rooms.get(roomCode);
   if (room) {
-    room.delete(connection);
-    if (room.size === 0) {
+    room.players = room.players.filter(p => p !== sessionId);
+
+    if (notifyOthers) {
+      broadcast(roomCode, {
+        type: 'player:left',
+        data: { session_id: sessionId }
+      }, sessionId);
+    }
+
+    // Si la sala quedó vacía, eliminarla
+    if (room.players.length === 0) {
       rooms.delete(roomCode);
       console.log(`[WS] Sala ${roomCode} vacía, eliminada`);
     }
   }
-  
-  console.log(`[WS] Cliente left: ${playerName} (${sessionId}) <- sala ${roomCode}`);
-  
-  return { roomCode, sessionId, playerName };
+
+  sessionToRoom.delete(sessionId);
+
+  console.log(`[WS] Jugador ${sessionId} salió de sala ${roomCode}`);
+
+  return roomCode || null;
 }
 
 /**
- * Broadcast a todos en una sala (incluyendo emisor opcional)
+ * Obtener la sala actual de un jugador
  */
-export function broadcast(
-  roomCode: string,
-  message: object,
-  excludeWs?: WebSocket
-): void {
+export function getPlayerRoom(sessionId: string): string | undefined {
+  return sessionToRoom.get(sessionId);
+}
+
+/**
+ * Verificar si una sala existe
+ */
+export function roomExists(roomCode: string): boolean {
+  return rooms.has(roomCode.toUpperCase());
+}
+
+/**
+ * Obtener todos los sessionIds en una sala
+ */
+export function getRoomPlayers(roomCode: string): string[] {
+  const room = rooms.get(roomCode.toUpperCase());
+  return room ? room.players : [];
+}
+
+/**
+ * Broadcast a todos en una sala (excepto opcionalmente uno)
+ */
+export function broadcast(roomCode: string, message: object, excludeSessionId?: string): void {
   const upperCode = roomCode.toUpperCase();
   const room = rooms.get(upperCode);
-  
+
   if (!room) {
     console.warn(`[WS] Broadcast a sala inexistente: ${upperCode}`);
     return;
   }
-  
+
   const payload = JSON.stringify(message);
-  
-  for (const conn of room) {
-    if (excludeWs && conn.ws === excludeWs) continue;
-    if (conn.ws.readyState !== 1) continue; // Solo conexiones abiertas
-    
+
+  for (const sessionId of room.players) {
+    if (excludeSessionId && sessionId === excludeSessionId) continue;
+
+    const ws = connections.get(sessionId);
+    if (!ws || ws.readyState !== 1) continue;
+
     try {
-      conn.ws.send(payload);
+      ws.send(payload);
     } catch (err) {
-      console.error(`[WS] Error enviando a ${conn.playerName}:`, err);
+      console.error(`[WS] Error enviando a ${sessionId}:`, err);
     }
   }
 }
 
 /**
- * Enviar mensaje a un WebSocket específico
+ * Enviar mensaje a un cliente específico
  */
-export function sendTo(ws: WebSocket, message: object): boolean {
-  if (ws.readyState !== 1) return false;
-  
+export function sendTo(sessionId: string, message: object): boolean {
+  const ws = connections.get(sessionId);
+  if (!ws || ws.readyState !== 1) return false;
+
   try {
     ws.send(JSON.stringify(message));
     return true;
@@ -138,61 +239,40 @@ export function sendTo(ws: WebSocket, message: object): boolean {
 }
 
 /**
- * Obtener info de conexión por WebSocket
+ * Obtener WebSocket por sessionId
  */
-export function getConnection(ws: WebSocket): RoomConnection | undefined {
-  return connections.get(ws);
-}
-
-/**
- * Obtener todos los clientes en una sala
- */
-export function getRoomClients(roomCode: string): RoomConnection[] {
-  const room = rooms.get(roomCode.toUpperCase());
-  return room ? Array.from(room) : [];
-}
-
-/**
- * Verificar si una sala existe y tiene clientes
- */
-export function roomExists(roomCode: string): boolean {
-  const room = rooms.get(roomCode.toUpperCase());
-  return !!room && room.size > 0;
+export function getConnection(sessionId: string): BunWebSocket | undefined {
+  return connections.get(sessionId);
 }
 
 /**
  * Heartbeat: mantener conexión viva
  */
-function startHeartbeat(ws: WebSocket): void {
-  stopHeartbeat(ws);
-  
+function startHeartbeat(sessionId: string, ws: BunWebSocket): void {
+  stopHeartbeat(sessionId);
+
   const timer = setInterval(() => {
-    if (ws.readyState !== 1) {
-      stopHeartbeat(ws);
+    const currentWs = connections.get(sessionId);
+    if (!currentWs || currentWs.readyState !== 1) {
+      stopHeartbeat(sessionId);
       return;
     }
-    
+
     // Enviar ping
-    sendTo(ws, { type: 'ping', timestamp: Date.now() });
-    
-    // Timeout para respuesta
-    const timeout = setTimeout(() => {
-      console.log(`[WS] Cliente sin respuesta, cerrando conexión`);
-      ws.close(4000, 'Heartbeat timeout');
-    }, HEARTBEAT_TIMEOUT);
-    
-    // Guardar timeout para limpiarlo
-    heartbeatTimers.set(ws, timeout);
+    sendTo(sessionId, { type: 'ping', timestamp: Date.now() });
+
+    // Timeout para respuesta - el cliente debe responder con pong
+    // Por ahora no cerramos automáticamente, confiamos en el navegador
   }, HEARTBEAT_INTERVAL);
-  
-  heartbeatTimers.set(ws, timer);
+
+  heartbeatTimers.set(sessionId, timer);
 }
 
-function stopHeartbeat(ws: WebSocket): void {
-  const timer = heartbeatTimers.get(ws);
+function stopHeartbeat(sessionId: string): void {
+  const timer = heartbeatTimers.get(sessionId);
   if (timer) {
     clearInterval(timer as any);
-    heartbeatTimers.delete(ws);
+    heartbeatTimers.delete(sessionId);
   }
 }
 
@@ -200,11 +280,18 @@ function stopHeartbeat(ws: WebSocket): void {
  * Limpiar todas las conexiones (shutdown)
  */
 export function cleanup(): void {
-  for (const ws of connections.keys()) {
+  for (const sessionId of connections.keys()) {
     try {
-      ws.close(1001, 'Server shutting down');
+      const ws = connections.get(sessionId);
+      if (ws) ws.close(1001, 'Server shutting down');
     } catch {}
   }
   connections.clear();
   rooms.clear();
+  sessionToRoom.clear();
+
+  for (const timer of heartbeatTimers.values()) {
+    clearInterval(timer as any);
+  }
+  heartbeatTimers.clear();
 }

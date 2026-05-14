@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { socket, connect, getSessionId, isConnected, getCurrentRoom } from '../websocket';
 import '../styles/MainMenu.css';
 
 interface RoomData {
@@ -15,7 +16,7 @@ const MainMenu: React.FC = () => {
   const [roomCode, setRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
-  const [sessionId, setSessionId] = useState<string>(() => {
+  const [sessionId] = useState<string>(() => {
     const saved = localStorage.getItem('patacon_session_id');
     if (saved) return saved;
     const gen = crypto.randomUUID();
@@ -47,145 +48,148 @@ const MainMenu: React.FC = () => {
     const savedCode = localStorage.getItem('patacon_room_code');
     if (savedCode) {
       setCreatedRoomCode(savedCode);
-      setScreen('create');
+
+      // Verificar si la sala ya está en estado in_draft
+      fetch(`/api/rooms/${savedCode}?session_id=${encodeURIComponent(sessionId)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.room && data.room.state === 'in_draft') {
+            setScreen('create');
+            // Conectar al socket si no está conectado
+            if (!isConnected()) {
+              connect();
+            }
+          } else if (data.success && data.room) {
+            setScreen('create');
+            // Conectar al socket
+            if (!isConnected()) {
+              connect();
+            }
+          }
+        })
+        .catch(err => console.error('Error checking room state:', err));
     }
   }, []);
 
-  // WebSocket connection for real-time room updates
+  // ==================== WEBSOCKET EVENT HANDLING ====================
   useEffect(() => {
-    let ws: WebSocket | null = null;
-    let reconnectTimer: NodeJS.Timeout | null = null;
-    let reconnectAttempts = 0;
-    const MAX_RECONNECT = 5;
-
-    function connect() {
-      if (!createdRoomCode) return;
-
-      const wsUrl = `ws://localhost:3000/ws/${createdRoomCode}?session_id=${encodeURIComponent(sessionId)}`;
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        console.log('[WS] Connected to room:', createdRoomCode);
-        reconnectAttempts = 0;
-
-        // Enviar init al servidor
-        ws!.send(JSON.stringify({
-          type: 'connection:init',
-          data: { session_id: sessionId, room_code: createdRoomCode }
-        }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-
-          switch (message.type) {
-            case 'connected':
-              console.log('[WS] Server confirmed connection');
-              break;
-
-            case 'room:joined':
-              // Guardar el número de jugador que viene del backend
-              if (typeof message.data.player_number === 'number') {
-                setPlayerNumber(message.data.player_number);
-              }
-              // Usar isHost del backend
-              if (typeof message.data.isHost === 'boolean') {
-                setIsHost(message.data.isHost);
-              }
-              // Actualizar conexión del oponente
-              if (message.data.opponent_connected !== undefined) {
-                setOpponentConnected(!!message.data.opponent_connected);
-              }
-              // Actualizar nombres de jugadores desde el inicio
-              if (message.data.player1_name) {
-                setPlayer1DisplayName(message.data.player1_name);
-              }
-              if (message.data.player2_name) {
-                setPlayer2DisplayName(message.data.player2_name || 'Esperando oponente...');
-              }
-              break;
-
-            case 'player:joined':
-              setOpponentConnected(true);
-              setOpponentName(message.data.player_name);
-              setPlayer2DisplayName(message.data.player_name);
-              // NO actualizar playerNumber aquí - cada jugador ya conoce su número desde room:joined
-              // Actualizar nombres si vienen
-              if (message.data.player1_name) {
-                setPlayer1DisplayName(message.data.player1_name);
-              }
-              if (message.data.player2_name) {
-                setPlayer2DisplayName(message.data.player2_name);
-              }
-              break;
-
-            case 'player:left':
-              if (message.data.session_id !== sessionId) {
-                setOpponentConnected(false);
-                setOpponentName(null);
-                setPlayer2DisplayName('Esperando oponente...');
-              }
-              break;
-
-            case 'room:state':
-              // NO actualizar playerNumber aquí - ya se estableció desde room:joined
-              // Actualizar conexión del oponente
-              if (message.data.opponent_connected !== undefined) {
-                setOpponentConnected(!!message.data.opponent_connected);
-              }
-              // Actualizar nombres de jugadores
-              if (message.data.player1_name) {
-                setPlayer1DisplayName(message.data.player1_name);
-              }
-              if (message.data.player2_name) {
-                setPlayer2DisplayName(message.data.player2_name);
-                setOpponentName(message.data.player2_name);
-              }
-              // Sincronizar isHost del backend
-              if (typeof message.data.isHost === 'boolean') {
-                setIsHost(message.data.isHost);
-              }
-              break;
-
-            case 'pong':
-              // Heartbeat response - conexión viva
-              break;
-
-            case 'error':
-              console.error('[WS] Server error:', message.message);
-              break;
-          }
-        } catch (e) {
-          console.error('[WS] Failed to parse message:', e);
-        }
-      };
-
-      ws.onclose = (event) => {
-        console.log(`[WS] Disconnected (code: ${event.code})`);
-
-        // Auto-reconectar si no fue un cierre intencional
-        if (event.code !== 1000 && reconnectAttempts < MAX_RECONNECT) {
-          reconnectAttempts++;
-          console.log(`[WS] Reconnecting... attempt ${reconnectAttempts}/${MAX_RECONNECT}`);
-          reconnectTimer = setTimeout(connect, 2000 * reconnectAttempts);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('[WS] WebSocket error:', error);
-      };
+    // Conectar al WebSocket si no está conectado
+    if (!isConnected()) {
+      connect();
     }
 
-    connect();
+    // Unsubscribe functions
+    const unsubscribes: (() => void)[] = [];
 
-    return () => {
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (ws) {
-        ws.close(1000, 'Component unmounting');
+    // Manejar conexión establecida
+    unsubscribes.push(socket.onConnect(() => {
+      console.log('[MainMenu] WebSocket conectado');
+    }));
+
+    // Sala creada exitosamente
+    unsubscribes.push(socket.on('room:created', (data) => {
+      console.log('[MainMenu] Sala creada:', data);
+      setCreatedRoomCode(data.roomCode);
+      setIsHost(true);
+      setPlayerNumber(1);
+      localStorage.setItem('patacon_room_code', data.roomCode);
+      setScreen('create');
+      setLoading(false);
+    }));
+
+    // Jugador unido a la sala
+    unsubscribes.push(socket.on('room:joined', (data) => {
+      console.log('[MainMenu] Joined room:', data);
+
+      if (typeof data.player_number === 'number') {
+        setPlayerNumber(data.player_number);
       }
+      if (typeof data.isHost === 'boolean') {
+        setIsHost(data.isHost);
+      }
+      if (data.opponent_connected !== undefined) {
+        setOpponentConnected(!!data.opponent_connected);
+      }
+      if (data.player1_name) {
+        setPlayer1DisplayName(data.player1_name);
+      }
+      if (data.player2_name) {
+        setPlayer2DisplayName(data.player2_name || 'Esperando oponente...');
+      }
+      if (data.state === 'in_draft') {
+        navigate(`/draft/${data.roomCode}`);
+      }
+
+      setCreatedRoomCode(data.roomCode);
+      setScreen('create');
+      setLoading(false);
+    }));
+
+    // Otro jugador se unió
+    unsubscribes.push(socket.on('player:joined', (data) => {
+      console.log('[MainMenu] Player joined:', data);
+      setOpponentConnected(true);
+      setOpponentName(data.player_name);
+      setPlayer2DisplayName(data.player_name);
+
+      if (data.player1_name) {
+        setPlayer1DisplayName(data.player1_name);
+      }
+      if (data.player2_name) {
+        setPlayer2DisplayName(data.player2_name);
+      }
+    }));
+
+    // Otro jugador salió
+    unsubscribes.push(socket.on('player:left', (data) => {
+      console.log('[MainMenu] Player left:', data);
+      if (data.session_id !== sessionId) {
+        setOpponentConnected(false);
+        setOpponentName(null);
+        setPlayer2DisplayName('Esperando oponente...');
+      }
+    }));
+
+    // Estado de la sala actualizado
+    unsubscribes.push(socket.on('room:state', (data) => {
+      console.log('[MainMenu] Room state:', data);
+      if (data.opponent_connected !== undefined) {
+        setOpponentConnected(!!data.opponent_connected);
+      }
+      if (data.player1_name) {
+        setPlayer1DisplayName(data.player1_name);
+      }
+      if (data.player2_name) {
+        setPlayer2DisplayName(data.player2_name);
+        setOpponentName(data.player2_name);
+      }
+      if (typeof data.isHost === 'boolean') {
+        setIsHost(data.isHost);
+      }
+    }));
+
+    // Draft iniciado
+    unsubscribes.push(socket.on('draft:started', () => {
+      console.log('[MainMenu] Draft started');
+      navigate(`/draft/${createdRoomCode}`);
+    }));
+
+    // Error del servidor
+    unsubscribes.push(socket.on('error', (data) => {
+      console.error('[MainMenu] Server error:', data);
+      // El mensaje puede ser un string o un objeto con propiedad message
+      const errorMessage = typeof data === 'string' ? data : (data?.message || 'Error del servidor');
+      alert(`❌ ${errorMessage}`);
+      setLoading(false);
+    }));
+
+    // Cleanup
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
     };
-  }, [createdRoomCode, sessionId]);
+  }, []);
+
+  // ==================== ACTIONS ====================
 
   const handleCreateRoom = async () => {
     if (!playerName.trim()) {
@@ -194,40 +198,47 @@ const MainMenu: React.FC = () => {
     }
 
     setLoading(true);
+
+    // Asegurar que el socket esté conectado
+    if (!isConnected()) {
+      connect();
+    }
+
+    // Enviar solicitud de crear sala
+    // Note: El evento CREATE_ROOM ahora lo maneja el servidor directamente
+    // Pero para compatibilidad, usamos el servicio REST primero y luego notify al WS
     try {
       const response = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           session_id: sessionId,
           player_name: playerName.trim()
         })
       });
 
       const data = await response.json();
-      
+
       if (!response.ok || !data.success) {
         console.error('[CreateRoom] Error response:', data);
         alert(`❌ ${data.error || 'Error al crear la sala'}`);
+        setLoading(false);
         return;
       }
-      
-      // Sincronizar con el servidor REST inmediatamente
-      const roomRes = await fetch(`/api/rooms/${data.code}?session_id=${encodeURIComponent(sessionId)}`);
-      const roomData = await roomRes.json();
-      
-      if (roomData.success && roomData.room) {
-        // Establecer isHost desde el backend inmediatamente
-        setIsHost(!!roomData.room.isHost);
-      }
-      
+
+      // Ahora unirse a la sala usando el WebSocket
+      socket.joinRoom(data.code, playerName.trim());
+
+      // Guardar código localmente
       setCreatedRoomCode(data.code);
       localStorage.setItem('patacon_room_code', data.code);
+      setIsHost(true);
+      setPlayerNumber(1);
       setScreen('create');
+
     } catch (error) {
       console.error('Error creating room:', error);
       alert('❌ Error al crear la sala');
-    } finally {
       setLoading(false);
     }
   };
@@ -243,40 +254,46 @@ const MainMenu: React.FC = () => {
     }
 
     setLoading(true);
+
+    // Asegurar que el socket esté conectado
+    if (!isConnected()) {
+      connect();
+    }
+
     try {
-      const response = await fetch(`/api/rooms/${roomCode}/join`, {
+      // Primero unirse usando la API REST
+      const response = await fetch(`/api/rooms/${roomCode.toUpperCase()}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           session_id: sessionId,
           player_name: playerName.trim()
         })
       });
 
       const data = await response.json();
-      if (data.success) {
-        console.log('Joined room:', data);
-        
-        // Sincronizar con el servidor REST para obtener isHost
-        const roomRes = await fetch(`/api/rooms/${data.code}?session_id=${encodeURIComponent(sessionId)}`);
-        const roomData = await roomRes.json();
-        
-        if (roomData.success && roomData.room) {
-          setIsHost(!!roomData.room.isHost);
-        }
-        
-        // Guardar código y navegar al lobby
-        localStorage.setItem('patacon_room_code', data.code);
-        setCreatedRoomCode(data.code);
-        setScreen('create');
-        alert(`✅ Te uniste a la sala ${data.code} como Jugador ${data.player_number}`);
-      } else {
+
+      if (!data.success) {
         alert(`❌ ${data.error || 'Sala no encontrada o llena'}`);
+        setLoading(false);
+        return;
       }
+
+      // Luego unirse usando el WebSocket
+      socket.joinRoom(data.code, playerName.trim());
+
+      // Guardar código
+      localStorage.setItem('patacon_room_code', data.code.toUpperCase());
+      setCreatedRoomCode(data.code.toUpperCase());
+      setScreen('create');
+      setIsHost(false);
+      setPlayerNumber(data.player_number || 2);
+
+      alert(`✅ Te uniste a la sala ${data.code} como Jugador ${data.player_number}`);
+
     } catch (error) {
       console.error('Error joining room:', error);
       alert('❌ Error al unirse a la sala');
-    } finally {
       setLoading(false);
     }
   };
@@ -284,6 +301,34 @@ const MainMenu: React.FC = () => {
   const copyRoomCode = () => {
     navigator.clipboard.writeText(createdRoomCode);
     alert('✅ Código copiado al portapapeles');
+  };
+
+  const handleStartDraft = async () => {
+    if (!opponentConnected) {
+      alert('❌ Necesitas un oponente conectado para iniciar');
+      return;
+    }
+    if (!isConnected()) {
+      alert('❌ La conexión con la sala no está lista');
+      return;
+    }
+
+    // Enviar evento para iniciar draft
+    socket.send({ type: 'draft:start' });
+  };
+
+  const handleLeaveRoom = async () => {
+    // Salir de la sala usando WebSocket (NO cerrar conexión)
+    socket.leaveRoom();
+
+    // Limpiar estado local
+    setCreatedRoomCode('');
+    localStorage.removeItem('patacon_room_code');
+    setOpponentConnected(false);
+    setOpponentName(null);
+    setIsHost(false);
+    setPlayerNumber(0);
+    setScreen('menu');
   };
 
   return (
@@ -405,31 +450,11 @@ const MainMenu: React.FC = () => {
                 <div className="divider"></div>
 
                 <div className="lobby-actions">
-                  {/* Botón solo visible para el host, solo se activa si hay 2 jugadores conectados */}
                   {isHost ? (
                     <button
                       className={`btn btn-danger ${!opponentConnected ? 'disabled' : ''}`}
-                      disabled={!opponentConnected}
-                      onClick={async () => {
-                        if (!opponentConnected) {
-                          alert('❌ Necesitas un oponente conectado para iniciar');
-                          return;
-                        }
-                        try {
-                          const res = await fetch(`/api/rooms/${createdRoomCode}/state`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ session_id: sessionId, state: 'in_draft' })
-                          });
-                          const data = await res.json();
-                          if (data.success) {
-                            alert('🚀 Draft iniciado');
-                            // aqui podríamos navegar al draft más tarde
-                          } else {
-                            alert(`❌ ${data.error || 'No se pudo iniciar'}`);
-                          }
-                        } catch (e) { console.error(e); }
-                      }}
+                      disabled={!opponentConnected || loading}
+                      onClick={handleStartDraft}
                     >
                       {!opponentConnected ? '🔒 ESPERANDO OPONENTE...' : '🚀 INICIAR PARTIDA'}
                     </button>
@@ -439,21 +464,7 @@ const MainMenu: React.FC = () => {
 
                   <button
                     className="btn btn-back"
-                    onClick={async () => {
-                      // abandonar sala
-                      try {
-                        await fetch(`/api/rooms/${createdRoomCode}/leave`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ session_id: sessionId })
-                        });
-                      } catch (e) {}
-                      setCreatedRoomCode('');
-                      localStorage.removeItem('patacon_room_code');
-                      setOpponentConnected(false);
-                      setOpponentName(null);
-                      setScreen('menu');
-                    }}
+                    onClick={handleLeaveRoom}
                   >
                     ABANDONAR SALA
                   </button>
@@ -554,7 +565,7 @@ const MainMenu: React.FC = () => {
 
         <div className="footer">
           <div className="footer-info">
-            <p className="version">🎮 Pokémon Patacon v1.0</p>
+            <p className="version">🎮 Pokémon Patacon v2.0 (WebSocket Persistente)</p>
           </div>
         </div>
       </div>

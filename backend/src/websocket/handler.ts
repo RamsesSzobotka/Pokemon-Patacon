@@ -1,9 +1,19 @@
 /**
- * WebSocket Message Handler
+ * WebSocket Message Handler (NUEVA ARQUITECTURA)
  * Procesa mensajes recibidos de los clientes
+ * Usa sessionId en lugar de WebSocket para identificar clientes
  */
 
-import { broadcast, sendTo, getConnection, leaveRoom } from './roomManager';
+import {
+  broadcast,
+  sendTo,
+  getConnection,
+  joinRoom as wsJoinRoom,
+  leaveRoom as wsLeaveRoom,
+  roomExists,
+  getPlayerRoom,
+  registerConnection
+} from './roomManager';
 import { getRoom, setReady, leaveRoom as leaveRoomService, draftPick } from '../services/roomService';
 import { getRoomByCode } from '../db/rooms';
 import type { Room, TeamMember } from '../db/rooms';
@@ -13,279 +23,477 @@ interface WSMessage {
   data?: Record<string, any>;
 }
 
-interface WebSocket {
+// Tipos para WebSocket de Bun
+interface BunWebSocket {
   send(data: string | ArrayBuffer | Blob): void;
   close(code?: number, reason?: string): void;
   readyState: number;
 }
 
 /**
- * Manejar mensaje recibido de un cliente
+ * Manejar mensaje recibido de un cliente (NUEVA ARQUITECTURA)
+ * @param sessionId Identificador de sesión del cliente
+ * @param rawMessage Mensaje JSON recibido
  */
-export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<void> {
+export async function handleMessageFromSession(sessionId: string, rawMessage: string): Promise<void> {
   let message: WSMessage;
-  
+
   try {
     message = JSON.parse(rawMessage);
   } catch {
-    sendTo(ws, { type: 'error', message: 'Invalid JSON' });
+    sendTo(sessionId, { type: 'error', message: 'Invalid JSON' });
     return;
   }
-  
-  const connection = getConnection(ws);
-  
+
+  // Asegurar que la conexión esté registrada
+  const connection = getConnection(sessionId);
+  if (!connection) {
+    sendTo(sessionId, { type: 'error', message: 'Conexión no registrada' });
+    return;
+  }
+
+  // El servidor debe tener registro de conexiones aunque no estén en sala
+  // Esto ya lo hace roomManager.registerConnection
+
   switch (message.type) {
-    case 'connection:init':
-      handleConnectionInit(ws, message.data, connection);
+    // ========== NUEVOS EVENTOS DE LA NUEVA ARQUITECTURA ==========
+
+    case 'CREATE_ROOM':
+      // Crear una nueva sala y unirse a ella
+      await handleCreateRoom(sessionId, message.data);
       break;
-      
+
+    case 'JOIN_ROOM':
+      // Unirse a una sala existente
+      await handleJoinRoom(sessionId, message.data);
+      break;
+
+    case 'LEAVE_ROOM':
+      // Salir de la sala actual
+      await handleLeaveRoom(sessionId);
+      break;
+
+    case 'RECONNECT':
+      // Reconectar a una sala existente
+      await handleReconnect(sessionId, message.data);
+      break;
+
+    // ========== EVENTOS ORIGINALES (mantenidos por compatibilidad) ==========
+
+    case 'connection:init':
+      // Este evento ahora simplemente une a la sala
+      await handleConnectionInit(sessionId, message.data);
+      break;
+
     case 'ping':
       // Heartbeat response
-      sendTo(ws, { type: 'pong', timestamp: Date.now() });
+      sendTo(sessionId, { type: 'pong', timestamp: Date.now() });
       break;
-      
+
     case 'room:state':
       // Cliente solicita estado actual
-      if (connection) {
-        handleRoomState(ws, connection.roomCode);
+      const currentRoom = getPlayerRoom(sessionId);
+      if (currentRoom) {
+        await handleRoomState(sessionId, currentRoom);
       }
       break;
-      
+
     case 'ready':
-      // Toggle ready status
-      if (connection) {
-        handleReady(ws, connection, message.data);
+      // Toggle ready status (ya no se usa, mantenido por compatibilidad)
+      const roomCode = getPlayerRoom(sessionId);
+      if (roomCode) {
+        sendTo(sessionId, { type: 'room:state', data: { state: 'waiting' } });
       }
       break;
-      
-case 'leave':
+
+    case 'leave':
       // Cliente abandona sala
-      if (connection) {
-        handleLeave(ws, connection);
-      }
+      await handleLeaveRoom(sessionId);
       break;
 
     case 'draft:pick':
       // Realizar un pick en el draft
-      if (connection) {
-        await handleDraftPick(ws, connection, message.data);
+      const currentRoomCode = getPlayerRoom(sessionId);
+      if (currentRoomCode) {
+        await handleDraftPick(sessionId, currentRoomCode, message.data);
       }
       break;
 
     case 'draft:state':
       // Solicitar estado del draft
-      if (connection) {
-        await handleDraftState(ws, connection);
+      const roomCode2 = getPlayerRoom(sessionId);
+      if (roomCode2) {
+        await handleDraftState(sessionId, roomCode2);
       }
       break;
 
     case 'draft:picks':
       // Solicitar picks de ambos jugadores
-      if (connection) {
-        await handleDraftPicks(ws, connection);
+      const roomCode3 = getPlayerRoom(sessionId);
+      if (roomCode3) {
+        await handleDraftPicks(sessionId, roomCode3);
+      }
+      break;
+
+    case 'draft:start':
+      // Iniciar draft (solo el host)
+      const roomCode4 = getPlayerRoom(sessionId);
+      if (roomCode4) {
+        await handleDraftStart(sessionId, roomCode4);
+      }
+      break;
+
+    case 'draft:confirm':
+      // Confirmar equipo y terminar draft
+      const roomCode5 = getPlayerRoom(sessionId);
+      if (roomCode5) {
+        await handleDraftConfirm(sessionId, roomCode5);
       }
       break;
 
     default:
-      sendTo(ws, { type: 'error', message: `Unknown message type: ${message.type}` });
+      sendTo(sessionId, { type: 'error', message: `Unknown message type: ${message.type}` });
   }
 }
 
 /**
- * Inicializar conexión - validar session_id y unirse a sala
+ * CREAR NUEVA SALA
+ * El cliente crea una sala y se une automáticamente
  */
-async function handleConnectionInit(
-  ws: WebSocket,
-  data: Record<string, any> | undefined,
-  existingConnection: ReturnType<typeof getConnection>
-): Promise<void> {
-  const sessionId = data?.session_id;
-  const roomCode = data?.room_code;
+async function handleCreateRoom(sessionId: string, data: Record<string, any> | undefined): Promise<void> {
+  const playerName = data?.player_name || 'Jugador';
 
-  if (!sessionId) {
-    sendTo(ws, { type: 'error', message: 'session_id requerido' });
-    return;
+  // Crear sala usando el servicio REST
+  try {
+    const response = await fetch('http://localhost:3000/api/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId,
+        player_name: playerName
+      })
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      sendTo(sessionId, { type: 'error', message: result.error || 'Error al crear sala' });
+      return;
+    }
+
+    const roomCode = result.code;
+
+    // Unirse a la sala en el WebSocket (estructura lógica)
+    wsJoinRoom(sessionId, roomCode, playerName);
+
+    // Responder al cliente
+    sendTo(sessionId, {
+      type: 'room:created',
+      data: {
+        roomCode,
+        player_name: playerName,
+        player_number: 1,
+        isHost: true
+      }
+    });
+
+    console.log(`[WS] Sala ${roomCode} creada por ${playerName} (${sessionId})`);
+
+  } catch (error) {
+    console.error('[WS] Error creando sala:', error);
+    sendTo(sessionId, { type: 'error', message: 'Error al crear sala' });
   }
+}
+
+/**
+ * UNIRSE A SALA EXISTENTE
+ */
+async function handleJoinRoom(sessionId: string, data: Record<string, any> | undefined): Promise<void> {
+  const roomCode = data?.roomId;
+  const playerName = data?.player_name || 'Jugador';
 
   if (!roomCode) {
-    sendTo(ws, { type: 'error', message: 'room_code requerido' });
+    sendTo(sessionId, { type: 'error', message: 'roomId requerido' });
     return;
   }
 
-  // Validar que la sala existe (usar getRoomByCode para obtener session_ids reales)
+  // Unirse a la sala usando el servicio REST
+  try {
+    const response = await fetch(`http://localhost:3000/api/rooms/${roomCode}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId,
+        player_name: playerName
+      })
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      sendTo(sessionId, { type: 'error', message: result.error || 'Error al unirse a la sala' });
+      return;
+    }
+
+    // Unirse a la sala en el WebSocket (estructura lógica)
+    wsJoinRoom(sessionId, roomCode, playerName);
+
+    // Obtener información de la sala para enviar al cliente
+    const room = await getRoomByCode(roomCode);
+    const playerNumber = result.player_number || 2;
+    const isHost = playerNumber === 1;
+
+    // Si es el primer jugador (player1), enviar 'room:created', sino 'room:joined'
+    const eventType = isHost ? 'room:created' : 'room:joined';
+
+    sendTo(sessionId, {
+      type: eventType,
+      data: {
+        roomCode,
+        player_name: playerName,
+        player_number: playerNumber,
+        isHost,
+        state: room?.state || 'waiting',
+        opponent_connected: playerNumber === 1 ? false : !!room?.players?.player1?.session_id,
+        player1_name: room?.players?.player1?.player_name,
+        player2_name: room?.players?.player2?.player_name
+      }
+    });
+
+    // Notificar al otro jugador
+    broadcast(roomCode, {
+      type: 'player:joined',
+      data: {
+        player_name: playerName,
+        player_number: result.player_number || 2
+      }
+    }, sessionId);
+
+    console.log(`[WS] Jugador ${playerName} (${sessionId}) se unió a sala ${roomCode}`);
+
+  } catch (error) {
+    console.error('[WS] Error uniéndose a sala:', error);
+    sendTo(sessionId, { type: 'error', message: 'Error al unirse a la sala' });
+  }
+}
+
+/**
+ * SALIR DE LA SALA ACTUAL
+ */
+async function handleLeaveRoom(sessionId: string): Promise<void> {
+  const roomCode = wsLeaveRoom(sessionId);
+
+  if (roomCode) {
+    // Notificar al servicio REST
+    try {
+      await fetch(`http://localhost:3000/api/rooms/${roomCode}/leave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+      });
+    } catch (e) {
+      console.error('[WS] Error notifying leave to REST:', e);
+    }
+  }
+
+  sendTo(sessionId, {
+    type: 'room:left',
+    data: { roomCode }
+  });
+
+  console.log(`[WS] Jugador ${sessionId} salió de la sala`);
+}
+
+/**
+ * RECONECTAR A UNA SALA EXISTENTE
+ * El cliente se reconecta y recupera su estado
+ */
+async function handleReconnect(sessionId: string, data: Record<string, any> | undefined): Promise<void> {
+  const roomCode = data?.roomCode;
+
+  if (!roomCode) {
+    sendTo(sessionId, { type: 'error', message: 'roomCode requerido para reconectar' });
+    return;
+  }
+
+  // Verificar que la sala existe
   const room = await getRoomByCode(roomCode);
+
   if (!room) {
-    sendTo(ws, { type: 'error', message: 'Sala no encontrada' });
+    sendTo(sessionId, { type: 'error', message: 'La sala ya no existe' });
     return;
   }
 
-  const upperCode = room.code;
-
-  // Determinar player name y número (comparando con session_ids reales)
+  // Determinar el número de jugador
+  let playerNumber = 0;
   let playerName = 'Jugador';
-  let isPlayer1 = false;
   let isHost = false;
 
   if (room.players.player1.session_id === sessionId) {
+    playerNumber = 1;
     playerName = room.players.player1.player_name || 'Jugador 1';
-    isPlayer1 = true;
     isHost = true;
   } else if (room.players.player2.session_id === sessionId) {
+    playerNumber = 2;
     playerName = room.players.player2.player_name || 'Jugador 2';
-    isPlayer1 = false;
     isHost = false;
   } else {
-    sendTo(ws, { type: 'error', message: 'No perteneces a esta sala' });
+    sendTo(sessionId, { type: 'error', message: 'No perteneces a esta sala' });
     return;
   }
 
-  // Registrar al cliente en la sala WebSocket ANTES de enviar cualquier mensaje
-  const { joinRoom, getRoomClients } = await import('./roomManager');
-  joinRoom(ws, upperCode, sessionId, playerName);
+  // Volver a unir a la sala
+  wsJoinRoom(sessionId, roomCode, playerName);
 
-  // Enviar mensaje de confirmación SOLO al cliente que se acaba de conectar
-  // NO enviar a todos - cada cliente se identifica por su session_id
-  const playerNumber = isPlayer1 ? 1 : 2;
-  
-  // Obtener información del rival
-  const rivalPlayerName = isPlayer1
-    ? room.players.player2.player_name
-    : room.players.player1.player_name;
-  const rivalConnected = isPlayer1
-    ? !!room.players.player2.session_id
-    : true; // Si no eres player1, player1 siempre existe (eres player2)
-
-  // Enviar solo al cliente que se conectó
-  sendTo(ws, {
-    type: 'room:joined',
+  // Enviar estado completo
+  sendTo(sessionId, {
+    type: 'room:reconnected',
     data: {
-      isHost,
+      roomCode,
       player_number: playerNumber,
-      player_name: isPlayer1 ? room.players.player1.player_name : room.players.player2.player_name,
-      roomCode: upperCode,
+      player_name: playerName,
+      isHost,
       state: room.state,
-      opponent_connected: rivalConnected,
-      opponent_name: rivalPlayerName,
-      // Nombres para mostrar en lista
+      opponent_connected: playerNumber === 1
+        ? !!room.players.player2.session_id
+        : true,
       player1_name: room.players.player1.player_name,
       player2_name: room.players.player2.player_name
     }
   });
-  
-  console.log(`[WS] Cliente joined: ${playerName} (player${playerNumber}) -> sala ${upperCode}, isHost: ${isHost}`);
 
-  // Broadcast a otros jugadores que alguien se unió (EXCLUYENDO al que se acaba de unir)
-  // Solo si hay al menos otro jugador conectado (player1 siempre existe)
-  broadcast(upperCode, {
-    type: 'player:joined',
+  // Notificar a los demás
+  broadcast(roomCode, {
+    type: 'player:reconnected',
     data: {
+      session_id: sessionId,
       player_name: playerName,
+      player_number: playerNumber
+    }
+  }, sessionId);
+
+  console.log(`[WS] Jugador ${sessionId} reconectado a sala ${roomCode}`);
+}
+
+/**
+ * Connection init (compatibilidad con cliente anterior)
+ */
+async function handleConnectionInit(
+  sessionId: string,
+  data: Record<string, any> | undefined
+): Promise<void> {
+  const roomCode = data?.room_code;
+  const playerName = data?.player_name || 'Jugador';
+
+  if (!roomCode) {
+    sendTo(sessionId, { type: 'error', message: 'room_code requerido' });
+    return;
+  }
+
+  // Unirse a la sala
+  wsJoinRoom(sessionId, roomCode, playerName);
+
+  // Obtener información de la sala
+  const room = await getRoomByCode(roomCode);
+
+  if (!room) {
+    sendTo(sessionId, { type: 'error', message: 'Sala no encontrada' });
+    return;
+  }
+
+  // Determinar número de jugador
+  let playerNumber = 0;
+  let isHost = false;
+
+  if (room.players.player1.session_id === sessionId) {
+    playerNumber = 1;
+    isHost = true;
+  } else if (room.players.player2.session_id === sessionId) {
+    playerNumber = 2;
+  }
+
+  // Si es el host (player1), enviar 'room:created', sino 'room:joined'
+  const eventType = isHost ? 'room:created' : 'room:joined';
+
+  sendTo(sessionId, {
+    type: eventType,
+    data: {
+      roomCode,
       player_number: playerNumber,
-      opponent_connected: true,
+      player_name: playerName,
+      isHost,
+      state: room.state,
+      opponent_connected: playerNumber === 1
+        ? !!room.players.player2.session_id
+        : true,
       player1_name: room.players.player1.player_name,
       player2_name: room.players.player2.player_name
     }
-  }, ws);
+  });
+
+  // Broadcast a otros
+  broadcast(roomCode, {
+    type: 'player:joined',
+    data: {
+      player_name: playerName,
+      player_number: playerNumber
+    }
+  }, sessionId);
 }
 
 /**
  * Obtener estado actual de la sala
  */
-async function handleRoomState(ws: WebSocket, roomCode: string): Promise<void> {
-  const connection = getConnection(ws);
-  if (!connection) return;
-  
-  const result = await getRoom(roomCode, connection.sessionId);
+async function handleRoomState(sessionId: string, roomCode: string): Promise<void> {
+  const result = await getRoom(roomCode, sessionId);
+
   if (!result.success || !result.room) {
-    sendTo(ws, { type: 'error', message: 'No se pudo obtener estado' });
+    sendTo(sessionId, { type: 'error', message: 'No se pudo obtener estado' });
     return;
   }
-  
+
   const room = result.room;
-  const isHost = room.isHost;
-  const isPlayer1 = room.players.player1.session_id === connection.sessionId || 
-                    room.players.player1.session_id === 'masked';
-  
-  sendTo(ws, {
+
+  sendTo(sessionId, {
     type: 'room:state',
     data: {
       state: room.state,
       opponent_connected: !!room.players.player2.player_name,
-      isHost
+      isHost: room.isHost
     }
   });
 }
-
-/**
- * Toggle ready status (ya no se usa, mantenido por compatibilidad)
- */
-async function handleReady(
-  ws: WebSocket,
-  connection: NonNullable<ReturnType<typeof getConnection>>,
-  data: Record<string, any> | undefined
-): Promise<void> {
-  // El sistema de ready fue eliminado
-  // Mantenido por compatibilidad, pero ya no hace nada
-  sendTo(ws, { type: 'room:state', data: { state: 'waiting' } });
-}
-
-/**
- * Manejar abandono de sala
- */
-async function handleLeave(
-  ws: WebSocket,
-  connection: NonNullable<ReturnType<typeof getConnection>>
-): Promise<void> {
-  const { roomCode, sessionId } = connection;
-
-  // Notificar a otros jugadores
-  broadcast(roomCode, {
-    type: 'player:left',
-    data: {
-      session_id: sessionId,
-      player_name: connection.playerName
-    }
-  });
-
-  // Remover de sala WebSocket
-  leaveRoom(ws);
-
-  // Llamar al servicio REST para actualizar la DB
-  await leaveRoomService(roomCode, sessionId);
-}
-
-// ============ HANDLERS DE DRAFT ============
 
 /**
  * Realizar un pick en el draft
  */
 async function handleDraftPick(
-  ws: WebSocket,
-  connection: NonNullable<ReturnType<typeof getConnection>>,
+  sessionId: string,
+  roomCode: string,
   data: Record<string, any> | undefined
 ): Promise<void> {
   const pokemon = data?.pokemon as TeamMember | undefined;
 
   if (!pokemon || !pokemon.pokeapi_id) {
-    sendTo(ws, { type: 'error', message: 'Pokémon requerido para el pick' });
+    sendTo(sessionId, { type: 'error', message: 'Pokémon requerido para el pick' });
     return;
   }
 
-  const result = await draftPick(connection.roomCode, connection.sessionId, pokemon);
+  const result = await draftPick(roomCode, sessionId, pokemon);
 
   if (!result.success) {
-    sendTo(ws, { type: 'draft:error', message: result.message });
+    sendTo(sessionId, { type: 'draft:error', message: result.message });
     return;
   }
 
   // Obtener sala actualizada para broadcast
-  const room = await getRoomByCode(connection.roomCode);
+  const room = await getRoomByCode(roomCode);
   if (!room) return;
 
   // Broadcast del pick a todos los jugadores
-  const playerNumber = room.players.player1.session_id === connection.sessionId ? 1 : 2;
+  const playerNumber = room.players.player1.session_id === sessionId ? 1 : 2;
 
-  broadcast(connection.roomCode, {
+  broadcast(roomCode, {
     type: 'draft:picked',
     data: {
       player_number: playerNumber,
@@ -299,9 +507,9 @@ async function handleDraftPick(
   // Si el draft se completó, cambiar estado a in_battle
   if (result.draft_completed && room.state !== 'in_battle') {
     const { changeRoomState } = await import('../services/roomService');
-    await changeRoomState(connection.roomCode, connection.sessionId, 'in_battle');
+    await changeRoomState(roomCode, sessionId, 'in_battle');
 
-    broadcast(connection.roomCode, {
+    broadcast(roomCode, {
       type: 'draft:completed',
       data: {
         team_1: room.draft_picks.player1,
@@ -314,26 +522,23 @@ async function handleDraftPick(
 /**
  * Obtener estado del draft
  */
-async function handleDraftState(
-  ws: WebSocket,
-  connection: NonNullable<ReturnType<typeof getConnection>>
-): Promise<void> {
+async function handleDraftState(sessionId: string, roomCode: string): Promise<void> {
   const { getDraftState } = await import('../services/roomService');
-  const result = await getDraftState(connection.roomCode, connection.sessionId);
+  const result = await getDraftState(roomCode, sessionId);
 
   if (!result.success || !result.draft) {
-    sendTo(ws, { type: 'draft:state', data: { started: false } });
+    sendTo(sessionId, { type: 'draft:state', data: { started: false } });
     return;
   }
 
   // Determinar si es el turno del cliente
-  const room = await getRoomByCode(connection.roomCode);
+  const room = await getRoomByCode(roomCode);
   if (!room) return;
 
-  const isPlayer1 = room.players.player1.session_id === connection.sessionId;
+  const isPlayer1 = room.players.player1.session_id === sessionId;
   const isMyTurn = result.draft.current_turn === (isPlayer1 ? 'player1' : 'player2');
 
-  sendTo(ws, {
+  sendTo(sessionId, {
     type: 'draft:state',
     data: {
       ...result.draft,
@@ -346,18 +551,15 @@ async function handleDraftState(
 /**
  * Obtener picks de ambos jugadores
  */
-async function handleDraftPicks(
-  ws: WebSocket,
-  connection: NonNullable<ReturnType<typeof getConnection>>
-): Promise<void> {
-  const room = await getRoomByCode(connection.roomCode);
+async function handleDraftPicks(sessionId: string, roomCode: string): Promise<void> {
+  const room = await getRoomByCode(roomCode);
 
   if (!room) {
-    sendTo(ws, { type: 'error', message: 'Sala no encontrada' });
+    sendTo(sessionId, { type: 'error', message: 'Sala no encontrada' });
     return;
   }
 
-  sendTo(ws, {
+  sendTo(sessionId, {
     type: 'draft:picks',
     data: {
       player1: room.draft_picks.player1,
@@ -368,19 +570,128 @@ async function handleDraftPicks(
 }
 
 /**
- * Manejar desconexión
+ * Iniciar el draft (solo el host/player1 puede iniciar)
  */
-export function handleClose(ws: WebSocket): void {
-  const connection = leaveRoom(ws);
-  
-  if (connection) {
-    // Notificar a otros jugadores
-    broadcast(connection.roomCode, {
+async function handleDraftStart(sessionId: string, roomCode: string): Promise<void> {
+  console.log(`[DRAFT] handleDraftStart called: sessionId=${sessionId}, roomCode=${roomCode}`);
+
+  const room = await getRoomByCode(roomCode);
+  console.log(`[DRAFT] Room found:`, room ? 'yes' : 'no');
+  console.log(`[DRAFT] Room players:`, room?.players);
+
+  if (!room) {
+    sendTo(sessionId, { type: 'error', message: 'Sala no encontrada' });
+    return;
+  }
+
+  // Verificar que es el host (player1)
+  console.log(`[DRAFT] Checking host: room.player1.session_id=${room.players.player1.session_id}, sessionId=${sessionId}`);
+  if (room.players.player1.session_id !== sessionId) {
+    sendTo(sessionId, { type: 'error', message: 'Solo el creador puede iniciar el draft' });
+    return;
+  }
+
+  // Verificar que hay 2 jugadores
+  console.log(`[DRAFT] Checking player2:`, room.players.player2.session_id);
+  if (!room.players.player2.session_id) {
+    sendTo(sessionId, { type: 'error', message: 'Necesitas un oponente para iniciar el draft' });
+    return;
+  }
+
+  // Importar servicios necesarios
+  const { changeRoomState, getDraftState } = await import('../services/roomService');
+
+  // Cambiar estado a in_draft e inicializar draft
+  const result = await changeRoomState(roomCode, sessionId, 'in_draft');
+
+  if (!result.success) {
+    sendTo(sessionId, { type: 'error', message: result.message || 'No se pudo iniciar el draft' });
+    return;
+  }
+
+  // Obtener estado del draft
+  const draftResult = await getDraftState(roomCode, sessionId);
+
+  // Broadcast a ambos jugadores que el draft empezó
+  broadcast(roomCode, {
+    type: 'draft:started',
+    data: {
+      current_turn: draftResult.draft?.current_turn || 'player1',
+      picks_remaining: draftResult.draft?.picks_remaining || { player1: 6, player2: 6 },
+      started: true
+    }
+  });
+
+  console.log(`[DRAFT] Started in room ${roomCode}, turn: ${draftResult.draft?.current_turn}`);
+}
+
+/**
+ * Confirmar equipo (terminar draft)
+ */
+async function handleDraftConfirm(sessionId: string, roomCode: string): Promise<void> {
+  const room = await getRoomByCode(roomCode);
+
+  if (!room) {
+    sendTo(sessionId, { type: 'error', message: 'Sala no encontrada' });
+    return;
+  }
+
+  // Verificar que el draft esté completo (ambos tienen 6 Pokémon)
+  if (!room.draft_picks || !room.draft_state?.completed) {
+    sendTo(sessionId, { type: 'error', message: 'El draft no está completo' });
+    return;
+  }
+
+  // Verificar que el equipo tiene 6 Pokémon
+  const playerIsP1 = room.players.player1.session_id === sessionId;
+  const team = playerIsP1 ? room.draft_picks.player1 : room.draft_picks.player2;
+
+  if (team.length !== 6) {
+    sendTo(sessionId, { type: 'error', message: 'Necesitas seleccionar 6 Pokémon' });
+    return;
+  }
+
+  // Importar servicios
+  const { changeRoomState } = await import('../services/roomService');
+
+  // Cambiar estado a in_battle
+  const result = await changeRoomState(roomCode, sessionId, 'in_battle');
+
+  if (!result.success) {
+    sendTo(sessionId, { type: 'error', message: 'No se pudo iniciar la batalla' });
+    return;
+  }
+
+  // Broadcast de inicio de batalla
+  broadcast(roomCode, {
+    type: 'battle:starting',
+    data: {
+      team_1: room.draft_picks.player1,
+      team_2: room.draft_picks.player2,
+      message: '¡La batalla está por comenzar!'
+    }
+  });
+
+  console.log(`[BATTLE] Starting in room ${roomCode}`);
+}
+
+/**
+ * Manejar desconexión (por sessionId)
+ */
+export function handleClose(sessionId: string): void {
+  // El roomManager ya maneja la limpieza de la conexión
+  // Aquí solo necesitamos notificar a otros jugadores en la sala
+  const roomCode = getPlayerRoom(sessionId);
+
+  if (roomCode) {
+    broadcast(roomCode, {
       type: 'player:left',
-      data: {
-        session_id: connection.sessionId,
-        player_name: connection.playerName
-      }
+      data: { session_id: sessionId }
     });
   }
+}
+
+// Mantener la función original para compatibilidad (deprecated)
+export async function handleMessage(ws: any, rawMessage: string): Promise<void> {
+  console.warn('[WS] handleMessage deprecated, usar handleMessageFromSession');
 }

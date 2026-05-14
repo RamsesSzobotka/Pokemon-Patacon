@@ -6,8 +6,8 @@ import { pokemonService } from './services/pokemonService';
 import { initializeRoomsIndexes } from './db/rooms';
 import pokemonRoutes from './routes/pokemon';
 import roomRoutes from './routes/rooms';
-import { handleMessage, handleClose } from './websocket/handler';
-import { cleanup as cleanupWebSocket } from './websocket/roomManager';
+import { handleMessage, handleClose, handleMessageFromSession } from './websocket/handler';
+import { cleanup as cleanupWebSocket, registerConnection, removeConnection } from './websocket/roomManager';
 
 // Initialize Hono app
 const app = new Hono();
@@ -25,11 +25,11 @@ app.use('*', cors({
 app.get('/', (c) => {
   return c.json({
     message: 'Pokémon Patacon Backend',
-    version: '1.0.0',
+    version: '2.0.0',
     endpoints: {
       pokemon: '/api/pokemon',
       rooms: '/api/rooms',
-      battle: 'ws://localhost:3000/battle/:room_code'
+      websocket: 'ws://localhost:3000/ws?session_id=xxx'
     }
   });
 });
@@ -70,124 +70,126 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-// ============ WEBSOCKET SERVER (Bun native) ============
+// ============ WEBSOCKET SERVER (NUEVA ARQUITECTURA) ============
+// Una sola conexión WebSocket por cliente, reusable para múltiples salas
 
 interface WSData {
-  roomCode: string;
   sessionId: string;
 }
-
-// Almacenar clientes WebSocket por sesión
-const wsClients = new Map<string, WebSocket>();
-
-// Usar Bun.serve con la API correcta de Bun
-const server = Bun.serve<WSData>({
-  port: PORT,
-  fetch(req, server) {
-    const url = new URL(req.url);
-    
-    // Solo manejar conexiones WebSocket en /ws/
-    if (url.pathname.startsWith('/ws/')) {
-      const pathParts = url.pathname.replace('/ws/', '').split('?');
-      const roomCode = pathParts[0].toUpperCase();
-      const sessionId = url.searchParams.get('session_id');
-      
-      if (!sessionId) {
-        return new Response('session_id requerido', { status: 400 });
-      }
-      
-      const success = server.upgrade(req, {
-        data: { roomCode, sessionId }
-      });
-      
-      if (success) {
-        return; // Upgrade completado
-      }
-      
-      return new Response('WebSocket upgrade falló', { status: 500 });
-    }
-    
-    // Para otras rutas, usar el fetch de Hono
-    return app.fetch(req);
-  },
-  websocket: {
-    open(ws) {
-      const data = ws.data as WSData;
-      wsClients.set(data.sessionId, ws as any);
-      
-      console.log(`[WS] Conexión abierta: ${data.sessionId} -> sala ${data.roomCode}`);
-      
-      // Enviar confirmación de conexión
-      ws.send(JSON.stringify({
-        type: 'connected',
-        data: { roomCode: data.roomCode }
-      }));
-    },
-    
-    async message(ws, message) {
-      const data = ws.data as WSData;
-
-      // Ignorar mensajes binarios o vacíos
-      if (!message || typeof message !== 'string') return;
-
-      // Pasar al handler de mensajes
-      try {
-        await handleMessage(ws as any, message.toString());
-      } catch (err) {
-        console.error('[WS] Error procesando mensaje:', err);
-      }
-    },
-    
-    close(ws, code, reason) {
-      const data = ws.data as WSData;
-      wsClients.delete(data.sessionId);
-      
-      console.log(`[WS] Conexión cerrada: ${data.sessionId} (code: ${code})`);
-      
-      // Notificar al handler de desconexión
-      try {
-        handleClose(ws as any);
-      } catch (err) {
-        console.error('[WS] Error en close handler:', err);
-      }
-    },
-    
-    error(ws, error) {
-      const data = ws.data as WSData;
-      console.error(`[WS] Error en ${data.sessionId}:`, error);
-    }
-  }
-});
-
-console.log(`🔌 WebSocket server en ws://localhost:${PORT}/ws/:room_code?session_id=xxx`);
 
 // Iniciar servidor con conexión a MongoDB
 async function startServer() {
   try {
-    // Conectar a MongoDB
+    // 1. Primero conectar a MongoDB
+    console.log(`🔌 Conectando a MongoDB: ${process.env.MONGODB_URI || 'mongodb://localhost:27017'}`);
     await connectDB();
-    
-    // Inicializar índices de rooms
-    await initializeRoomsIndexes();
-    
-    // Inicializar servicio de Pokémon
-    await pokemonService.initialize();
+    console.log('✅ MongoDB conectada correctamente');
 
-    console.log(`🚀 Pokémon Patacon Backend`);
+    // 2. Inicializar índices de rooms
+    await initializeRoomsIndexes();
+    console.log('✅ Índices de rooms creados');
+
+    // 3. Inicializar servicio de Pokémon
+    await pokemonService.initialize();
+    console.log('🐾 Servicio de Pokémon inicializado');
+
+    // 4. Iniciar el servidor WebSocket (después de que MongoDB esté lista)
+    const server = Bun.serve<WSData>({
+      port: PORT,
+      fetch(req, server) {
+        const url = new URL(req.url);
+
+        // NUEVA ARQUITECTURA: Una sola ruta WebSocket global /ws
+        if (url.pathname === '/ws' || url.pathname.startsWith('/ws/')) {
+          const sessionId = url.searchParams.get('session_id');
+
+          if (!sessionId) {
+            return new Response('session_id requerido', { status: 400 });
+          }
+
+          const success = server.upgrade(req, {
+            data: { sessionId }
+          });
+
+          if (success) {
+            return; // Upgrade completado
+          }
+
+          return new Response('WebSocket upgrade falló', { status: 500 });
+        }
+
+        // Para otras rutas, usar el fetch de Hono
+        return app.fetch(req);
+      },
+      websocket: {
+        open(ws) {
+          const data = ws.data as WSData;
+          const sessionId = data.sessionId;
+
+          // Registrar la conexión (una por sessionId)
+          registerConnection(sessionId, ws as any);
+
+          console.log(`[WS] Conexión abierta: ${sessionId}`);
+
+          // Enviar confirmación de conexión
+          ws.send(JSON.stringify({
+            type: 'connected',
+            data: { sessionId }
+          }));
+        },
+
+        async message(ws, message) {
+          const data = ws.data as WSData;
+          const sessionId = data.sessionId;
+
+          // Ignorar mensajes binarios o vacíos
+          if (!message || typeof message !== 'string') return;
+
+          // Pasar al handler de mensajes
+          try {
+            // NUEVA ARQUITECTURA: Pasar sessionId directamente
+            await handleMessageFromSession(sessionId, message.toString());
+          } catch (err) {
+            console.error('[WS] Error procesando mensaje:', err);
+          }
+        },
+
+        close(ws, code, reason) {
+          const data = ws.data as WSData;
+          const sessionId = data.sessionId;
+
+          // Remover la conexión
+          removeConnection(sessionId);
+
+          // Notificar al handler de desconexión
+          try {
+            handleClose(sessionId);
+          } catch (err) {
+            console.error('[WS] Error en close handler:', err);
+          }
+
+          console.log(`[WS] Conexión cerrada: ${sessionId} (code: ${code})`);
+        },
+
+        error(ws, error) {
+          const data = ws.data as WSData;
+          console.error(`[WS] Error en ${data.sessionId}:`, error);
+        }
+      }
+    });
+
+    console.log(`🔌 WebSocket server en ws://localhost:${PORT}/ws?session_id=xxx`);
+    console.log(`🚀 Pokémon Patacon Backend v2.0`);
     console.log(`📍 Server running on http://localhost:${PORT}`);
     console.log(`📚 API Docs: http://localhost:${PORT}`);
     console.log(`🔗 CORS Origin: ${process.env.CORS_ORIGIN || 'http://localhost:5173'}`);
-    console.log(`🐾 Pokédex Endpoints:`);
-    console.log(`   GET /api/pokemon (list with filters)`);
-    console.log(`   GET /api/pokemon/:id (detail)`);
-    console.log(`   GET /api/pokemon/search?q=name (search)`);
-    console.log(`   GET /api/pokemon/type/:type (by type)`);
+    console.log(`🐾 Nueva arquitectura: Una conexión WebSocket persistente por cliente`);
+
   } catch (error) {
     console.error('❌ Error starting server:', error);
     process.exit(1);
   }
 }
 
+// Iniciar el servidor
 startServer();
-
-export default server;

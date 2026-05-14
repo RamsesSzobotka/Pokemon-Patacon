@@ -389,6 +389,10 @@ export async function leaveRoom(
     if (!room) return { success: false, message: 'Sala no encontrada' };
 
     if (room.players.player1.session_id === sessionId) {
+      if (room.state !== 'waiting') {
+        return { success: true, message: 'El creador se desconectó, pero la sala permanece activa' };
+      }
+
       const deleted = await roomsDB.deleteRoom(upperCode);
       return deleted ? { success: true, message: 'Sala cerrada (creador salió)' } : { success: false, message: 'No se pudo cerrar la sala' };
     }

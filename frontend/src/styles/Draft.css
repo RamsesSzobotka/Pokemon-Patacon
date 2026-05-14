@@ -1,0 +1,358 @@
+.draft-container {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  color: white;
+  font-family: 'Pokemon', sans-serif;
+  padding: 20px;
+}
+
+.draft-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 30px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.draft-header h1 {
+  font-size: 1.5rem;
+  color: #ffd700;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  margin: 0;
+}
+
+.turn-indicator {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.turn-indicator .your-turn {
+  color: #2ecc71;
+  animation: pulse 1s infinite;
+}
+
+.turn-indicator .waiting-turn {
+  color: #95a5a6;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.exit-btn {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.exit-btn:hover {
+  background: #c0392b;
+}
+
+.draft-content {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+}
+
+.team-panel {
+  width: 250px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 15px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.team-panel h2 {
+  font-size: 1rem;
+  margin-bottom: 15px;
+  color: #ffd700;
+}
+
+.my-team {
+  border: 2px solid #3498db;
+}
+
+.opponent-team {
+  border: 2px solid #e74c3c;
+}
+
+.pokemon-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pokemon-slot {
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.pokemon-slot .pokemon-sprite {
+  width: 80px;
+  height: 80px;
+  image-rendering: pixelated;
+}
+
+.empty-slot {
+  font-size: 2rem;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.pick-count {
+  margin-top: 15px;
+  font-size: 0.9rem;
+  color: #95a5a6;
+}
+
+.selector-panel {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 15px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-input {
+  width: 100%;
+  padding: 15px;
+  font-size: 1rem;
+  border: 2px solid #3498db;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  margin-bottom: 15px;
+}
+
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.search-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pokemon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 60vh;
+  padding: 10px;
+}
+
+.pokemon-card {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.pokemon-card:hover:not(.disabled) {
+  background: rgba(52, 152, 219, 0.3);
+  border-color: #3498db;
+  transform: scale(1.05);
+}
+
+.pokemon-card.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pokemon-card.taken {
+  background: rgba(231, 76, 60, 0.2);
+  border-color: #e74c3c;
+}
+
+.card-sprite {
+  width: 60px;
+  height: 60px;
+  image-rendering: pixelated;
+}
+
+.card-name {
+  font-size: 0.7rem;
+  color: white;
+  text-align: center;
+  margin-top: 5px;
+}
+
+.card-legendary {
+  color: #f1c40f;
+  font-size: 1rem;
+}
+
+.selected-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px;
+}
+
+.preview-sprite {
+  width: 150px;
+  height: 150px;
+  image-rendering: pixelated;
+  margin-bottom: 20px;
+}
+
+.selected-preview h3 {
+  font-size: 1.5rem;
+  color: #ffd700;
+  margin-bottom: 10px;
+}
+
+.legendary-badge {
+  color: #f1c40f;
+  font-size: 1rem;
+  height: 20px;
+}
+
+.legendary-badge.show {
+  font-weight: bold;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.confirm-btn {
+  background: #2ecc71;
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.confirm-btn:hover {
+  background: #27ae60;
+}
+
+.cancel-btn {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.cancel-btn:hover {
+  background: #c0392b;
+}
+
+.error-message {
+  background: rgba(231, 76, 60, 0.8);
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.confirm-team-section {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.confirm-team-btn {
+  background: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%);
+  color: #1a1a2e;
+  border: none;
+  padding: 20px 50px;
+  border-radius: 10px;
+  font-size: 1.3rem;
+  font-weight: bold;
+  cursor: pointer;
+  animation: glow 1s infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 10px #f1c40f;
+  }
+  to {
+    box-shadow: 0 0 20px #f1c40f, 0 0 30px #f39c12;
+  }
+}
+
+.confirm-team-btn:hover {
+  transform: scale(1.05);
+}
+
+.battle-starting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 80vh;
+}
+
+.battle-starting h1 {
+  font-size: 3rem;
+  color: #ffd700;
+  text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.5);
+  margin-bottom: 30px;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 215, 0, 0.3);
+  border-top-color: #ffd700;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Scrollbar styling */
+.pokemon-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.pokemon-grid::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.pokemon-grid::-webkit-scrollbar-thumb {
+  background: #3498db;
+  border-radius: 4px;
+}
+
+.pokemon-grid::-webkit-scrollbar-thumb:hover {
+  background: #2980b9;
+}

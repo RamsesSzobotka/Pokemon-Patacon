@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import MainMenu from './components/MainMenu';
 import PokédexView from './components/PokédexView';
+import Draft from './components/Draft';
 import './App.css';
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
             <PokédexView />
           </div>
         } />
+        <Route path="/draft/:roomCode" element={<Draft />} />
       </Routes>
     </BrowserRouter>
   );
