@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/MainMenu.css';
 
@@ -30,6 +30,19 @@ const MainMenu: React.FC = () => {
   const [isHost, setIsHost] = useState(false);
   const [player1DisplayName, setPlayer1DisplayName] = useState<string>('Jugador 1');
   const [player2DisplayName, setPlayer2DisplayName] = useState<string>('Esperando oponente...');
+
+  // Audio background music ref
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Play background music on mount
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = 0.3; // 30% volume for background
+      audioRef.current.play().catch(() => {
+        // Autoplay might be blocked, that's ok
+      });
+    }
+  }, []);
 
   // Check backend health on mount
   useEffect(() => {
@@ -216,6 +229,13 @@ const MainMenu: React.FC = () => {
 
   return (
     <div className="main-menu-container">
+      {/* Background Music */}
+      <audio
+        ref={audioRef}
+        src="/assets/music/Title Screen - Pokémon Black and White (Restored).mp3"
+        loop
+        preload="auto"
+      />
       <div className="menu-card">
         {/* Pokemon Logo / Title Image */}
         <div className="logo-container">
