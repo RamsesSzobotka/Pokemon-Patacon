@@ -307,4 +307,138 @@ pokedex.get('/meta/cache', async (c) => {
   });
 });
 
+/**
+ * GET /api/pokemon/:id/moves - Obtiene los movimientos de un Pokémon
+ */
+pokedex.get('/:id/moves', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'));
+
+    if (isNaN(id) || id < 1 || id > 649) {
+      return c.json({
+        success: false,
+        error: 'Invalid Pokémon ID (must be 1-649)',
+        code: 'INVALID_ID'
+      }, 400);
+    }
+
+    const moves = await pokemonService.getPokemonMoves(id);
+
+    return c.json({
+      success: true,
+      data: {
+        pokemon_id: id,
+        moves,
+        count: moves.length
+      }
+    });
+  } catch (error) {
+    console.error(`Error in GET /api/pokemon/:id/moves:`, error);
+    return c.json({
+      success: false,
+      error: 'Error fetching Pokémon moves',
+      code: 'FETCH_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/moves - Obtiene todos los movimientos disponibles
+ */
+pokedex.get('/meta/moves/all', async (c) => {
+  try {
+    const limit = Math.min(parseInt(c.req.query('limit') || '100'), 500);
+    const type = c.req.query('type')?.toLowerCase();
+    const damageClass = c.req.query('damage_class')?.toLowerCase();
+
+    const { getAllMoves, getMovesByType, getMovesByDamageClass } = await import('../db/mongodb');
+
+    let moves;
+    if (type) {
+      moves = await getMovesByType(type);
+    } else if (damageClass) {
+      moves = await getMovesByDamageClass(damageClass);
+    } else {
+      moves = await getAllMoves();
+    }
+
+    // Aplicar limit
+    moves = moves.slice(0, limit);
+
+    return c.json({
+      success: true,
+      data: {
+        moves,
+        count: moves.length
+      }
+    });
+  } catch (error) {
+    console.error(`Error in GET /api/moves:`, error);
+    return c.json({
+      success: false,
+      error: 'Error fetching moves',
+      code: 'FETCH_ERROR'
+    }, 500);
+  }
+});
+
+/**
+ * POST /api/pokemon/meta/moves/update-spanish - Inicia migración en background
+ * Este endpoint inicia la migración para agregar descripciones en español (ejecuta en background)
+ */
+let migrationStatus = { running: false, updated: 0, errors: 0, startTime: '', endTime: '' };
+
+pokedex.post('/meta/moves/update-spanish', async (c) => {
+  if (migrationStatus.running) {
+    return c.json({
+      success: false,
+      error: 'Migración ya en progreso',
+      data: migrationStatus
+    }, 409);
+  }
+
+  // Iniciar migración en background
+  migrationStatus = { 
+    running: true, 
+    updated: 0, 
+    errors: 0, 
+    startTime: new Date().toISOString(), 
+    endTime: '' 
+  };
+
+  // Ejecutar sin esperar (background)
+  pokemonService.updateMovesWithSpanishData().then(result => {
+    migrationStatus = {
+      running: false,
+      updated: result.updated,
+      errors: result.errors,
+      startTime: migrationStatus.startTime,
+      endTime: new Date().toISOString()
+    };
+    console.log(`✅ Migración completada: ${result.updated} actualizados`);
+  }).catch(error => {
+    migrationStatus.running = false;
+    migrationStatus.errors++;
+    console.error('❌ Error en migración:', error);
+  });
+
+  return c.json({
+    success: true,
+    data: {
+      message: 'Migración iniciada en background',
+      status: migrationStatus
+    }
+  });
+});
+
+/**
+ * GET /api/pokemon/meta/moves/migration-status - Consulta estado de la migración
+ */
+pokedex.get('/meta/moves/migration-status', async (c) => {
+  return c.json({
+    success: true,
+    data: migrationStatus
+  });
+});
+
 export default pokedex;

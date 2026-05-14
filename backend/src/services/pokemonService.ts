@@ -5,8 +5,43 @@ import {
   insertPokemon,
   getPokemonList,
   countPokemon,
-  getAllPokemonIds
+  getAllPokemonIds,
+  insertMove,
+  getMovesByIds,
+  getAllMoves,
+  insertMovesBatch,
+  isMoveValidForCombat,
+  PRIMARY_AILMENTS
 } from '../db/mongodb';
+
+interface Move {
+  _id?: string;
+  move_id: number;
+  name: string;
+  type: string;
+  damage_class: string;
+  power: number | null;
+  accuracy: number | null;
+  pp: number;
+  priority: number;
+  target: string;
+  meta: {
+    ailment: string | null;
+    ailment_chance: number;
+    stat_changes: Array<{ stat: string; change: number }>;
+    flinch_chance: number;
+    heal: number;
+  };
+  flags: {
+    contact: boolean;
+    recharge: boolean;
+    protect: boolean;
+    mirror: boolean;
+    sound: boolean;
+  };
+  created_at: string;
+  updated_at: string;
+}
 
 interface Pokemon {
   _id?: string;
@@ -25,14 +60,7 @@ interface Pokemon {
   base_experience: number;
   is_legendary: boolean;
   is_mythical: boolean;
-  moves: Array<{
-    name: string;
-    type: string;
-    power: number | null;
-    accuracy: number | null;
-    priority: number;
-    damage_class: string;
-  }>;
+  move_ids: number[];  // Array de IDs de movimientos permitidos
   sprites: {
     animated_gif: string;
     static_png: string;
@@ -42,6 +70,9 @@ interface Pokemon {
   cached_at: string;
   updated_at: string;
 }
+
+// Cache en memoria para movimientos (optimización para battle engine)
+let movesCache: Map<number, Move> = new Map();
 
 const POKEAPI_BASE = process.env.POKEAPI_BASE_URL || 'https://pokeapi.co/api/v2';
 
@@ -390,8 +421,8 @@ export class PokemonService {
       });
       const generation = this.extractGenerationNumber(speciesResponse.data.generation.url);
 
-      // Obtener movimientos
-      const moves = await this.getValidMoves(data.moves);
+      // Obtener movimientos (devuelve move_ids)
+      const moveIds = await this.getValidMoves(data.moves);
 
       const pokemon: Pokemon = {
         pokeapi_id: id,
@@ -409,7 +440,7 @@ export class PokemonService {
         base_experience: data.base_experience || 0,
         is_legendary: isLegendary,
         is_mythical: isMythical,
-        moves,
+        move_ids: moveIds,
         sprites: {
           animated_gif: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif`,
           static_png: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`
@@ -436,14 +467,18 @@ export class PokemonService {
   }
 
   /**
-   * Obtiene TODOS los movimientos disponibles para un Pokémon (incluye MT/MO)
-   * Guarda todos los movimientos, incluyendo los de estado (sin poder)
+   * Obtiene los movimientos válidos para un Pokémon
+   * 1. Obtiene datos completos del movimiento desde PokeAPI
+   * 2. Valida si es válido para combate (tiene daño O aplica estado primario)
+   * 3. Guarda el movimiento en la colección moves (normalizado)
+   * 4. Retorna solo los move_ids para el Pokémon
    */
-  private async getValidMoves(moves: any[]): Promise<Pokemon['moves']> {
-    const validMoves: Pokemon['moves'] = [];
-    const seenMoves = new Set<string>();
+  private async getValidMoves(moves: any[]): Promise<number[]> {
+    const validMoveIds: number[] = [];
+    const seenMoveIds = new Set<number>();
+    const movesToInsert: any[] = [];
 
-    // Procesar TODOS los movimientos disponibles (no limitar a 20)
+    // Procesar TODOS los movimientos disponibles
     for (const moveData of moves) {
       try {
         const moveResponse = await axios.get(moveData.move.url, {
@@ -451,32 +486,79 @@ export class PokemonService {
         });
 
         const move = moveResponse.data;
-        const moveName = move.name.replace(/-/g, ' ').toLowerCase();
+        const moveId = move.id;
 
         // Evitar duplicados
-        if (seenMoves.has(moveName)) continue;
-        seenMoves.add(moveName);
+        if (seenMoveIds.has(moveId)) continue;
+        seenMoveIds.add(moveId);
 
-        // Guardar TODOS los movimientos (incluye status moves sin power)
-        validMoves.push({
-          name: moveName,
+        // Crear objeto de movimiento normalizado
+        const normalizedMove = {
+          move_id: moveId,
+          name: move.name.replace(/-/g, ' ').toLowerCase(),
           type: move.type.name.toLowerCase(),
+          damage_class: move.damage_class?.name || 'status',
           power: move.power || null,
           accuracy: move.accuracy || null,
-          priority: move.priority,
-          damage_class: move.damage_class?.name || 'status'
-        });
+          pp: move.pp || 5,
+          priority: move.priority || 0,
+          target: move.target?.name || 'selected-pokemon',
+          meta: {
+            ailment: move.meta?.ailment?.name || null,
+            ailment_chance: move.meta?.ailment_chance || 0,
+            stat_changes: (move.stat_changes || []).map((sc: any) => ({
+              stat: sc.stat.name,
+              change: sc.change
+            })),
+            flinch_chance: move.meta?.flinch_chance || 0,
+            heal: move.meta?.heal || 0
+          },
+          flags: {
+            contact: move.flags?.contact || false,
+            recharge: move.flags?.recharge || false,
+            protect: move.flags?.protect || false,
+            mirror: move.flags?.mirror_move || false,
+            sound: move.flags?.sound || false
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        // Validar si el movimiento es válido para combate
+        const validation = isMoveValidForCombat(normalizedMove);
+        
+        if (validation.isValid) {
+          validMoveIds.push(moveId);
+          movesToInsert.push(normalizedMove);
+          console.log(`  ✅ Move válido: ${normalizedMove.name} (power: ${normalizedMove.power}, ailment: ${normalizedMove.meta.ailment})`);
+        } else {
+          console.log(`  ❌ Move excluido: ${normalizedMove.name} - ${validation.reason}`);
+        }
       } catch (error) {
-        // Continuar con el siguiente movimiento
         console.warn(`⚠️ Error fetching move: ${moveData.move.name}`);
       }
     }
 
-    // Ordenar por nombre para mejor visualización
-    validMoves.sort((a, b) => a.name.localeCompare(b.name));
+    // Insertar movimientos válidos en la colección moves (batch para eficiencia)
+    if (movesToInsert.length > 0) {
+      try {
+        await insertMovesBatch(movesToInsert);
+        console.log(`💾 ${movesToInsert.length} movimientos guardados en colección moves`);
+        
+        // Agregar al cache en memoria
+        for (const move of movesToInsert) {
+          movesCache.set(move.move_id, move);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error guardando movimientos en batch:`, error);
+      }
+    }
 
-    console.log(`✅ ${validMoves.length} movimientos guardados para este Pokémon`);
-    return validMoves;
+    // Ordenar IDs para mejor visualización
+    validMoveIds.sort((a, b) => a - b);
+
+    console.log(`✅ ${validMoveIds.length} movimientos válidos para este Pokémon`);
+    return validMoveIds;
   }
 
   /**
@@ -498,6 +580,212 @@ export class PokemonService {
   clearMemoryCache(): void {
     this.inMemoryCache.clear();
     console.log('🧹 Caché en memoria limpiado');
+  }
+
+  /**
+   * Obtiene los movimientos completos de un Pokémon (para frontend)
+   * @param pokemonId ID del Pokémon en PokeAPI
+   */
+  async getPokemonMoves(pokemonId: number): Promise<any[]> {
+    // 1. Obtener el Pokémon de la DB (contiene move_ids)
+    const pokemon = await this.getPokemonById(pokemonId);
+    
+    if (!pokemon || !pokemon.move_ids || pokemon.move_ids.length === 0) {
+      return [];
+    }
+
+    // 2. Obtener los detalles de los movimientos desde la colección moves
+    const moves = await getMovesByIds(pokemon.move_ids);
+    
+    // Ordenar por nombre
+    return moves.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * Obtiene un movimiento por su ID (desde cache o DB)
+   */
+  async getMoveById(moveId: number): Promise<any | null> {
+    // Primero verificar en cache
+    if (movesCache.has(moveId)) {
+      return movesCache.get(moveId);
+    }
+
+    // Si no está en cache, buscar en DB
+    const { getMoveById: getMove } = await import('../db/mongodb');
+    const move = await getMove(moveId);
+    
+    if (move) {
+      movesCache.set(moveId, move);
+    }
+    
+    return move;
+  }
+
+  /**
+   * Carga todos los movimientos al cache en memoria (para battle engine)
+   */
+  async preloadMovesToCache(): Promise<void> {
+    const allMoves = await getAllMoves();
+    
+    for (const move of allMoves) {
+      movesCache.set(move.move_id, move);
+    }
+    
+    console.log(`✅ ${allMoves.length} movimientos cargados al cache`);
+  }
+
+  /**
+   * Obtiene el estado del cache de movimientos
+   */
+  getMovesCacheStats(): { size: number; message: string } {
+    return {
+      size: movesCache.size,
+      message: `${movesCache.size} movimientos en cache`
+    };
+  }
+
+  /**
+   * Obtiene la descripción en español de un movimiento desde PokeAPI
+   */
+  private async getMoveDescriptionES(moveId: number): Promise<string | null> {
+    try {
+      const response = await axios.get(`${POKEAPI_BASE}/move/${moveId}`, {
+        timeout: 5000
+      });
+
+      const data = response.data;
+      
+      // Buscar flavor_text en español
+      const flavorTextEntries = data.flavor_text_entries || [];
+      
+      // Prioridad: español > español (gen 5) > inglés
+      let descES = null;
+      
+      // Buscar específicamente "es" o "Spanish"
+      for (const entry of flavorTextEntries) {
+        if (entry.language.name === 'es') {
+          descES = entry.flavor_text
+            .replace(/\f/g, ' ')  // Reemplazar form feed
+            .replace(/\n/g, ' ')   // Reemplazar saltos de línea
+            .replace(/\s+/g, ' ')  // Normalizar espacios
+            .trim();
+          break;
+        }
+      }
+
+      // Si no hay español, usar inglés (fallback)
+      if (!descES) {
+        const enEntry = flavorTextEntries.find((e: any) => e.language.name === 'en');
+        if (enEntry) {
+          descES = enEntry.flavor_text
+            .replace(/\f/g, ' ')
+            .replace(/\n/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        }
+      }
+
+      return descES;
+    } catch (error) {
+      console.warn(`⚠️ Error obteniendo descripción para move ${moveId}`);
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene los nombres traducidos de un movimiento
+   */
+  private async getMoveNames(moveId: number): Promise<{ es: string; en: string; ja: string } | null> {
+    try {
+      const response = await axios.get(`${POKEAPI_BASE}/move/${moveId}`, {
+        timeout: 5000
+      });
+
+      const data = response.data;
+      const names = data.names || [];
+
+      let esName = data.name;
+      let enName = data.name;
+      let jaName = data.name;
+
+      for (const nameEntry of names) {
+        switch (nameEntry.language.name) {
+          case 'es':
+            esName = nameEntry.name;
+            break;
+          case 'en':
+            enName = nameEntry.name;
+            break;
+          case 'ja':
+            jaName = nameEntry.name;
+            break;
+        }
+      }
+
+      return {
+        es: esName,
+        en: enName,
+        ja: jaName
+      };
+    } catch (error) {
+      console.warn(`⚠️ Error obteniendo nombres para move ${moveId}`);
+      return null;
+    }
+  }
+
+  /**
+   * Actualiza todos los movimientos con descripciones en español
+   * Migrations: agrega description y names a los movimientos existentes
+   */
+  async updateMovesWithSpanishData(): Promise<{ updated: number; errors: number }> {
+    const { getAllMoves, insertMove } = await import('../db/mongodb');
+    
+    console.log('🔄 Iniciando actualización de movimientos con descripciones en español...');
+    
+    const allMoves = await getAllMoves();
+    console.log(`📊 Total de movimientos a actualizar: ${allMoves.length}`);
+    
+    let updated = 0;
+    let errors = 0;
+
+    for (const move of allMoves) {
+      try {
+        // Obtener descripción en español
+        const description = await this.getMoveDescriptionES(move.move_id);
+        
+        // Obtener nombres traducidos
+        const names = await this.getMoveNames(move.move_id);
+
+        // Actualizar el movimiento
+        const updatedMove = {
+          ...move,
+          description: description || move.description || null,
+          names: names || move.names || { es: move.name, en: move.name, ja: move.name },
+          updated_at: new Date().toISOString()
+        };
+
+        await insertMove(updatedMove);
+        
+        // Actualizar cache
+        movesCache.set(move.move_id, updatedMove);
+        
+        updated++;
+        
+        if (updated % 50 === 0) {
+          console.log(`✅ Actualizados ${updated}/${allMoves.length} movimientos...`);
+        }
+
+        // Rate limiting para no sobrecargar PokeAPI
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        console.warn(`⚠️ Error actualizando move ${move.move_id}:`, error);
+        errors++;
+      }
+    }
+
+    console.log(`✅ Migración completada: ${updated} actualizados, ${errors} errores`);
+    return { updated, errors };
   }
 }
 

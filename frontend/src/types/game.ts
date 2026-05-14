@@ -2,6 +2,39 @@
  * Tipos compartidos para Pokémon Patacon
  */
 
+export interface MoveType {
+  _id?: string;
+  move_id: number;
+  name: string;
+  names?: {
+    es: string;
+    en: string;
+    ja: string;
+  };
+  description?: string;
+  type: string;
+  damage_class: 'physical' | 'special' | 'status';
+  power: number | null;
+  accuracy: number | null;
+  pp: number;
+  priority: number;
+  target: string;
+  meta: {
+    ailment: string | null;
+    ailment_chance: number;
+    stat_changes: Array<{ stat: string; change: number }>;
+    flinch_chance: number;
+    heal: number;
+  };
+  flags: {
+    contact: boolean;
+    recharge: boolean;
+    protect: boolean;
+    mirror: boolean;
+    sound: boolean;
+  };
+}
+
 export interface PokemonType {
   id?: string;
   pokeapi_id: number;
@@ -19,14 +52,7 @@ export interface PokemonType {
   base_experience: number;
   is_legendary: boolean;
   is_mythical: boolean;
-  moves: Array<{
-    name: string;
-    type: string;
-    power: number | null;
-    accuracy: number | null;
-    priority: number;
-    damage_class: string;
-  }>;
+  move_ids: number[];  // Array de IDs de movimientos permitidos
   sprites: {
     animated_gif: string;
     static_png: string;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PokemonType, POKEMON_TYPES, TYPE_COLORS, GENERATIONS } from '../types/game';
+import { PokemonType, MoveType, POKEMON_TYPES, TYPE_COLORS, GENERATIONS } from '../types/game';
 import '../styles/Pokedex.css';
 
 interface PokemonListResponse {
@@ -14,6 +14,15 @@ interface PokemonListResponse {
   };
 }
 
+interface MovesResponse {
+  success: boolean;
+  data: {
+    pokemon_id: number;
+    moves: MoveType[];
+    count: number;
+  };
+}
+
 const PokédexView: React.FC = () => {
   const navigate = useNavigate();
   const [pokemon, setPokemon] = useState<PokemonType[]>([]);
@@ -22,6 +31,9 @@ const PokédexView: React.FC = () => {
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonType | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [showAllMoves, setShowAllMoves] = useState(false);
+  const [pokemonMoves, setPokemonMoves] = useState<MoveType[]>([]);
+  const [loadingMoves, setLoadingMoves] = useState(false);
+  const [selectedMove, setSelectedMove] = useState<MoveType | null>(null);
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,13 +129,32 @@ const PokédexView: React.FC = () => {
     setCurrentPage(1);
   };
 
-  const openDetail = (poke: PokemonType) => {
+  const openDetail = async (poke: PokemonType) => {
     setSelectedPokemon(poke);
     setIsDetailOpen(true);
+    setShowAllMoves(false);
+    setPokemonMoves([]);
+    
+    // Cargar movimientos del Pokémon desde el endpoint
+    setLoadingMoves(true);
+    try {
+      const response = await fetch(`/api/pokemon/${poke.pokeapi_id}/moves`);
+      const data: MovesResponse = await response.json();
+      
+      if (data.success) {
+        setPokemonMoves(data.data.moves);
+      }
+    } catch (err) {
+      console.error('Error fetching moves:', err);
+    } finally {
+      setLoadingMoves(false);
+    }
   };
 
   const closeDetail = () => {
     setIsDetailOpen(false);
+    setShowAllMoves(false);
+    setPokemonMoves([]);
     setShowAllMoves(false);
   };
 
@@ -452,60 +483,84 @@ const PokédexView: React.FC = () => {
                 <div className="detail-moves">
                   <h3>MOVIMIENTOS</h3>
                   
+                  {/* Indicador de carga de movimientos */}
+                  {loadingMoves && (
+                    <div className="moves-loading">
+                      <div className="spinner-small"></div>
+                      <span>Cargando movimientos...</span>
+                    </div>
+                  )}
+
                   {/* Botón para mostrar/ocultar todos los ataques */}
-                  <button 
-                    className="view-all-moves-btn"
-                    onClick={() => setShowAllMoves(!showAllMoves)}
-                  >
-                    {showAllMoves 
-                      ? '🔼 Ocultar movimientos' 
-                      : `🔍 Ver ${selectedPokemon.moves.length} ataques disponibles`
-                    }
-                  </button>
+                  {!loadingMoves && (
+                    <button 
+                      className="view-all-moves-btn"
+                      onClick={() => setShowAllMoves(!showAllMoves)}
+                    >
+                      {showAllMoves 
+                        ? '🔼 Ocultar movimientos' 
+                        : `🔍 Ver ${pokemonMoves.length} ataques disponibles`
+                      }
+                    </button>
+                  )}
 
                   {/* Lista de movimientos con scroll */}
-                  <div className={`moves-scroll-container ${showAllMoves ? 'expanded' : 'collapsed'}`}>
-                    {selectedPokemon.moves.map((move, index) => (
-                      <div key={`${move.name}-${index}`} className="move-card">
-                        <div className="move-header">
-                          <span className="move-name">{move.name.toUpperCase()}</span>
-                          <span 
-                            className="move-type-badge" 
-                            style={{ backgroundColor: TYPE_COLORS[move.type] || '#999' }}
-                          >
-                            {move.type.toUpperCase()}
-                          </span>
-                        </div>
-                        
-                        <div className="move-details">
-                          <div className="move-stat">
-                            <span className="stat-label">PODER</span>
-                            <span className="stat-value">{move.power !== null ? move.power : '—'}</span>
-                          </div>
-                          <div className="move-stat">
-                            <span className="stat-label">PRECISIÓN</span>
-                            <span className="stat-value">{move.accuracy !== null ? `${move.accuracy}%` : '—'}</span>
-                          </div>
-                          <div className="move-stat">
-                            <span className="stat-label">PRIORIDAD</span>
-                            <span className="stat-value">{move.priority >= 0 ? `+${move.priority}` : move.priority}</span>
-                          </div>
-                          <div className="move-stat">
-                            <span className="stat-label">TIPO</span>
-                            <span className={`damage-class ${move.damage_class}`}>
-                              {move.damage_class === 'physical' ? 'FÍSICO' : 
-                               move.damage_class === 'special' ? 'ESPECIAL' : 'ESTADO'}
+                  {!loadingMoves && (
+                    <div className={`moves-scroll-container ${showAllMoves ? 'expanded' : 'collapsed'}`}>
+                      {pokemonMoves.map((move) => (
+                        <div 
+                          key={move.move_id} 
+                          className="move-card"
+                          onClick={() => setSelectedMove(move)}
+                        >
+                          <div className="move-header">
+                            <span className="move-name">{move.names?.es?.toUpperCase() || move.name.toUpperCase()}</span>
+                            <span 
+                              className="move-type-badge" 
+                              style={{ backgroundColor: TYPE_COLORS[move.type] || '#999' }}
+                            >
+                              {move.type.toUpperCase()}
                             </span>
                           </div>
+                          
+                          <div className="move-details">
+                            <div className="move-stat">
+                              <span className="stat-label">PODER</span>
+                              <span className="stat-value">{move.power !== null ? move.power : '—'}</span>
+                            </div>
+                            <div className="move-stat">
+                              <span className="stat-label">PRECISIÓN</span>
+                              <span className="stat-value">{move.accuracy !== null ? `${move.accuracy}%` : '—'}</span>
+                            </div>
+                            <div className="move-stat">
+                              <span className="stat-label">PRIORIDAD</span>
+                              <span className="stat-value">{move.priority >= 0 ? `+${move.priority}` : move.priority}</span>
+                            </div>
+                            <div className="move-stat">
+                              <span className="stat-label">TIPO</span>
+                              <span className={`damage-class ${move.damage_class}`}>
+                                {move.damage_class === 'physical' ? 'FÍSICO' : 
+                                 move.damage_class === 'special' ? 'ESPECIAL' : 'ESTADO'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Mostrar estado aplicado si existe */}
+                          {move.meta?.ailment && (
+                            <div className="move-ailment">
+                              <span className="ailment-badge">{move.meta.ailment.toUpperCase()}</span>
+                              <span className="ailment-chance">{move.meta.ailment_chance}%</span>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Indicador de más movimientos */}
-                  {!showAllMoves && selectedPokemon.moves.length > 4 && (
+                  {!loadingMoves && !showAllMoves && pokemonMoves.length > 4 && (
                     <p className="moves-hint">
-                      + {selectedPokemon.moves.length - 4} ataques más. Haz clic en "Ver ataques" para ver todos.
+                      + {pokemonMoves.length - 4} ataques más. Haz clic en "Ver ataques" para ver todos.
                     </p>
                   )}
                 </div>
@@ -526,6 +581,85 @@ const PokédexView: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de descripción del movimiento */}
+      {selectedMove && (
+        <div className="move-detail-overlay" onClick={() => setSelectedMove(null)}>
+          <div className="move-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="move-detail-close"
+              onClick={() => setSelectedMove(null)}
+            >
+              ✕
+            </button>
+
+            <div className="move-detail-header">
+              <h2>{selectedMove.names?.es?.toUpperCase() || selectedMove.name.toUpperCase()}</h2>
+              <span 
+                className="move-type-badge-large"
+                style={{ backgroundColor: TYPE_COLORS[selectedMove.type] || '#999' }}
+              >
+                {selectedMove.type.toUpperCase()}
+              </span>
+            </div>
+
+            <div className="move-detail-description">
+              <p>{selectedMove.description || 'Sin descripción disponible.'}</p>
+            </div>
+
+            <div className="move-detail-stats">
+              <div className="detail-stat-item">
+                <span className="label">PODER</span>
+                <span className="value">{selectedMove.power !== null ? selectedMove.power : '—'}</span>
+              </div>
+              <div className="detail-stat-item">
+                <span className="label">PRECISIÓN</span>
+                <span className="value">{selectedMove.accuracy !== null ? `${selectedMove.accuracy}%` : '—'}</span>
+              </div>
+              <div className="detail-stat-item">
+                <span className="label">PP</span>
+                <span className="value">{selectedMove.pp || '—'}</span>
+              </div>
+              <div className="detail-stat-item">
+                <span className="label">PRIORIDAD</span>
+                <span className="value">{selectedMove.priority >= 0 ? `+${selectedMove.priority}` : selectedMove.priority}</span>
+              </div>
+            </div>
+
+            <div className="move-detail-class">
+              <span className={`damage-class-large ${selectedMove.damage_class}`}>
+                {selectedMove.damage_class === 'physical' ? '⚔️ FÍSICO' : 
+                 selectedMove.damage_class === 'special' ? '✨ ESPECIAL' : '📋 ESTADO'}
+              </span>
+            </div>
+
+            {selectedMove.meta?.ailment && (
+              <div className="move-detail-ailment">
+                <span className="ailment-label">Puede causar:</span>
+                <span 
+                  className="ailment-badge-large"
+                  style={{ 
+                    backgroundColor: selectedMove.meta.ailment === 'burn' ? '#ff6b35' :
+                                   selectedMove.meta.ailment === 'poison' ? '#9b59b6' :
+                                   selectedMove.meta.ailment === 'sleep' ? '#3498db' :
+                                   selectedMove.meta.ailment === 'paralysis' ? '#f1c40f' :
+                                   selectedMove.meta.ailment === 'freeze' ? '#00cec9' : '#999'
+                  }}
+                >
+                  {selectedMove.meta.ailment.toUpperCase()} ({selectedMove.meta.ailment_chance}%)
+                </span>
+              </div>
+            )}
+
+            <div className="move-detail-flags">
+              {selectedMove.flags?.protect && <span className="flag">🛡️ Bloqueable</span>}
+              {selectedMove.flags?.mirror && <span className="flag">🔄 Reflejable</span>}
+              {selectedMove.flags?.contact && <span className="flag">👊 Contacto</span>}
+              {selectedMove.flags?.recharge && <span className="flag">🔋 Recarga</span>}
             </div>
           </div>
         </div>

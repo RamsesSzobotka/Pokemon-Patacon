@@ -1,6 +1,6 @@
 # MongoDB Schemas - Pokemon Patacon
 
-**Versión:** 1.0  
+**Versión:** 2.0  
 **Fecha:** 13 de Mayo de 2026  
 **Estado:** Especificación Técnica
 
@@ -16,6 +16,8 @@
 - `pokeapi_id` (único)
 - `name` (texto)
 - `is_legendary` (booleano)
+- `types` (array)
+- `move_ids` (array)
 
 ```javascript
 {
@@ -35,18 +37,7 @@
   "base_experience": 64,
   "is_legendary": false,
   "is_mythical": false,
-  "moves": [
-    {
-      "name": "tackle",
-      "type": "normal",
-      "power": 40,
-      "accuracy": 100,
-      "priority": 0,
-      "damage_class": "physical",  // "physical" | "special" | "status"
-      "pokeapi_id": 33
-    },
-    // ... 3+ movimientos más (validados para Gen V)
-  ],
+  "move_ids": [33, 45, 73, 74, 102, ...],  // Array de IDs de movimientos válidos
   "sprites": {
     "animated_gif": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/versions/generation-v/black-white/animated/1.gif",
     "static_png": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/1.png"
@@ -57,6 +48,75 @@
   "updated_at": ISODate("2026-05-13T12:00:00Z")
 }
 ```
+
+**Nota:** El campo `move_ids` contiene únicamente los IDs de movimientos que el Pokémon puede aprender y que son válidos para combate (tienen poder > 0 O aplican estado primario).
+
+---
+
+### 1.1. `moves` - Movimientos Normalizados (Colección Independiente)
+
+**Propósito:** Almacenar todos los movimientos disponibles en una colección única y normalizada. Cada movimiento existe una sola vez y se referencia por ID desde los Pokémon.
+
+**Validación de Movimientos para Combate:**
+El sistema permite únicamente movimientos que:
+- Tienen daño directo (`power > 0` y `damage_class` = physical/special), O
+- Aplican estado primario (paralysis, sleep, poison, burn, freeze)
+
+Se excluyen:
+- Movimientos que solo modifican estadísticas (buff/debuff)
+- Movimientos de status sin efecto útil
+
+**Índices Recomendados:**
+- `move_id` (único)
+- `name` (texto)
+- `type` (para filtrar por tipo)
+- `damage_class` (physical/special/status)
+- `power` (orden descendente)
+- `meta.ailment` (para movimientos con estados)
+
+```javascript
+{
+  "_id": ObjectId,                          // MongoDB ID único
+  "move_id": 36,                            // ID único del movimiento (de PokeAPI)
+  "name": "flamethrower",                   // Nombre en inglés (base)
+  "names": {
+    "es": "lanzallamas",                    // Nombre en español
+    "en": "flamethrower",
+    "ja": "ひのこ"                          // Nombre en japonés
+  },
+  "description": "El usuario escupe un intenso chorro de llamas. Puede causar quemadura.",  // Descripción en español
+  "type": "fire",                           // Tipo del movimiento
+  "damage_class": "special",               // "physical" | "special" | "status"
+  "power": 90,                              // Potencia del movimiento (null para status)
+  "accuracy": 100,                          // Precisión (porcentaje)
+  "pp": 15,                                 // Power Points (usos disponibles)
+  "priority": 0,                            // Prioridad del movimiento [-6, +6]
+  "target": "selected-pokemon",            // "self" | "opponent" | "all" | "all-opponents"
+  "meta": {
+    "ailment": "burn",                      // Estado primario aplicado (paralysis|sleep|poison|burn|freeze|null)
+    "ailment_chance": 10,                  // Porcentaje de probabilidad de aplicar el estado
+    "stat_changes": [],                     // Cambios de estadísticas (buff/debuff)
+    "flinch_chance": 0,                     // Porcentaje de probabilidad de hacer flinch
+    "heal": 0                               // Porcentaje de curación (0-100)
+  },
+  "flags": {
+    "contact": false,                       // El movimiento hace contacto físico
+    "recharge": true,                      // Requiere recargarse al siguiente turno
+    "protect": true,                       // Puede ser bloqueado por Protect/Detect
+    "mirror": true,                        // Puede ser reflejar por Magic Coat
+    "sound": false,                        // Es un movimiento de sonido
+    "powder": false,                       // Afectado por polvos (Bloom Wrap, etc.)
+    "distance": false                      // Puede alcanzar a objetivos a distancia
+  },
+  "created_at": ISODate("2026-05-13T12:00:00Z"),
+  "updated_at": ISODate("2026-05-13T12:00:00Z")
+}
+```
+
+**Relación con Pokémon:**
+- Cada Pokémon en la colección `pokemon` tiene un campo `move_ids: number[]` que contiene los IDs de los movimientos que puede aprender.
+- La referencia es por `move_id`, no embebida - esto reduce redundancia y facilita el balanceo global.
+- Un mismo movimiento puede ser usado por múltiples Pokémon pero solo se almacena una vez en `moves`.
 
 ---
 
@@ -250,22 +310,44 @@
 
 ```typescript
 // En backend initialization
+
+// === COLECCIÓN POKEMON ===
 await db.collection('pokemon').createIndex({ pokeapi_id: 1 }, { unique: true });
+await db.collection('pokemon').createIndex({ name: 1 });
 await db.collection('pokemon').createIndex({ name: 'text' });
 await db.collection('pokemon').createIndex({ is_legendary: 1 });
+await db.collection('pokemon').createIndex({ is_mythical: 1 });
+await db.collection('pokemon').createIndex({ types: 1 });
+await db.collection('pokemon').createIndex({ generation: 1 });
+await db.collection('pokemon').createIndex({ move_ids: 1 });  // Para buscar Pokémon por movimiento
+await db.collection('pokemon').createIndex({ cached_at: 1 });
 
+// === COLECCIÓN MOVES (Optimizados para Battle Engine) ===
+await db.collection('moves').createIndex({ move_id: 1 }, { unique: true });
+await db.collection('moves').createIndex({ name: 1 });
+await db.collection('moves').createIndex({ type: 1 });
+await db.collection('moves').createIndex({ damage_class: 1 });
+await db.collection('moves').createIndex({ power: -1 });  // Ordenar por poder descendente
+await db.collection('moves').createIndex({ 'meta.ailment': 1 });
+await db.collection('moves').createIndex({ type: 1, damage_class: 1 });  // Filtrado compuesto
+await db.collection('moves').createIndex({ power: 1, accuracy: 1 });  // Optimización de daño
+
+// === COLECCIÓN ROOMS ===
 await db.collection('rooms').createIndex({ code: 1 }, { unique: true });
 await db.collection('rooms').createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
 await db.collection('rooms').createIndex({ state: 1 });
 
+// === COLECCIÓN BATTLES ===
 await db.collection('battles').createIndex({ room_code: 1 }, { unique: true });
 await db.collection('battles').createIndex({ started_at: 1 }, { expireAfterSeconds: 3600 });
 
+// === COLECCIÓN TYPE_MATCHUPS ===
 await db.collection('type_matchups').createIndex(
   { attacker_type: 1, defender_type: 1 },
   { unique: true }
 );
 
+// === COLECCIÓN SESSIONS (Opcional) ===
 await db.collection('sessions').createIndex({ session_id: 1 }, { unique: true });
 await db.collection('sessions').createIndex({ created_at: 1 }, { expireAfterSeconds: 86400 });
 ```
@@ -294,6 +376,36 @@ db.type_matchups.findOne({ attacker_type: "electric", defender_type: "water" })
 db.battles.findOne({ room_code: "AB12CD" })
 ```
 
+### Obtener los movimientos de un Pokémon (por IDs)
+```javascript
+// 1. Obtener move_ids del Pokémon
+const pokemon = db.pokemon.findOne({ pokeapi_id: 25 });
+// pokemon.move_ids = [25, 87, 93, 98, 145, ...]
+
+// 2. Obtener detalles de los movimientos
+db.moves.find({ move_id: { $in: pokemon.move_ids } })
+```
+
+### Buscar Pokémon que pueden aprender un movimiento específico
+```javascript
+db.pokemon.find({ move_ids: 25 })  // Buscar Pokémon con "thunderbolt"
+```
+
+### Filtrar movimientos por tipo y clase de daño
+```javascript
+db.moves.find({ type: "fire", damage_class: "special" })
+```
+
+### Obtener movimientos que aplican estado (para estrategias)
+```javascript
+db.moves.find({ "meta.ailment": "paralysis" })
+```
+
+### Obtener movimientos de alto poder para damage dealer
+```javascript
+db.moves.find({ power: { $gte: 100 } }).sort({ power: -1 }).limit(10)
+```
+
 ---
 
 ## 🚀 Data Seeding (Inicialización)
@@ -301,10 +413,24 @@ db.battles.findOne({ room_code: "AB12CD" })
 Al iniciar la aplicación por primera vez:
 
 1. Descargar 649 Pokémon desde PokeAPI v2
-2. Insertar en colección `pokemon`
+2. Para cada Pokémon:
+   - Obtener todos sus movimientos disponibles
+   - Validar cada movimiento (solo válidos para combate)
+   - Guardar movimientos únicos en colección `moves`
+   - Guardar solo los `move_ids` en el Pokémon
 3. Descargar tabla de tipos (18×18 matchups)
 4. Insertar en colección `type_matchups`
 5. Crear índices automáticamente
 
-**Tiempo estimado:** ~30 segundos en primera conexión (incluye rate limiting de PokeAPI)
+**Flujo de Validación de Movimientos:**
+```
+Para cada movimiento del Pokémon:
+  1. Obtener datos completos desde PokeAPI
+  2. Verificar si tiene poder > 0 (movimiento de daño)
+  3. O verificar si aplica estado primario (paralysis|sleep|poison|burn|freeze)
+  4. Si cumple 2 o 3 → GUARDAR en colección moves + agregar ID a move_ids
+  5. Si no → EXCLUIR (buffs/debuffs puros, status sin efecto)
+```
+
+**Tiempo estimado:** ~2-5 minutos en primera conexión (incluye rate limiting de PokeAPI y validación de movimientos para ~650K+ movimientos totales)
 
