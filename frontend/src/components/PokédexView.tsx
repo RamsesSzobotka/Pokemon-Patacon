@@ -160,21 +160,22 @@ const PokédexView: React.FC = () => {
 
   return (
     <div className="pokedex-view">
-      {/* Header */}
-      <div className="pokedex-header">
-        <button
-          className="back-btn-header"
-          onClick={() => navigate('/')}
-          title="Volver al menú"
-        >
-          ◀
-        </button>
-        <h1>📖 POKÉDEX - 649 POKÉMON (GEN I-V)</h1>
-        <p className="subtitle">Explora todos los Pokémon disponibles en batalla</p>
-      </div>
+      {/* Main Layout: Filtros + Área de Pokémon */}
+      <div className="pokedex-main">
+        {/* Filtros */}
+        <div className="filters-panel">
+          {/* Header dentro de filtros */}
+          <div className="filters-header">
+            <button
+              className="back-btn-filters"
+              onClick={() => navigate('/')}
+              title="Volver al menú"
+            >
+              ◀
+            </button>
+            <span className="filters-title">POKÉDEX</span>
+          </div>
 
-      {/* Filtros */}
-      <div className="filters-panel">
         {/* Búsqueda */}
         <div className="filter-section">
           <label htmlFor="search">BUSCAR POKÉMON</label>
@@ -303,29 +304,32 @@ const PokédexView: React.FC = () => {
             <option value={100}>100 por página</option>
           </select>
         </div>
-      </div>
+        </div>  {/* cierra filters-panel */}
 
-      {/* Estado de carga/error */}
-      {loading && (
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Cargando Pokémon...</p>
-        </div>
-      )}
+        {/* Área de Pokémon */}
+        <div className="pokemon-area">
+          <div className="pokemon-scroll-container">
+            {/* Estado de carga/error */}
+            {loading && (
+              <div className="loading-state">
+                <div className="spinner"></div>
+                <p>Cargando Pokémon...</p>
+              </div>
+            )}
 
-      {error && (
-        <div className="error-state">
-          <p>❌ Error: {error}</p>
-          <button onClick={fetchPokemon} className="btn btn-primary">
-            Reintentar
-          </button>
-        </div>
-      )}
+            {error && (
+              <div className="error-state">
+                <p>❌ Error: {error}</p>
+                <button onClick={fetchPokemon} className="btn btn-primary">
+                  Reintentar
+                </button>
+              </div>
+            )}
 
-      {/* Grid de Pokémon */}
-      {!loading && pokemon.length > 0 && (
-        <>
-          <div className="pokemon-grid">
+            {/* Grid de Pokémon */}
+            {!loading && pokemon.length > 0 && (
+              <>
+                <div className="pokemon-grid">
             {pokemon.map((poke) => (
               <div
                 key={poke.pokeapi_id}
@@ -405,19 +409,22 @@ const PokédexView: React.FC = () => {
             >
               Siguiente ▶
             </button>
-          </div>
-        </>
-      )}
+          </div>  {/* cierra pagination */}
+                </>
+            )}
 
-      {/* Sin resultados */}
-      {!loading && pokemon.length === 0 && !error && (
-        <div className="no-results">
-          <p>😔 No se encontraron Pokémon con los filtros aplicados</p>
-          <button onClick={clearAllFilters} className="btn btn-primary">
-            Limpiar filtros
-          </button>
-        </div>
-      )}
+            {/* Sin resultados */}
+            {!loading && pokemon.length === 0 && !error && (
+              <div className="no-results">
+                <p>😔 No se encontraron Pokémon con los filtros aplicados</p>
+                <button onClick={clearAllFilters} className="btn btn-primary">
+                  Limpiar filtros
+                </button>
+              </div>
+            )}
+          </div>  {/* cierra pokemon-scroll-container */}
+        </div>  {/* cierra pokemon-area */}
+      </div>  {/* cierra pokedex-main */}
 
       {/* Modal de detalles */}
       {isDetailOpen && selectedPokemon && (

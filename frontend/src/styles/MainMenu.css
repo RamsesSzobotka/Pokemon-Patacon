@@ -79,7 +79,7 @@
     0 0 10px rgba(225, 6, 0, 0.5),
     0 0 20px rgba(225, 6, 0, 0.3),
     0 2px 4px rgba(0, 0, 0, 0.8);
-  animation: glow 2s ease-in-out infinite alternate, float 3s ease-in-out infinite;
+  animation: float 3s ease-in-out infinite;
 }
 
 @keyframes glow {

@@ -2,53 +2,56 @@
 
 .pokedex-view {
   width: 100%;
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 20px;
   animation: fadeIn 0.3s ease-out;
 }
 
-/* Header */
-.pokedex-header {
-  text-align: center;
-  margin-bottom: 32px;
-  position: relative;
+.pokedex-main {
+  display: grid;
+  grid-template-columns: minmax(500px, 320px) 1fr;
+  gap: 24px;
+  align-items: start;
 }
 
-.back-btn-header {
-  position: absolute;
-  left: 0;
-  top: 0;
+/* Header de filtros */
+.filters-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid #4a4a4a;
+}
+
+.back-btn-filters {
   background: #E10600;
   color: #f5f5f5;
   border: none;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 4px;
-  font-size: 18px;
+  font-size: 16px;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
-.back-btn-header:hover {
+.back-btn-filters:hover {
   background: #cc0d0d;
   transform: translateY(-2px);
 }
 
-.pokedex-header h1 {
-  font-size: 28px;
+.filters-title {
+  font-size: 20px;
+  font-weight: 700;
   color: #f5f5f5;
-  margin-bottom: 8px;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
   text-transform: uppercase;
-}
-
-.pokedex-header .subtitle {
-  color: #B3B3B3;
-  font-size: 14px;
 }
 
 /* Filtros Panel */
@@ -56,17 +59,39 @@
   background: #1a1a1a;
   border: 2px solid #4a4a4a;
   border-radius: 4px;
-  padding: 20px;
-  margin-bottom: 24px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
+  position: sticky;
+  top: 20px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.pokemon-area {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pokemon-scroll-container {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .filter-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  border-bottom: 1px solid #333;
+  padding-bottom: 12px;
+}
+
+.filter-section:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .filter-section label {
@@ -173,23 +198,19 @@
 
 /* Controles de filtro */
 .filter-controls {
-  grid-column: 1 / -1;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
   padding-top: 12px;
   border-top: 1px solid #4a4a4a;
 }
 
 .filter-controls button {
-  flex: 1;
-  max-width: 200px;
+  width: 100%;
 }
 
 .filter-controls select {
-  flex: 1;
-  max-width: 200px;
+  width: 100%;
 }
 
 /* Loading State */
@@ -259,8 +280,8 @@
 /* Grid de Pokémon */
 .pokemon-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
   margin-bottom: 24px;
   animation: fadeIn 0.3s ease-out;
 }
@@ -845,14 +866,57 @@
 }
 
 /* Responsive */
-@media (max-width: 768px) {
-  .filters-panel {
+@media (max-width: 1024px) {
+  .pokedex-main {
     grid-template-columns: 1fr;
   }
 
+  .filters-panel {
+    position: static;
+    max-height: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .filter-section {
+    flex: 1;
+    min-width: 200px;
+    border-bottom: none;
+    border-right: 1px solid #333;
+    padding-right: 12px;
+    padding-bottom: 0;
+  }
+
+  .filter-section:last-of-type {
+    border-right: none;
+    padding-right: 0;
+  }
+
   .pokemon-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .filters-panel {
+    flex-direction: column;
+  }
+
+  .filter-section {
+    border-bottom: 1px solid #333;
+    border-right: none;
+    padding-bottom: 12px;
+    padding-right: 0;
+  }
+
+  .filter-section:last-of-type {
+    border-bottom: none;
+  }
+
+  .pokemon-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
 
   .detail-container {
@@ -884,7 +948,7 @@
   }
 
   .pokemon-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    grid-template-columns: 1fr;
     gap: 8px;
   }
 
