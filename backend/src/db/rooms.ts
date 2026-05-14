@@ -6,6 +6,21 @@ let roomsCollection: Collection | null = null;
 export interface TeamMember {
   pokeapi_id: number;
   selected_moves: number[];
+  is_legendary?: boolean;
+  name?: string;
+}
+
+export interface DraftState {
+  current_turn: 'player1' | 'player2';
+  picks_remaining: {
+    player1: number;
+    player2: number;
+  };
+  banned_pokemon: number[];
+  available_pokemon: number[];
+  pick_order: number;
+  started: boolean;
+  completed: boolean;
 }
 
 export interface RoomPlayer {
@@ -33,6 +48,12 @@ export interface Room {
   winner: 'player1' | 'player2' | null;
   started_at: Date | null;
   finished_at: Date | null;
+  // Sistema de Draft
+  draft_state: DraftState | null;
+  draft_picks: {
+    player1: TeamMember[];
+    player2: TeamMember[];
+  };
 }
 
 function getRoomsCollection(): Collection {
@@ -50,12 +71,12 @@ function getRoomsCollection(): Collection {
 export function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  
+
   for (let i = 0; i < 6; i++) {
     const randomIndex = Math.floor(Math.random() * chars.length);
     code += chars[randomIndex];
   }
-  
+
   return code;
 }
 
@@ -112,7 +133,13 @@ export async function createRoom(creatorSessionId: string, playerName: string = 
     battle_id: null,
     winner: null,
     started_at: null,
-    finished_at: null
+    finished_at: null,
+    // Inicializar draft
+    draft_state: null,
+    draft_picks: {
+      player1: [],
+      player2: []
+    }
   };
   
   const result = await collection.insertOne(room);
@@ -418,23 +445,164 @@ export async function setPlayerReady(code: string, sessionId: string, ready: boo
  */
 export async function initializeRoomsIndexes(): Promise<void> {
   const collection = getRoomsCollection();
-  
+
   try {
     // Índice único para código
     await collection.createIndex({ code: 1 }, { unique: true });
-    
+
     // TTL para auto-limpieza (30 minutos)
     await collection.createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
-    
+
     // Índices para búsqueda por sesión
     await collection.createIndex({ 'players.player1.session_id': 1 });
     await collection.createIndex({ 'players.player2.session_id': 1 });
-    
+
     // Índice para estado
     await collection.createIndex({ state: 1 });
-    
+
     console.log('✅ Índices de rooms creados');
   } catch (error) {
     console.log('⚠️ Índices de rooms ya existen o error menor:', (error as Error).message);
   }
+}
+
+// ============ FUNCIONES DE DRAFT ============
+
+/**
+ * Inicializa el sistema de draft en una sala
+ * Según PRD: Draft alternado P1 elige → P2 elige → P1 elige
+ * @param code - Código de la sala
+ * @returns La sala actualizada
+ */
+export async function startDraft(code: string): Promise<Room | null> {
+  const collection = getRoomsCollection();
+
+  const room = await getRoomByCode(code);
+  if (!room) return null;
+
+  // El draft comienza cuando el estado cambia a in_draft
+  // Initializar estructura de draft
+  const draftState: DraftState = {
+    current_turn: 'player1', // P1 empieza según PRD
+    picks_remaining: {
+      player1: 6,
+      player2: 6
+    },
+    banned_pokemon: [],
+    available_pokemon: [], // Se llenará con IDs 1-649
+    pick_order: 1,
+    started: true,
+    completed: false
+  };
+
+  const result = await collection.findOneAndUpdate(
+    { code },
+    {
+      $set: {
+        draft_state: draftState,
+        draft_picks: { player1: [], player2: [] }
+      }
+    },
+    { returnDocument: 'after' }
+  );
+
+  if (!result || !('value' in result)) return null;
+  return result.value as Room | null;
+}
+
+/**
+ * Realiza un pick en el draft
+ * @param code - Código de la sala
+ * @param player - 'player1' o 'player2'
+ * @param pokemon - El Pokémon seleccionado
+ * @returns La sala actualizada
+ */
+export async function draftPick(
+  code: string,
+  player: 'player1' | 'player2',
+  pokemon: TeamMember
+): Promise<Room | null> {
+  const collection = getRoomsCollection();
+
+  const room = await getRoomByCode(code);
+  if (!room || !room.draft_state) return null;
+
+  // Verificar que sea el turno del jugador
+  if (room.draft_state.current_turn !== player) {
+    throw new Error('NO_TURN');
+  }
+
+  // Verificar que el Pokémon no esté banned
+  if (room.draft_state.banned_pokemon.includes(pokemon.pokeapi_id)) {
+    throw new Error('POKEMON_BANNED');
+  }
+
+  // Verificar que el Pokémon no esté ya seleccionado por el oponente
+  const opponent = player === 'player1' ? 'player2' : 'player1';
+  const opponentPicks = room.draft_picks[opponent].map(p => p.pokeapi_id);
+  if (opponentPicks.includes(pokemon.pokeapi_id)) {
+    throw new Error('POKEMON_ALREADY_PICKED');
+  }
+
+  // Agregar el pick al equipo del jugador
+  const playerPicks = room.draft_picks[player];
+  if (playerPicks.length >= 6) {
+    throw new Error('TEAM_FULL');
+  }
+
+  // Actualizar draft state y picks
+  const newPicks = playerPicks.length + 1;
+  const remainingPicks = 6 - newPicks;
+
+  const updateObj: any = {
+    draft_picks: {
+      ...room.draft_picks,
+      [player]: [...playerPicks, pokemon]
+    }
+  };
+
+  // Determinar el siguiente turno
+  if (newPicks === 6 && remainingPicks === 0) {
+    // Draft completado para este jugador
+    const bothComplete = player === 'player1'
+      ? room.draft_picks.player2.length >= 6
+      : room.draft_picks.player1.length >= 6;
+
+    if (bothComplete) {
+      // Ambos completaron, draft terminado
+      updateObj['draft_state.completed'] = true;
+      updateObj['draft_state.current_turn'] = null;
+      // Guardar equipos finales
+      updateObj['team_1'] = room.draft_picks.player1;
+      updateObj['team_2'] = room.draft_picks.player2;
+    } else {
+      // Cambiar turno al oponente
+      updateObj['draft_state.current_turn'] = opponent;
+      updateObj['draft_state.picks_remaining.' + player] = 0;
+    }
+  } else {
+    // Continuar alternando: P1 → P2 → P1 → P2
+    updateObj['draft_state.current_turn'] = opponent;
+    updateObj['draft_state.picks_remaining.' + player] = remainingPicks;
+    updateObj['draft_state.pick_order'] = room.draft_state.pick_order + 1;
+  }
+
+  const result = await collection.findOneAndUpdate(
+    { code },
+    { $set: updateObj },
+    { returnDocument: 'after' }
+  );
+
+  if (!result || !('value' in result)) return null;
+  return result.value as Room | null;
+}
+
+/**
+ * Obtiene el estado actual del draft
+ * @param code - Código de la sala
+ * @returns El estado del draft
+ */
+export async function getDraftState(code: string): Promise<DraftState | null> {
+  const room = await getRoomByCode(code);
+  return room?.draft_state || null;
 }

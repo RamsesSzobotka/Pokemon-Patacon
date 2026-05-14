@@ -1,5 +1,5 @@
 import * as roomsDB from '../db/rooms';
-import type { Room, TeamMember } from '../db/rooms';
+import type { Room, TeamMember, DraftState } from '../db/rooms';
 
 /**
  * Servicio de lógica de negocio para salas
@@ -303,58 +303,61 @@ export async function deleteRoom(code: string, sessionId: string): Promise<Delet
  * Confirma el equipo de un jugador
  */
 export async function confirmTeam(
-  code: string, 
-  sessionId: string, 
+  code: string,
+  sessionId: string,
   team: TeamMember[]
 ): Promise<{ success: boolean; message: string; bothReady?: boolean }> {
   try {
     if (!code || !sessionId || !team) {
       return { success: false, message: 'Parámetros inválidos' };
     }
-    
+
     const upperCode = code.toUpperCase();
     const room = await roomsDB.getRoomByCode(upperCode);
-    
+
     if (!room) {
       return { success: false, message: 'Sala no encontrada' };
     }
-    
+
     // Validar que el jugador esté en la sala
     let player: 'player1' | 'player2' | null = null;
-    
+
     if (room.players.player1.session_id === sessionId) {
       player = 'player1';
     } else if (room.players.player2.session_id === sessionId) {
       player = 'player2';
     }
-    
+
     if (!player) {
       return { success: false, message: 'No perteneces a esta sala' };
     }
-    
-    // Validar equipo: exactamente 6 Pokémon
-    if (team.length !== 6) {
-      return { success: false, message: 'El equipo debe tener exactamente 6 Pokémon' };
+
+    // Usar función de validación del PRD
+    const validation = validateTeam(team);
+    if (!validation.valid) {
+      return { success: false, message: validation.error || 'Equipo inválido' };
     }
-    
-    // Validar: exactamente 4 movimientos por Pokémon
-    for (const member of team) {
-      if (!member.selected_moves || member.selected_moves.length !== 4) {
-        return { success: false, message: 'Cada Pokémon debe tener exactamente 4 movimientos' };
+
+    // Verificar que no haya repetición entre equipos (si el otro ya confirmó)
+    const opponentTeam = player === 'player1' ? room.team_2 : room.team_1;
+    if (opponentTeam) {
+      const overlapValidation = validateTeamsNoOverlap(team, opponentTeam);
+      if (!overlapValidation.valid) {
+        return { success: false, message: overlapValidation.error || 'Los equipos no pueden tener Pokémon en común' };
       }
     }
-    
+
     // Confirmar equipo
     const updatedRoom = await roomsDB.confirmTeam(upperCode, player, team);
-    
+
     if (!updatedRoom) {
       return { success: false, message: 'Error al confirmar equipo' };
     }
-    
+
     // Verificar si ambos están ready
-    const bothReady = updatedRoom.players.player1.ready && 
+    const bothReady = updatedRoom.players.player1.ready &&
                       updatedRoom.players.player2.ready !== null;
-    
+
     return {
       success: true,
       message: 'Equipo confirmado',
@@ -433,6 +436,15 @@ export async function changeRoomState(code: string, sessionId: string, newState:
       return { success: false, message: 'Solo el creador puede iniciar el draft' };
     }
 
+    // Si se inicia el draft, verificar que ambos jugadores estén conectados
+    if (newState === 'in_draft') {
+      if (!room.players.player1.session_id || !room.players.player2.session_id) {
+        return { success: false, message: 'Ambos jugadores deben estar conectados para iniciar el draft' };
+      }
+      // Inicializar el draft
+      await roomsDB.startDraft(upperCode);
+    }
+
     const updated = await roomsDB.updateRoomState(upperCode, newState);
     if (!updated) return { success: false, message: 'No se pudo actualizar el estado' };
     return { success: true, room: updated };
@@ -440,6 +452,173 @@ export async function changeRoomState(code: string, sessionId: string, newState:
     console.error('Error cambiando estado de sala:', error);
     return { success: false, message: 'Error interno' };
   }
+}
+
+// ============ FUNCIONES DE DRAFT ============
+
+/**
+ * Obtiene el estado actual del draft
+ */
+export async function getDraftState(code: string, sessionId: string): Promise<{ success: boolean; draft?: DraftState; message?: string }> {
+  try {
+    const upperCode = code.toUpperCase();
+    const draft = await roomsDB.getDraftState(upperCode);
+    if (!draft) return { success: false, message: 'El draft no ha iniciado' };
+    return { success: true, draft };
+  } catch (error) {
+    console.error('Error obteniendo estado del draft:', error);
+    return { success: false, message: 'Error interno' };
+  }
+}
+
+/**
+ * Realiza un pick en el draft
+ */
+export async function draftPick(
+  code: string,
+  sessionId: string,
+  pokemon: TeamMember
+): Promise<{ success: boolean; message?: string; room?: Room; draft_completed?: boolean }> {
+  try {
+    const upperCode = code.toUpperCase();
+    const room = await roomsDB.getRoomByCode(upperCode);
+
+    if (!room) return { success: false, message: 'Sala no encontrada' };
+
+    // Determinar qué jugador es
+    let player: 'player1' | 'player2' | null = null;
+    if (room.players.player1.session_id === sessionId) {
+      player = 'player1';
+    } else if (room.players.player2.session_id === sessionId) {
+      player = 'player2';
+    }
+
+    if (!player) return { success: false, message: 'No perteneces a esta sala' };
+
+    // Verificar que el draft esté activo
+    if (!room.draft_state || !room.draft_state.started) {
+      return { success: false, message: 'El draft no ha iniciado' };
+    }
+
+    if (room.draft_state.completed) {
+      return { success: false, message: 'El draft ya terminó' };
+    }
+
+    // Verificar que sea su turno
+    if (room.draft_state.current_turn !== player) {
+      return { success: false, message: 'No es tu turno' };
+    }
+
+    // Validar que el Pokémon no esté ya en el equipo del oponente (no repetibles)
+    const opponent = player === 'player1' ? 'player2' : 'player1';
+    const opponentPicks = room.draft_picks[opponent].map(p => p.pokeapi_id);
+    if (opponentPicks.includes(pokemon.pokeapi_id)) {
+      return { success: false, message: 'Este Pokémon ya fue seleccionado por el oponente' };
+    }
+
+    // Verificar que el jugador no tenga ya este Pokémon en su equipo
+    const playerPicks = room.draft_picks[player].map(p => p.pokeapi_id);
+    if (playerPicks.includes(pokemon.pokeapi_id)) {
+      return { success: false, message: 'Ya tienes este Pokémon en tu equipo' };
+    }
+
+    // Verificar límite de legendarios (máximo 1 por equipo según PRD)
+    const legendaryCount = room.draft_picks[player].filter(p => p.is_legendary).length;
+    if (pokemon.is_legendary && legendaryCount >= 1) {
+      return { success: false, message: 'Máximo 1 legendario por equipo' };
+    }
+
+    // Realizar el pick
+    const updatedRoom = await roomsDB.draftPick(upperCode, player, pokemon);
+
+    if (!updatedRoom) {
+      return { success: false, message: 'Error al realizar el pick' };
+    }
+
+    const draftCompleted = updatedRoom.draft_state?.completed || false;
+
+    return {
+      success: true,
+      message: draftCompleted ? 'Draft completado!' : 'Pick realizado',
+      room: updatedRoom,
+      draft_completed: draftCompleted
+    };
+  } catch (error: any) {
+    console.error('Error en draft pick:', error);
+    return { success: false, message: error.message || 'Error interno' };
+  }
+}
+
+/**
+ * Obtiene los picks actuales de ambos jugadores (para sincronización)
+ */
+export async function getDraftPicks(code: string): Promise<{ success: boolean; picks?: { player1: TeamMember[]; player2: TeamMember[] }; message?: string }> {
+  try {
+    const upperCode = code.toUpperCase();
+    const room = await roomsDB.getRoomByCode(upperCode);
+    if (!room) return { success: false, message: 'Sala no encontrada' };
+
+    return {
+      success: true,
+      picks: room.draft_picks
+    };
+  } catch (error) {
+    console.error('Error obteniendo picks:', error);
+    return { success: false, message: 'Error interno' };
+  }
+}
+
+// ============ VALIDACIONES DE EQUIPO (para cuando no hay draft) ============
+
+/**
+ * Valida un equipo según las reglas del PRD
+ * - Máximo 1 legendario por equipo
+ * - Un mismo Pokémon no puede aparecer dos veces
+ * - Exactly 6 Pokémon con 4 movimientos cada uno
+ */
+export function validateTeam(team: TeamMember[]): { valid: boolean; error?: string } {
+  if (team.length !== 6) {
+    return { valid: false, error: 'El equipo debe tener exactamente 6 Pokémon' };
+  }
+
+  // Validar que cada Pokémon tenga exactamente 4 movimientos
+  for (const member of team) {
+    if (!member.selected_moves || member.selected_moves.length !== 4) {
+      return { valid: false, error: 'Cada Pokémon debe tener exactamente 4 movimientos' };
+    }
+  }
+
+  // Contar legendarios
+  const legendaryCount = team.filter(p => p.is_legendary).length;
+  if (legendaryCount > 1) {
+    return { valid: false, error: 'Máximo 1 legendario por equipo' };
+  }
+
+  // Verificar que no haya Pokémon repetidos
+  const pokemonIds = team.map(p => p.pokeapi_id);
+  const uniqueIds = new Set(pokemonIds);
+  if (uniqueIds.size !== pokemonIds.length) {
+    return { valid: false, error: 'No puedes tener el mismo Pokémon dos veces en tu equipo' };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Valida que los equipos de ambos jugadores no tengan Pokémon en común
+ * (cuando confirman equipo sin draft)
+ */
+export function validateTeamsNoOverlap(team1: TeamMember[], team2: TeamMember[]): { valid: boolean; error?: string } {
+  const ids1 = new Set(team1.map(p => p.pokeapi_id));
+  const ids2 = new Set(team2.map(p => p.pokeapi_id));
+
+  for (const id of ids1) {
+    if (ids2.has(id)) {
+      return { valid: false, error: `El Pokémon ${id} está en ambos equipos` };
+    }
+  }
+
+  return { valid: true };
 }
 
 // ============ FUNCIONES AUXILIARES ============

@@ -14,7 +14,6 @@ const MainMenu: React.FC = () => {
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
   const [sessionId, setSessionId] = useState<string>(() => {
     const saved = localStorage.getItem('patacon_session_id');
@@ -25,8 +24,6 @@ const MainMenu: React.FC = () => {
   });
   const [opponentName, setOpponentName] = useState<string | null>(null);
   const [opponentConnected, setOpponentConnected] = useState(false);
-  const [playerReady, setPlayerReady] = useState(false);
-  const [opponentReady, setOpponentReady] = useState(false);
   const [isHost, setIsHost] = useState(false);
   const [player1DisplayName, setPlayer1DisplayName] = useState<string>('Jugador 1');
   const [player2DisplayName, setPlayer2DisplayName] = useState<string>('Esperando oponente...');
@@ -43,26 +40,6 @@ const MainMenu: React.FC = () => {
         // Autoplay might be blocked, that's ok
       });
     }
-  }, []);
-
-  // Check backend health on mount
-  useEffect(() => {
-    const checkBackend = async () => {
-      try {
-        const response = await fetch('/api/health');
-        if (response.ok) {
-          setBackendStatus('online');
-        } else {
-          setBackendStatus('offline');
-        }
-      } catch (error) {
-        setBackendStatus('offline');
-      }
-    };
-
-    checkBackend();
-    const interval = setInterval(checkBackend, 5000); // Check every 5s
-    return () => clearInterval(interval);
   }, []);
 
   // Si ya había creado o entrado en una sala, restaurar código
@@ -116,12 +93,9 @@ const MainMenu: React.FC = () => {
               if (typeof message.data.isHost === 'boolean') {
                 setIsHost(message.data.isHost);
               }
-              // Actualizar estados de readiness
-              if (message.data.your_ready !== undefined) {
-                setPlayerReady(!!message.data.your_ready);
-              }
-              if (message.data.opponent_ready !== undefined) {
-                setOpponentReady(!!message.data.opponent_ready);
+              // Actualizar conexión del oponente
+              if (message.data.opponent_connected !== undefined) {
+                setOpponentConnected(!!message.data.opponent_connected);
               }
               // Actualizar nombres de jugadores desde el inicio
               if (message.data.player1_name) {
@@ -136,10 +110,7 @@ const MainMenu: React.FC = () => {
               setOpponentConnected(true);
               setOpponentName(message.data.player_name);
               setPlayer2DisplayName(message.data.player_name);
-              // También actualizar player_number si viene
-              if (typeof message.data.player_number === 'number') {
-                setPlayerNumber(message.data.player_number);
-              }
+              // NO actualizar playerNumber aquí - cada jugador ya conoce su número desde room:joined
               // Actualizar nombres si vienen
               if (message.data.player1_name) {
                 setPlayer1DisplayName(message.data.player1_name);
@@ -153,23 +124,13 @@ const MainMenu: React.FC = () => {
               if (message.data.session_id !== sessionId) {
                 setOpponentConnected(false);
                 setOpponentName(null);
-                setOpponentReady(false);
                 setPlayer2DisplayName('Esperando oponente...');
               }
               break;
 
             case 'room:state':
-              // Actualizar número de jugador si viene
-              if (typeof message.data.player_number === 'number') {
-                setPlayerNumber(message.data.player_number);
-              }
-              // Actualizar estados de readiness
-              if (message.data.your_ready !== undefined) {
-                setPlayerReady(!!message.data.your_ready);
-              }
-              if (message.data.opponent_ready !== undefined) {
-                setOpponentReady(!!message.data.opponent_ready);
-              }
+              // NO actualizar playerNumber aquí - ya se estableció desde room:joined
+              // Actualizar conexión del oponente
               if (message.data.opponent_connected !== undefined) {
                 setOpponentConnected(!!message.data.opponent_connected);
               }
@@ -325,28 +286,6 @@ const MainMenu: React.FC = () => {
     alert('✅ Código copiado al portapapeles');
   };
 
-  const getStatusColor = () => {
-    switch (backendStatus) {
-      case 'online':
-        return '#2ECC71';
-      case 'offline':
-        return '#E10600';
-      default:
-        return '#FFB90F';
-    }
-  };
-
-  const getStatusText = () => {
-    switch (backendStatus) {
-      case 'online':
-        return 'Conectado';
-      case 'offline':
-        return 'Desconectado';
-      default:
-        return 'Verificando...';
-    }
-  };
-
   return (
     <div className="main-menu-container">
       {/* Background Music */}
@@ -440,9 +379,9 @@ const MainMenu: React.FC = () => {
                           <span className="player-name">{player1DisplayName}</span>
                           <span className="player-role">{playerNumber === 1 ? ' (Tú)' : ''}</span>
                         </div>
-                        <div className={`player-status ${(playerNumber === 1 ? playerReady : opponentReady) ? 'ready' : 'waiting'}`}>
-                          <span className="status-icon">{playerNumber === 1 ? playerReady : opponentReady ? '✓' : '○'}</span>
-                          <span>{playerNumber === 1 ? playerReady : opponentReady ? 'LISTO' : 'Esperando'}</span>
+                        <div className="player-status ready">
+                          <span className="status-icon">✓</span>
+                          <span>Conectado</span>
                         </div>
                       </li>
                       <li className={`player2 ${playerNumber === 2 ? 'you' : ''} ${opponentConnected ? 'connected' : ''}`}>
@@ -452,9 +391,9 @@ const MainMenu: React.FC = () => {
                           </span>
                           <span className="player-role">{playerNumber === 2 ? ' (Tú)' : opponentConnected ? ' (Oponente)' : ''}</span>
                         </div>
-                        <div className={`player-status ${(playerNumber === 2 ? playerReady : opponentReady) ? 'ready' : 'waiting'}`}>
-                          <span className="status-icon">{playerNumber === 2 ? playerReady : opponentReady ? '✓' : opponentConnected ? '○' : '...'}</span>
-                          <span>{playerNumber === 2 ? playerReady : opponentReady ? 'LISTO' : opponentConnected ? 'Esperando' : 'Conectando...'}</span>
+                        <div className={`player-status ${opponentConnected ? 'ready' : 'waiting'}`}>
+                          <span className="status-icon">{opponentConnected ? '✓' : '○'}</span>
+                          <span>{opponentConnected ? 'Conectado' : 'Esperando...'}</span>
                         </div>
                       </li>
                     </ul>
@@ -466,29 +405,16 @@ const MainMenu: React.FC = () => {
                 <div className="divider"></div>
 
                 <div className="lobby-actions">
-                  <button
-                    className={`btn ${playerReady ? 'btn-success' : 'btn-primary'}`}
-                    onClick={async () => {
-                      // toggle ready
-                      const newReady = !playerReady;
-                      setPlayerReady(newReady);
-                      try {
-                        await fetch(`/api/rooms/${createdRoomCode}/ready`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ session_id: sessionId, ready: newReady })
-                        });
-                      } catch (e) {}
-                    }}
-                  >
-                    {playerReady ? '✅ Listo' : 'Listo'}
-                  </button>
-
+                  {/* Botón solo visible para el host, solo se activa si hay 2 jugadores conectados */}
                   {isHost ? (
                     <button
-                      className="btn btn-danger"
+                      className={`btn btn-danger ${!opponentConnected ? 'disabled' : ''}`}
+                      disabled={!opponentConnected}
                       onClick={async () => {
-                        // boton para iniciar draft (estético por ahora)
+                        if (!opponentConnected) {
+                          alert('❌ Necesitas un oponente conectado para iniciar');
+                          return;
+                        }
                         try {
                           const res = await fetch(`/api/rooms/${createdRoomCode}/state`, {
                             method: 'PUT',
@@ -497,7 +423,7 @@ const MainMenu: React.FC = () => {
                           });
                           const data = await res.json();
                           if (data.success) {
-                            alert('🚀 Draft iniciado (estético)');
+                            alert('🚀 Draft iniciado');
                             // aqui podríamos navegar al draft más tarde
                           } else {
                             alert(`❌ ${data.error || 'No se pudo iniciar'}`);
@@ -505,9 +431,11 @@ const MainMenu: React.FC = () => {
                         } catch (e) { console.error(e); }
                       }}
                     >
-                      INICIAR PARTIDA
+                      {!opponentConnected ? '🔒 ESPERANDO OPONENTE...' : '🚀 INICIAR PARTIDA'}
                     </button>
-                  ) : null}
+                  ) : (
+                    <p className="waiting-hint">⏳ Espera a que el host inicie la partida...</p>
+                  )}
 
                   <button
                     className="btn btn-back"
@@ -627,10 +555,6 @@ const MainMenu: React.FC = () => {
         <div className="footer">
           <div className="footer-info">
             <p className="version">🎮 Pokémon Patacon v1.0</p>
-            <p className="api-status">
-              <span className="status-dot" style={{ backgroundColor: getStatusColor() }}></span>
-              📡 Backend: <span className="status-text">{getStatusText()}</span>
-            </p>
           </div>
         </div>
       </div>

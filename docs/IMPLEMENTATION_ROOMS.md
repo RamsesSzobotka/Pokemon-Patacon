@@ -3,7 +3,7 @@
 **Versión:** 1.1  
 **Fecha:** 14 de Mayo de 2026  
 **Estado:** Parcialmente Implementado  
-**Proyecto:** Sistema de Salas + Polling (WebSocket pendiente)
+**Proyecto:** Sistema de Salas + WebSocket
 
 ---
 

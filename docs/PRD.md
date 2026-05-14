@@ -413,29 +413,29 @@ battle:end           → Batalla finalizada
 ```
 pokemon-patacon/
 │
-├── frontend/                      # Tauri + Svelte
+├── frontend/                      # TanStack Start + Vite
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Battle.svelte           # Pantalla principal de batalla
-│   │   │   ├── PokemonSprite.svelte    # Renderer de sprites .gif
-│   │   │   ├── ActionPanel.svelte      # Panel de acciones (atacar, cambiar, objetos)
-│   │   │   ├── ObjectsMenu.svelte      # Menú de objetos (pociones, revivir)
-│   │   │   ├── DraftSelector.svelte    # Selector de equipo (draft)
-│   │   │   ├── RoomLobby.svelte        # Sala de espera
-│   │   │   └── MainMenu.svelte         # Menú principal
+│   │   │   ├── Battle.tsx             # Pantalla principal de batalla
+│   │   │   ├── PokemonSprite.tsx      # Renderer de sprites .gif
+│   │   │   ├── ActionPanel.tsx        # Panel de acciones (atacar, cambiar, objetos)
+│   │   │   ├── ObjectsMenu.tsx        # Menú de objetos (pociones, revivir)
+│   │   │   ├── DraftSelector.tsx      # Selector de equipo (draft)
+│   │   │   ├── RoomLobby.tsx          # Sala de espera
+│   │   │   └── MainMenu.tsx           # Menú principal
 │   │   ├── store/
-│   │   │   ├── battle.js               # Estado de batalla (Svelte store)
-│   │   │   ├── room.js                 # Estado de sala
-│   │   │   └── pokemon.js              # Cache de Pokémon
+│   │   │   ├── battle.ts              # Estado de batalla (TanStack Store)
+│   │   │   ├── room.ts                # Estado de sala
+│   │   │   └── pokemon.ts             # Cache de Pokémon
 │   │   ├── services/
-│   │   │   ├── websocket.js            # WebSocket client
-│   │   │   ├── pokemonApi.js           # Llamadas a API backend
-│   │   │   └── sync.js                 # Sincronización
+│   │   │   ├── websocket.ts           # WebSocket client
+│   │   │   ├── pokemonApi.ts          # Llamadas a API backend
+│   │   │   └── sync.ts                # Sincronización
 │   │   ├── utils/
-│   │   │   ├── damage.js               # Cálculo de daño
-│   │   │   ├── typeChart.js            # Tabla de tipos
-│   │   │   └── spriteRenderer.js       # Manejo de .gif animados
-│   │   ├── App.svelte
+│   │   │   ├── damage.ts              # Cálculo de daño
+│   │   │   ├── typeChart.ts           # Tabla de tipos
+│   │   │   └── spriteRenderer.ts      # Manejo de .gif animados
+│   │   ├── App.tsx
 │   │   └── main.js
 │   ├── public/
 │   │   └── assets/
@@ -663,7 +663,7 @@ TURNO N - Sincronización Detallada:
 | **Disponibilidad** | 99% uptime del servidor durante horas de juego |
 | **Concurrencia** | Soportar mínimo 100 salas simultáneas |
 | **Almacenamiento** | MongoDB: ~500MB para 1000+ Pokémon cacheados |
-| **Compatibilidad** | Windows, macOS, Linux (Tauri) |
+| **Compatibilidad** | Web moderna (navegador): Chrome, Firefox, Safari, Edge |
 | **Sin Autenticación** | Acceso abierto (opcional: ID sesión anónima) |
 
 ---
@@ -1104,7 +1104,7 @@ Implementación:
 | **Backend MVP** | Pokémon CRUD, tipos, movimientos, fórmula daño | 🔴 Crítica |
 | **Sistema de Salas** | Crear, unirse, lobby, validación | 🔴 Crítica |
 | **Motor de Batalla** | Turnos, coinflip, daño, estados (3 turnos) | 🔴 Crítica |
-| **Frontend MVP** | Svelte + Vite, Battle UI, panel de acciones | 🔴 Crítica |
+| **Frontend MVP** | TanStack Start + Vite, Battle UI, panel de acciones | 🔴 Crítica |
 | **WebSocket Real-time** | Sincronización jugadores, eventos batalla | 🔴 Crítica |
 | **Pokédex** | 300+ Pokémon cargados, sprites gen-v | 🔴 Crítica |
 | **UI Completa** | Menú principal, draft, lobby, batalla, fin | 🟡 Alta |
@@ -1153,7 +1153,7 @@ Implementación:
 
 - ✅ **MongoDB:** Pokémon persistidos, salas, historial de batalla funcionales
 - ✅ **Backend (Hono+Bun):** Endpoints activos, WebSocket estable
-- ✅ **Frontend (Svelte+Vite):** UI responsiva, sin errores críticos
+- ✅ **Frontend (TanStack Start + Vite):** UI responsiva, sin errores críticos
 - ✅ **Docker:** docker-compose.yml funcional, levanta todo en 1 comando
 - ✅ **Sin hardcodeo:** Datos desde PokeAPI, no tablas fijas
 
@@ -1184,7 +1184,8 @@ Implementación:
 - **PokeAPI v2 Docs:** https://pokeapi.co/docs/v2
 - **PDF Especificaciones:** Enunciado funcional y fórmulas sugeridas
 - **Pokémon Type Chart:** https://pokémondb.net/type
-- **Tauri Docs:** https://tauri.app/
+- **TanStack Start Docs:** https://tanstack.com/start/latest
+- **Vite Docs:** https://vitejs.dev/
 - **Hono Docs:** https://hono.dev/
 - **MongoDB Docs:** https://docs.mongodb.com/
 

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { createRoom, getRoom, joinRoom, deleteRoom, confirmTeam, leaveRoom } from '../services/roomService';
-import { setReady, changeRoomState } from '../services/roomService';
+import { createRoom, getRoom, joinRoom, deleteRoom, confirmTeam, leaveRoom, validateTeam } from '../services/roomService';
+import { setReady, changeRoomState, getDraftState, draftPick, getDraftPicks } from '../services/roomService';
 import type { TeamMember } from '../db/rooms';
 
 const rooms = new Hono();
@@ -327,7 +327,7 @@ rooms.post('/:code/team', async (c) => {
 /**
  * POST /api/rooms/:code/leave
  * Un jugador abandona la sala
- * 
+ *
  * Body: { session_id: string }
  */
 rooms.post('/:code/leave', async (c) => {
@@ -335,23 +335,23 @@ rooms.post('/:code/leave', async (c) => {
     const code = c.req.param('code');
     const body = await c.req.json().catch(() => ({}));
     const sessionId = body.session_id;
-    
+
     if (!code) {
       return c.json({
         success: false,
         error: 'Código de sala requerido'
       }, 400);
     }
-    
+
     if (!sessionId) {
       return c.json({
         success: false,
         error: 'Session ID requerida'
       }, 400);
     }
-    
+
     const result = await leaveRoom(code, sessionId);
-    
+
     return c.json({
       success: result.success,
       message: result.message
@@ -362,6 +362,142 @@ rooms.post('/:code/leave', async (c) => {
       success: false,
       error: 'Error interno del servidor'
     }, 500);
+  }
+});
+
+// ============ RUTAS DE DRAFT ============
+
+/**
+ * GET /api/rooms/:code/draft
+ * Obtiene el estado actual del draft
+ */
+rooms.get('/:code/draft', async (c) => {
+  try {
+    const code = c.req.param('code');
+    const sessionId = getSessionId(c);
+
+    if (!code) {
+      return c.json({ success: false, error: 'Código requerido' }, 400);
+    }
+
+    const result = await getDraftState(code, sessionId || '');
+
+    if (!result.success) {
+      return c.json({ success: false, error: result.message }, 400);
+    }
+
+    return c.json({
+      success: true,
+      draft: result.draft
+    }, 200);
+  } catch (error) {
+    console.error('Error en GET /api/rooms/:code/draft:', error);
+    return c.json({ success: false, error: 'Error interno' }, 500);
+  }
+});
+
+/**
+ * GET /api/rooms/:code/draft/picks
+ * Obtiene los picks actuales de ambos jugadores
+ */
+rooms.get('/:code/draft/picks', async (c) => {
+  try {
+    const code = c.req.param('code');
+
+    if (!code) {
+      return c.json({ success: false, error: 'Código requerido' }, 400);
+    }
+
+    const result = await getDraftPicks(code);
+
+    if (!result.success) {
+      return c.json({ success: false, error: result.message }, 400);
+    }
+
+    return c.json({
+      success: true,
+      picks: result.picks
+    }, 200);
+  } catch (error) {
+    console.error('Error en GET /api/rooms/:code/draft/picks:', error);
+    return c.json({ success: false, error: 'Error interno' }, 500);
+  }
+});
+
+/**
+ * POST /api/rooms/:code/draft/pick
+ * Realiza un pick en el draft
+ *
+ * Body: { session_id: string, pokemon: { pokeapi_id, selected_moves, is_legendary, name } }
+ */
+rooms.post('/:code/draft/pick', async (c) => {
+  try {
+    const code = c.req.param('code');
+    const body = await c.req.json().catch(() => ({}));
+    const sessionId = body.session_id;
+    const pokemon = body.pokemon as TeamMember;
+
+    if (!code) {
+      return c.json({ success: false, error: 'Código requerido' }, 400);
+    }
+
+    if (!sessionId) {
+      return c.json({ success: false, error: 'Session ID requerida' }, 400);
+    }
+
+    if (!pokemon || !pokemon.pokeapi_id) {
+      return c.json({ success: false, error: 'Pokémon requerido' }, 400);
+    }
+
+    const result = await draftPick(code, sessionId, pokemon);
+
+    if (!result.success) {
+      return c.json({ success: false, error: result.message }, 400);
+    }
+
+    return c.json({
+      success: true,
+      message: result.message,
+      draft_completed: result.draft_completed,
+      room: result.room
+    }, 200);
+  } catch (error) {
+    console.error('Error en POST /api/rooms/:code/draft/pick:', error);
+    return c.json({ success: false, error: 'Error interno' }, 500);
+  }
+});
+
+/**
+ * GET /api/rooms/:code/validate-team
+ * Valida un equipo según las reglas del PRD
+ *
+ * Query: session_id, y body con team
+ */
+rooms.post('/:code/validate-team', async (c) => {
+  try {
+    const code = c.req.param('code');
+    const sessionId = getSessionId(c);
+    const body = await c.req.json().catch(() => ({}));
+    const team = body.team as TeamMember[];
+
+    if (!code || !sessionId) {
+      return c.json({ success: false, error: 'Parámetros requeridos' }, 400);
+    }
+
+    if (!team || !Array.isArray(team)) {
+      return c.json({ success: false, error: 'Equipo requerido' }, 400);
+    }
+
+    const validation = validateTeam(team);
+
+    return c.json({
+      success: true,
+      valid: validation.valid,
+      error: validation.error
+    }, 200);
+  } catch (error) {
+    console.error('Error en POST /api/rooms/:code/validate-team:', error);
+    return c.json({ success: false, error: 'Error interno' }, 500);
   }
 });
 

@@ -21,23 +21,12 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Health check endpoint
-app.get('/api/health', (c) => {
-  return c.json({
-    success: true,
-    status: 'ok',
-    database: 'checking',
-    timestamp: new Date().toISOString()
-  });
-});
-
 // Root endpoint
 app.get('/', (c) => {
   return c.json({
     message: 'Pokémon Patacon Backend',
     version: '1.0.0',
     endpoints: {
-      health: '/api/health',
       pokemon: '/api/pokemon',
       rooms: '/api/rooms',
       battle: 'ws://localhost:3000/battle/:room_code'
@@ -135,15 +124,15 @@ const server = Bun.serve<WSData>({
       }));
     },
     
-    message(ws, message) {
+    async message(ws, message) {
       const data = ws.data as WSData;
-      
+
       // Ignorar mensajes binarios o vacíos
       if (!message || typeof message !== 'string') return;
-      
+
       // Pasar al handler de mensajes
       try {
-        handleMessage(ws as any, message.toString());
+        await handleMessage(ws as any, message.toString());
       } catch (err) {
         console.error('[WS] Error procesando mensaje:', err);
       }
