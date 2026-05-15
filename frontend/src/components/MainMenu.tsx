@@ -15,7 +15,7 @@ const MainMenu: React.FC = () => {
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
+const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
   const [sessionId] = useState<string>(() => {
     const saved = localStorage.getItem('patacon_session_id');
     if (saved) return saved;
@@ -30,7 +30,7 @@ const MainMenu: React.FC = () => {
   const [player2DisplayName, setPlayer2DisplayName] = useState<string>('Esperando oponente...');
   const [playerNumber, setPlayerNumber] = useState<number>(0); // 1 o 2, 0 = no know
 
-  // Audio background music ref
+// Audio background music ref
   const audioRef = useRef<HTMLAudioElement>(null);
 
   // Play background music on mount
@@ -168,7 +168,7 @@ const MainMenu: React.FC = () => {
       }
     }));
 
-    // Draft iniciado
+// Draft iniciado
     unsubscribes.push(socket.on('draft:started', () => {
       console.log('[MainMenu] Draft started');
       navigate(`/draft/${createdRoomCode}`);
@@ -187,7 +187,7 @@ const MainMenu: React.FC = () => {
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, []);
+  }, [createdRoomCode]); // Agregado para evitar stale closure en draft:started
 
   // ==================== ACTIONS ====================
 
