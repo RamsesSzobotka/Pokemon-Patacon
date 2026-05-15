@@ -48,6 +48,11 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [battleStarting, setBattleStarting] = useState(false);
+  
+  // Estados de paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalPokemon, setTotalPokemon] = useState(0);
 
   const isCurrentTurnMine = (turn: 'player1' | 'player2' | null, number: number) => {
     if (!turn || number === 0) return false;
@@ -429,27 +434,37 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
     });
   };
 
-  // Cargar lista de Pokémon desde la API
+  // Resetear página cuando cambia la búsqueda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // Cargar lista de Pokémon desde la API con paginación
   useEffect(() => {
     const fetchPokemon = async () => {
       try {
-        const response = await fetch('/api/pokemon?limit=649');
+        const offset = (currentPage - 1) * pageSize;
+        const params = new URLSearchParams();
+        params.append('limit', pageSize.toString());
+        params.append('offset', offset.toString());
+        
+        if (searchQuery) {
+          params.append('search', searchQuery);
+        }
+        
+        const response = await fetch(`/api/pokemon?${params.toString()}`);
         const data = await response.json();
-        if (data.success && data.data && data.data.pokemon) {
-          setPokemonList(data.data.pokemon);
+        
+        if (data.success && data.data) {
+          setPokemonList(data.data.pokemon || []);
+          setTotalPokemon(data.data.total || 0);
         }
       } catch (err) {
         console.error('Error fetching Pokemon:', err);
       }
     };
     fetchPokemon();
-  }, []);
-
-  // Filtrar Pokémon por búsqueda
-  const filteredPokemon = pokemonList.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.pokeapi_id.toString().includes(searchQuery)
-  ).slice(0, 50); // Limitar a 50 resultados
+  }, [currentPage, pageSize, searchQuery]);
 
   const getSpriteUrl = (pokeapiId: number) =>
     `https://raw.githubusercontent.com/PokeAPI/sprites/master/versions/generation-v/black-white/animated/${pokeapiId}.gif`;
@@ -644,7 +659,7 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
                 disabled={!isMyTurn}
               />
               <div className="pokemon-grid">
-                {filteredPokemon.map((pokemon) => {
+                {pokemonList.map((pokemon) => {
                   const isSelected = myPicks.some(p => p.pokeapi_id === pokemon.pokeapi_id);
                   const isOppSelected = opponentPicks.some(p => p.pokeapi_id === pokemon.pokeapi_id);
                   const isDisabled = !isMyTurn || isSelected || isOppSelected;
@@ -670,6 +685,46 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Controles de paginación */}
+              <div className="pagination-controls">
+                <div className="pagination-info">
+                  <span>Mostrando {pokemonList.length} de {totalPokemon} Pokémon</span>
+                </div>
+                <div className="pagination-buttons">
+                  <button
+                    className="pagination-btn"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    ◀ Anterior
+                  </button>
+                  <span className="pagination-page">
+                    Página {currentPage} de {Math.ceil(totalPokemon / pageSize) || 1}
+                  </span>
+                  <button
+                    className="pagination-btn"
+                    onClick={() => setCurrentPage(prev => prev + 1)}
+                    disabled={pokemonList.length < pageSize}
+                  >
+                    Siguiente ▶
+                  </button>
+                </div>
+                <div className="page-size-selector">
+                  <label>Por página:</label>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(parseInt(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
               </div>
             </>
           )}
