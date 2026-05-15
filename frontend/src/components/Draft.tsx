@@ -101,12 +101,18 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
 
     // Solicitar estado inicial del draft al montar el componente
     const requestDraftState = () => {
-        socket.send({ type: 'draft:state' });
-        socket.send({ type: 'draft:picks' });
+      // Solo solicitar si tenemos playerNumber válido
+      if (playerNumberRef.current === 0) {
+        console.log('[Draft] Esperando playerNumber válido antes de solicitar estado...');
+        return;
+      }
+      console.log('[Draft] Solicitando estado del draft (playerNumber:', playerNumberRef.current + ')');
+      socket.send({ type: 'draft:state' });
+      socket.send({ type: 'draft:picks' });
     };
 
-    // Si ya conectado, enviar inmediatamente
-    if (isConnected()) {
+    // Si ya conectado y tenemos playerNumber, enviar inmediatamente
+    if (isConnected() && playerNumberRef.current > 0) {
         requestDraftState();
     } else {
         // Si no, esperar a que el socket conecte
@@ -123,6 +129,8 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
       if (typeof data.player_number === 'number') {
         setPlayerNumber(data.player_number);
         playerNumberRef.current = data.player_number;
+        // Solicitar estado después de tener playerNumber válido
+        requestDraftState();
       }
     }));
 
@@ -132,11 +140,9 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
       if (typeof data.player_number === 'number') {
         setPlayerNumber(data.player_number);
         playerNumberRef.current = data.player_number;
+        // Solicitar estado después de tener playerNumber válido
+        requestDraftState();
       }
-
-      // Solicitar estado del draft
-      socket.send({ type: 'draft:state' });
-      socket.send({ type: 'draft:picks' });
     }));
 
     // Error del servidor
@@ -144,6 +150,13 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
       console.error('[Draft] Server error:', data);
       // El mensaje puede ser un string o un objeto con propiedad message
       const errorMessage = typeof data === 'string' ? data : (data?.message || 'Error del servidor');
+      setError(errorMessage);
+    }));
+
+    // Error específico del draft (cuando falla un pick)
+    unsubscribes.push(socket.on('draft:error', (data) => {
+      console.error('[Draft] Draft error:', data);
+      const errorMessage = data?.message || 'Error al realizar la acción';
       setError(errorMessage);
     }));
 
@@ -170,6 +183,13 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
     unsubscribes.push(socket.on('draft:picked', (data) => {
       console.log('[Draft] Pokemon picked:', data);
       console.log('[Draft] playerNumberRef:', playerNumberRef.current);
+      
+      // Validación defensiva: no procesar si playerNumber no está disponible
+      if (playerNumberRef.current === 0) {
+        console.warn('[Draft] Ignorando draft:picked - playerNumber no disponible');
+        return;
+      }
+
       const pickerNum = data.player_number;
       const pickerIsMe = pickerNum === playerNumberRef.current;
 
@@ -188,6 +208,7 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
 
       // Actualizar turno siempre
       if (data.current_turn) {
+        console.log('[Draft] Actualizando currentTurn a:', data.current_turn);
         setCurrentTurn(data.current_turn);
       }
     }));
@@ -195,9 +216,18 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
     // Sincronizar picks
     unsubscribes.push(socket.on('draft:picks', (data) => {
       console.log('[Draft] Draft picks:', data);
+      console.log('[Draft] playerNumberRef en draft:picks:', playerNumberRef.current);
+      
+      // Validación defensiva: no procesar si playerNumber no está disponible
+      if (playerNumberRef.current === 0) {
+        console.warn('[Draft] Ignorando draft:picks - playerNumber no disponible');
+        return;
+      }
+
       if (data.player1 && data.player2) {
         const myPicksData = playerNumberRef.current === 1 ? data.player1 : data.player2;
         const oppPicksData = playerNumberRef.current === 1 ? data.player2 : data.player1;
+        console.log('[Draft] Mis picks:', myPicksData?.length, 'Picks oponente:', oppPicksData?.length);
         setMyPicks(myPicksData || []);
         setOpponentPicks(oppPicksData || []);
         // Sincronizar refs
@@ -205,6 +235,7 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
         opponentPicksRef.current = oppPicksData || [];
       }
       if (data.current_turn) {
+        console.log('[Draft] Actualizando currentTurn desde draft:picks:', data.current_turn);
         setCurrentTurn(data.current_turn);
       }
     }));
@@ -212,14 +243,20 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
     // Estado del draft
     unsubscribes.push(socket.on('draft:state', (data) => {
       console.log('[Draft] Draft state:', data);
+      
+      // Actualizar playerNumber si viene en el evento
       if (typeof data.player_number === 'number') {
         setPlayerNumber(data.player_number);
         playerNumberRef.current = data.player_number;
+        console.log('[Draft] playerNumber actualizado desde draft:state:', data.player_number);
       }
+      
       if (typeof data.is_my_turn === 'boolean') {
         setIsMyTurn(data.is_my_turn);
       }
-      if (data.started) {
+      
+      if (data.started && data.current_turn) {
+        console.log('[Draft] Draft iniciado, currentTurn:', data.current_turn);
         setCurrentTurn(data.current_turn);
       }
     }));

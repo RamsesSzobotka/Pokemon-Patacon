@@ -525,13 +525,21 @@ export async function draftPick(
   player: 'player1' | 'player2',
   pokemon: TeamMember
 ): Promise<Room | null> {
+  console.log(`[DB:draftPick] code=${code}, player=${player}, pokemon=${pokemon.name}`);
   const collection = getRoomsCollection();
 
   const room = await getRoomByCode(code);
-  if (!room || !room.draft_state) return null;
+  console.log(`[DB:draftPick] Room found:`, !!room, ', draft_state:', !!room?.draft_state);
+  
+  if (!room || !room.draft_state) {
+    console.log(`[DB:draftPick] ERROR: Room or draft_state not found`);
+    return null;
+  }
 
   // Verificar que sea el turno del jugador
+  console.log(`[DB:draftPick] current_turn=${room.draft_state.current_turn}, player=${player}`);
   if (room.draft_state.current_turn !== player) {
+    console.log(`[DB:draftPick] ERROR: Not player turn`);
     throw new Error('NO_TURN');
   }
 
@@ -543,12 +551,14 @@ export async function draftPick(
   // Verificar que el Pokémon no esté ya seleccionado por el oponente
   const opponent = player === 'player1' ? 'player2' : 'player1';
   const opponentPicks = room.draft_picks[opponent].map(p => p.pokeapi_id);
+  console.log(`[DB:draftPick] opponentPicks:`, opponentPicks);
   if (opponentPicks.includes(pokemon.pokeapi_id)) {
     throw new Error('POKEMON_ALREADY_PICKED');
   }
 
   // Agregar el pick al equipo del jugador
   const playerPicks = room.draft_picks[player];
+  console.log(`[DB:draftPick] playerPicks count: ${playerPicks.length}`);
   if (playerPicks.length >= 6) {
     throw new Error('TEAM_FULL');
   }
@@ -590,14 +600,39 @@ export async function draftPick(
     updateObj['draft_state.pick_order'] = room.draft_state.pick_order + 1;
   }
 
+  console.log(`[DB:draftPick] Performing update...`);
   const result = await collection.findOneAndUpdate(
     { code },
     { $set: updateObj },
     { returnDocument: 'after' }
   );
 
-  if (!result || !('value' in result)) return null;
-  return result.value as Room | null;
+  console.log(`[DB:draftPick] Update result:`, typeof result, result);
+  
+  // Manejar diferentes estructuras de respuesta del driver
+  let updatedRoom: Room | null = null;
+  
+  if (!result) {
+    console.log(`[DB:draftPick] ERROR: result is null/undefined`);
+    return null;
+  }
+  
+  // Verificar si tiene propiedad 'value' o si es directamente el documento
+  if ('value' in result) {
+    console.log(`[DB:draftPick] Result has 'value' property`);
+    updatedRoom = result.value as Room | null;
+  } else if (result && typeof result === 'object') {
+    console.log(`[DB:draftPick] Result is direct document`);
+    updatedRoom = result as unknown as Room;
+  }
+  
+  if (!updatedRoom) {
+    console.log(`[DB:draftPick] ERROR: updatedRoom is null`);
+    return null;
+  }
+  
+  console.log(`[DB:draftPick] SUCCESS, returning updated room`);
+  return updatedRoom;
 }
 
 /**
