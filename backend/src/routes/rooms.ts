@@ -352,10 +352,17 @@ rooms.post('/:code/leave', async (c) => {
 
     const result = await leaveRoom(code, sessionId);
 
-    return c.json({
+    // Incluir información adicional si el host abandonó
+    const response: any = {
       success: result.success,
       message: result.message
-    }, result.success ? 200 : 400);
+    };
+
+    if ('hostLeft' in result && result.hostLeft) {
+      response.host_left = true;
+    }
+
+    return c.json(response, result.success ? 200 : 400);
   } catch (error) {
     console.error('Error en POST /api/rooms/:code/leave:', error);
     return c.json({

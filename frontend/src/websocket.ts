@@ -20,6 +20,7 @@ interface WSEventMap {
   'room:created': (data: any) => void;
   'room:joined': (data: any) => void;
   'room:left': (data: any) => void;
+  'room:closed': (data: any) => void;
   'room:reconnected': (data: any) => void;
   'player:joined': (data: any) => void;
   'player:left': (data: any) => void;
@@ -67,8 +68,8 @@ class WebSocketManager {
       localStorage.setItem('patacon_session_id', this.sessionId);
     }
 
-    // Cargar última sala del localStorage
-    this.currentRoomCode = localStorage.getItem('patacon_room_code') || null;
+    // Cargar última sala del sessionStorage
+    this.currentRoomCode = sessionStorage.getItem('patacon_room_code') || null;
   }
 
   public static getInstance(): WebSocketManager {
@@ -212,6 +213,8 @@ class WebSocketManager {
    */
   private handleMessage(message: { type: string; data?: any; message?: any }): void {
     const { type, data } = message;
+    console.log(`[WS:handleMessage] Type: ${type}, Handler exists: ${this.eventHandlers.has(type)}, Number of handlers: ${this.eventHandlers.get(type)?.size || 0}`);
+
     const payload = type === 'error'
       ? (data ?? message.message ?? message)
       : data;
@@ -219,6 +222,7 @@ class WebSocketManager {
     // Notificar a los handlers registrados para este tipo de evento
     const handlers = this.eventHandlers.get(type);
     if (handlers) {
+      console.log(`[WS:handleMessage] Executing ${handlers.size} handler(s) for ${type}`);
       handlers.forEach(handler => handler(payload));
     }
 
@@ -246,7 +250,7 @@ class WebSocketManager {
    */
   public joinRoom(roomCode: string, playerName: string): boolean {
     this.currentRoomCode = roomCode.toUpperCase();
-    localStorage.setItem('patacon_room_code', this.currentRoomCode);
+    sessionStorage.setItem('patacon_room_code', this.currentRoomCode);
 
     return this.send({
       type: 'JOIN_ROOM',
@@ -265,7 +269,7 @@ class WebSocketManager {
 
     if (success) {
       this.currentRoomCode = null;
-      localStorage.removeItem('patacon_room_code');
+      sessionStorage.removeItem('patacon_room_code');
     }
 
     return success;
@@ -276,7 +280,7 @@ class WebSocketManager {
    */
   public setCurrentRoom(roomCode: string): void {
     this.currentRoomCode = roomCode.toUpperCase();
-    localStorage.setItem('patacon_room_code', this.currentRoomCode);
+    sessionStorage.setItem('patacon_room_code', this.currentRoomCode);
   }
 
   // ==================== EVENT HANDLING ====================

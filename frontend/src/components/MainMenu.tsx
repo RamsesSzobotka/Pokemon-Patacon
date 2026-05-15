@@ -45,7 +45,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
   // Si ya había creado o entrado en una sala, restaurar código
   useEffect(() => {
-    const savedCode = localStorage.getItem('patacon_room_code');
+    const savedCode = sessionStorage.getItem('patacon_room_code');
     if (savedCode) {
       setCreatedRoomCode(savedCode);
 
@@ -92,7 +92,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
       setCreatedRoomCode(data.roomCode);
       setIsHost(true);
       setPlayerNumber(1);
-      localStorage.setItem('patacon_room_code', data.roomCode);
+      sessionStorage.setItem('patacon_room_code', data.roomCode);
       setScreen('create');
       setLoading(false);
     }));
@@ -231,7 +231,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
       // Guardar código localmente
       setCreatedRoomCode(data.code);
-      localStorage.setItem('patacon_room_code', data.code);
+      sessionStorage.setItem('patacon_room_code', data.code);
       setIsHost(true);
       setPlayerNumber(1);
       setScreen('create');
@@ -283,7 +283,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
       socket.joinRoom(data.code, playerName.trim());
 
       // Guardar código
-      localStorage.setItem('patacon_room_code', data.code.toUpperCase());
+      sessionStorage.setItem('patacon_room_code', data.code.toUpperCase());
       setCreatedRoomCode(data.code.toUpperCase());
       setScreen('create');
       setIsHost(false);
@@ -323,7 +323,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
     // Limpiar estado local
     setCreatedRoomCode('');
-    localStorage.removeItem('patacon_room_code');
+    sessionStorage.removeItem('patacon_room_code');
     setOpponentConnected(false);
     setOpponentName(null);
     setIsHost(false);

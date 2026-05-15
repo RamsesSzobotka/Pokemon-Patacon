@@ -389,12 +389,17 @@ export async function leaveRoom(
     if (!room) return { success: false, message: 'Sala no encontrada' };
 
     if (room.players.player1.session_id === sessionId) {
-      if (room.state !== 'waiting') {
-        return { success: true, message: 'El creador se desconectó, pero la sala permanece activa' };
+      // El host abandona la sala - cambiar estado a 'finished' y expulsar a todos
+      // TODO: Futuro - implementar sistema de reconexión para partidos activos
+      const updated = await roomsDB.updateRoomState(upperCode, 'finished');
+      if (!updated) {
+        return { success: false, message: 'No se pudo cerrar la sala' };
       }
-
-      const deleted = await roomsDB.deleteRoom(upperCode);
-      return deleted ? { success: true, message: 'Sala cerrada (creador salió)' } : { success: false, message: 'No se pudo cerrar la sala' };
+      return { 
+        success: true, 
+        message: 'Sala cerrada (el host abandonó)',
+        hostLeft: true  // Indica que el host abandonó para notificar al otro jugador
+      };
     }
 
     // Llamar a playerDisconnected para player2

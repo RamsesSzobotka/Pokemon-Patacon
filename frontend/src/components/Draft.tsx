@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { socket, connect, isConnected, getSessionId, leaveRoom as wsLeaveRoom } from '../websocket';
+import { socket, connect, isConnected, leaveRoom as wsLeaveRoom } from '../websocket';
+import { PokemonType, MoveType } from '../types/game';
 import '../styles/Draft.css';
 
 interface PokemonSprite {
@@ -26,21 +27,23 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
   const { roomCode } = useParams<{ roomCode: string }>();
   const navigate = useNavigate();
 
-  // Obtener sessionId desde el socket singleton
-  const sessionId = getSessionId();
-
   // Estado para playerNumber e isHost (vienen del WebSocket)
   const [playerNumber, setPlayerNumber] = useState<number>(0);
-  const [isHost, setIsHost] = useState(false);
 
-  const [pokemonList, setPokemonList] = useState<any[]>([]);
+  const playerNumberRef = useRef(0);
+  const myPicksRef = useRef<PokemonSprite[]>([]);
+  const opponentPicksRef = useRef<PokemonSprite[]>([]);
+
+  const [pokemonList, setPokemonList] = useState<PokemonType[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPokemon, setSelectedPokemon] = useState<PokemonSprite | null>(null);
+  const [selectedPokemon, setSelectedPokemon] = useState<PokemonType | null>(null);
+  const [selectedPokemonMoves, setSelectedPokemonMoves] = useState<MoveType[]>([]);
+  const [loadingMoves, setLoadingMoves] = useState(false);
+  const [selectedMove, setSelectedMove] = useState<MoveType | null>(null);
   const [myPicks, setMyPicks] = useState<PokemonSprite[]>([]);
   const [opponentPicks, setOpponentPicks] = useState<PokemonSprite[]>([]);
   const [currentTurn, setCurrentTurn] = useState<'player1' | 'player2' | null>(null);
   const [isMyTurn, setIsMyTurn] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [battleStarting, setBattleStarting] = useState(false);
 
@@ -53,6 +56,35 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
     setIsMyTurn(isCurrentTurnMine(currentTurn, playerNumber));
   }, [currentTurn, playerNumber]);
 
+  useEffect(() => {
+    if (!selectedPokemon) {
+      setSelectedPokemonMoves([]);
+      setLoadingMoves(false);
+      return;
+    }
+
+    const loadMoves = async () => {
+      setLoadingMoves(true);
+      try {
+        const response = await fetch(`/api/pokemon/${selectedPokemon.pokeapi_id}/moves`);
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.data?.moves)) {
+          setSelectedPokemonMoves(data.data.moves);
+        } else {
+          setSelectedPokemonMoves([]);
+        }
+      } catch (error) {
+        console.error('Error loading selected Pokémon moves:', error);
+        setSelectedPokemonMoves([]);
+      } finally {
+        setLoadingMoves(false);
+      }
+    };
+
+    loadMoves();
+  }, [selectedPokemon]);
+
   // ==================== WEBSOCKET EVENT HANDLING ====================
   useEffect(() => {
     if (!roomCode) return;
@@ -62,19 +94,34 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
       connect();
     }
 
-    // Unsubscribe functions
+    // Unsubscribe functions — declarar ANTES de usarse
     const unsubscribes: (() => void)[] = [];
+
+    // Solicitar estado inicial del draft al montar el componente
+    const requestDraftState = () => {
+        socket.send({ type: 'draft:state' });
+        socket.send({ type: 'draft:picks' });
+    };
+
+    // Si ya conectado, enviar inmediatamente
+    if (isConnected()) {
+        requestDraftState();
+    } else {
+        // Si no, esperar a que el socket conecte
+        const unsubConnect = socket.onConnect(() => {
+            requestDraftState();
+            unsubConnect(); // cleanup after first fire
+        });
+        unsubscribes.push(unsubConnect);
+    }
 
     // Sala iniciada (reconexión)
     unsubscribes.push(socket.on('room:joined', (data) => {
       console.log('[Draft] Room joined:', data);
       if (typeof data.player_number === 'number') {
         setPlayerNumber(data.player_number);
+        playerNumberRef.current = data.player_number;
       }
-      if (typeof data.isHost === 'boolean') {
-        setIsHost(data.isHost);
-      }
-      setLoading(false);
     }));
 
     // Sala reconectada
@@ -82,11 +129,8 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
       console.log('[Draft] Room reconnected:', data);
       if (typeof data.player_number === 'number') {
         setPlayerNumber(data.player_number);
+        playerNumberRef.current = data.player_number;
       }
-      if (typeof data.isHost === 'boolean') {
-        setIsHost(data.isHost);
-      }
-      setLoading(false);
 
       // Solicitar estado del draft
       socket.send({ type: 'draft:state' });
@@ -99,7 +143,19 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
       // El mensaje puede ser un string o un objeto con propiedad message
       const errorMessage = typeof data === 'string' ? data : (data?.message || 'Error del servidor');
       setError(errorMessage);
-      setLoading(false);
+    }));
+
+    // Sala cerrada por abandono del host
+    unsubscribes.push(socket.on('room:closed', (data) => {
+      console.log('[Draft] Sala cerrada por el host:', data);
+      const reason = data?.reason || 'host_left';
+      if (reason === 'host_left') {
+        // Limpiar estado de sala
+        sessionStorage.removeItem('patacon_room_code');
+        // Mostrar mensaje y redirigir al menú
+        alert('El host abandonó la sala');
+        navigate('/');
+      }
     }));
 
     // Draft iniciado
@@ -108,20 +164,43 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
       setCurrentTurn(data.current_turn);
     }));
 
-    // Pokemon seleccionado
+// Pokemon seleccionado - actualizar interfaz del oponente
     unsubscribes.push(socket.on('draft:picked', (data) => {
       console.log('[Draft] Pokemon picked:', data);
-      handlePickUpdate(data);
+      console.log('[Draft] playerNumberRef:', playerNumberRef.current);
+      const pickerNum = data.player_number;
+      const pickerIsMe = pickerNum === playerNumberRef.current;
+
+      if (pickerIsMe) {
+        // Mi pick - ya se actualizó con optimistic update, solo actualizar turno
+        console.log('[Draft] Mi pick confirmado');
+      } else {
+        // Pick del oponente - actualizar opponentPicks
+        console.log('[Draft] Pick del oponente, actualizando opponentPicks');
+        setOpponentPicks(prev => {
+          const newPicks = [...prev, data.pokemon];
+          opponentPicksRef.current = newPicks;
+          return newPicks;
+        });
+      }
+
+      // Actualizar turno siempre
+      if (data.current_turn) {
+        setCurrentTurn(data.current_turn);
+      }
     }));
 
     // Sincronizar picks
     unsubscribes.push(socket.on('draft:picks', (data) => {
       console.log('[Draft] Draft picks:', data);
       if (data.player1 && data.player2) {
-        const myPicksData = playerNumber === 1 ? data.player1 : data.player2;
-        const oppPicksData = playerNumber === 1 ? data.player2 : data.player1;
+        const myPicksData = playerNumberRef.current === 1 ? data.player1 : data.player2;
+        const oppPicksData = playerNumberRef.current === 1 ? data.player2 : data.player1;
         setMyPicks(myPicksData || []);
         setOpponentPicks(oppPicksData || []);
+        // Sincronizar refs
+        myPicksRef.current = myPicksData || [];
+        opponentPicksRef.current = oppPicksData || [];
       }
       if (data.current_turn) {
         setCurrentTurn(data.current_turn);
@@ -131,6 +210,13 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
     // Estado del draft
     unsubscribes.push(socket.on('draft:state', (data) => {
       console.log('[Draft] Draft state:', data);
+      if (typeof data.player_number === 'number') {
+        setPlayerNumber(data.player_number);
+        playerNumberRef.current = data.player_number;
+      }
+      if (typeof data.is_my_turn === 'boolean') {
+        setIsMyTurn(data.is_my_turn);
+      }
       if (data.started) {
         setCurrentTurn(data.current_turn);
       }
@@ -153,7 +239,7 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [roomCode, playerNumber]);
+  }, [roomCode]);
 
   // ==================== FUNCTIONS ====================
 
@@ -165,8 +251,8 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
     // Salir de la sala (estructura lógica) pero mantener conexión
     wsLeaveRoom();
 
-    // Limpiar localStorage
-    localStorage.removeItem('patacon_room_code');
+    // Limpiar sessionStorage
+    sessionStorage.removeItem('patacon_room_code');
 
     if (onExit) {
       onExit();
@@ -176,25 +262,9 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
   };
 
   /**
-   * Manejar actualización de picks
-   */
-  const handlePickUpdate = (data: any) => {
-    const pickerNum = data.player_number;
-    const pickerIsMe = pickerNum === playerNumber;
-
-    if (pickerIsMe) {
-      setMyPicks(prev => [...prev, data.pokemon]);
-    } else {
-      setOpponentPicks(prev => [...prev, data.pokemon]);
-    }
-
-    setCurrentTurn(data.current_turn);
-  };
-
-  /**
    * Seleccionar un Pokémon
    */
-  const handlePokemonSelect = (pokemon: any) => {
+  const handlePokemonSelect = (pokemon: PokemonType) => {
     if (!isMyTurn) return;
     if (myPicks.length >= 6) return;
 
@@ -232,6 +302,18 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
       is_legendary: selectedPokemon.is_legendary
     };
 
+    // === OPTIMISTIC UPDATE: actualizar UI inmediatamente ===
+    // Agregar el pokemon a myPicks localmente (sin esperar roundtrip)
+    setMyPicks(prev => {
+      const newPicks = [...prev, pokemonData];
+      myPicksRef.current = newPicks;
+      return newPicks;
+    });
+    // Alternar el turno: si soy player1 → pasa a player2, y viceversa
+    const nextTurn = (playerNumberRef.current === 1 ? 'player2' : 'player1') as 'player1' | 'player2';
+    setCurrentTurn(nextTurn);
+    // =====================================================
+
     socket.send({
       type: 'draft:pick',
       data: { pokemon: pokemonData }
@@ -246,6 +328,14 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
    */
   const cancelPick = () => {
     setSelectedPokemon(null);
+    setSelectedPokemonMoves([]);
+  };
+
+  /**
+   * Ver detalles de un movimiento
+   */
+  const handleMoveClick = (move: MoveType) => {
+    setSelectedMove(move);
   };
 
   /**
@@ -340,19 +430,109 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
         <div className="selector-panel">
           {selectedPokemon ? (
             <div className="selected-preview">
-              <img
-                src={getSpriteUrl(selectedPokemon.pokeapi_id)}
-                alt={selectedPokemon.name}
-                className="preview-sprite"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${selectedPokemon.pokeapi_id}.png`;
-                }}
-              />
-              <h3>{selectedPokemon.name}</h3>
-              <span className={`legendary-badge ${selectedPokemon.is_legendary ? 'show' : ''}`}>
-                {selectedPokemon.is_legendary ? 'Legendario' : ''}
-              </span>
+              <div className="selected-preview-top">
+                <div className="selected-preview-visual">
+                  <img
+                    src={getSpriteUrl(selectedPokemon.pokeapi_id)}
+                    alt={selectedPokemon.name}
+                    className="preview-sprite"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${selectedPokemon.pokeapi_id}.png`;
+                    }}
+                  />
+                  <h3>{selectedPokemon.name}</h3>
+                  <span className={`legendary-badge ${selectedPokemon.is_legendary ? 'show' : ''}`}>
+                    {selectedPokemon.is_legendary ? 'Legendario' : ''}
+                  </span>
+                </div>
+
+                <div className="selected-preview-scrolls">
+                  <div className="pokemon-info-card">
+                    <div className="pokemon-info-row">
+                      <span className="pokemon-info-label">Tipo</span>
+                      <div className="pokemon-type-tags">
+                        {selectedPokemon.types.map((type) => (
+                          <span
+                            key={type}
+                            className="pokemon-type-tag"
+                            style={{ backgroundColor: TYPE_COLORS[type] || '#4a4a4a' }}
+                          >
+                            {type}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="pokemon-info-grid">
+                      <div className="pokemon-info-item">
+                        <span className="pokemon-info-label">Gen</span>
+                        <strong>{selectedPokemon.generation}</strong>
+                      </div>
+                      <div className="pokemon-info-item">
+                        <span className="pokemon-info-label">Base EXP</span>
+                        <strong>{selectedPokemon.base_experience}</strong>
+                      </div>
+                      <div className="pokemon-info-item">
+                        <span className="pokemon-info-label">Altura</span>
+                        <strong>{(selectedPokemon.height_dm / 10).toFixed(1)} m</strong>
+                      </div>
+                      <div className="pokemon-info-item">
+                        <span className="pokemon-info-label">Peso</span>
+                        <strong>{(selectedPokemon.weight_hg / 10).toFixed(1)} kg</strong>
+                      </div>
+                    </div>
+                    <div className="pokemon-stats-list">
+                      <div className="pokemon-stat-row"><span>HP</span><strong>{selectedPokemon.stats.hp}</strong></div>
+                      <div className="pokemon-stat-row"><span>Ataque</span><strong>{selectedPokemon.stats.attack}</strong></div>
+                      <div className="pokemon-stat-row"><span>Defensa</span><strong>{selectedPokemon.stats.defense}</strong></div>
+                      <div className="pokemon-stat-row"><span>At. Esp.</span><strong>{selectedPokemon.stats.sp_attack}</strong></div>
+                      <div className="pokemon-stat-row"><span>Def. Esp.</span><strong>{selectedPokemon.stats.sp_defense}</strong></div>
+                      <div className="pokemon-stat-row"><span>Velocidad</span><strong>{selectedPokemon.stats.speed}</strong></div>
+                    </div>
+                  </div>
+
+                  <div className="pokemon-moves-card">
+                    <div className="pokemon-moves-header">
+                      <span className="pokemon-info-label">Ataques</span>
+                      <span className="pokemon-moves-count">
+                        {loadingMoves ? 'Cargando...' : `${selectedPokemonMoves.length} mostrados`}
+                      </span>
+                    </div>
+
+                    {loadingMoves ? (
+                      <div className="pokemon-moves-loading">
+                        <div className="spinner-small"></div>
+                        <span>Cargando ataques...</span>
+                      </div>
+                    ) : selectedPokemonMoves.length > 0 ? (
+                      <div className="pokemon-moves-list">
+                        {selectedPokemonMoves.map((move) => (
+                          <div key={move.move_id} className="pokemon-move-row" onClick={() => handleMoveClick(move)}>
+                            <div className="pokemon-move-main">
+                              <span className="pokemon-move-name">
+                                {move.names?.es?.toUpperCase() || move.name.toUpperCase()}
+                              </span>
+                              <span
+                                className="pokemon-move-type"
+                                style={{ backgroundColor: TYPE_COLORS[move.type] || '#4a4a4a' }}
+                              >
+                                {move.type.toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="pokemon-move-meta">
+                              <span>Poder: {move.power !== null ? move.power : '—'}</span>
+                              <span>Precisión: {move.accuracy !== null ? `${move.accuracy}%` : '—'}</span>
+                              <span>PP: {move.pp || '—'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="pokemon-moves-empty">Este Pokémon no tiene ataques disponibles en la base de datos.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
               <div className="preview-actions">
                 <button className="confirm-btn" onClick={confirmPick}>
                   ✓ Seleccionar
@@ -436,6 +616,89 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
           <button className="confirm-team-btn" onClick={confirmTeam}>
             ✓ Confirmar Equipo
           </button>
+        </div>
+      )}
+
+      {/* Modal de descripción del movimiento */}
+      {selectedMove && (
+        <div className="move-detail-overlay" onClick={() => setSelectedMove(null)}>
+          <div className="move-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="move-detail-close"
+              onClick={() => setSelectedMove(null)}
+            >
+              ✕
+            </button>
+
+            <div className="move-detail-header">
+              <h2>{selectedMove.names?.es?.toUpperCase() || selectedMove.name.toUpperCase()}</h2>
+              <span 
+                className="move-type-badge-large"
+                style={{ backgroundColor: TYPE_COLORS[selectedMove.type] || '#999' }}
+              >
+                {selectedMove.type.toUpperCase()}
+              </span>
+            </div>
+
+            <div className="move-detail-description">
+              <p>{selectedMove.description || 'Sin descripción disponible.'}</p>
+            </div>
+
+            <div className="move-detail-stats">
+              <div className="detail-stat-item">
+                <span className="label">PODER</span>
+                <span className="value">{selectedMove.power !== null ? selectedMove.power : '—'}</span>
+              </div>
+              <div className="detail-stat-item">
+                <span className="label">PRECISIÓN</span>
+                <span className="value">{selectedMove.accuracy !== null ? `${selectedMove.accuracy}%` : '—'}</span>
+              </div>
+              <div className="detail-stat-item">
+                <span className="label">PP</span>
+                <span className="value">{selectedMove.pp || '—'}</span>
+              </div>
+              <div className="detail-stat-item">
+                <span className="label">PRIORIDAD</span>
+                <span className="value">{selectedMove.priority >= 0 ? `+${selectedMove.priority}` : selectedMove.priority}</span>
+              </div>
+            </div>
+
+            <div className="move-detail-class">
+              <span className={`damage-class-large ${selectedMove.damage_class}`}>
+                {selectedMove.damage_class === 'physical' ? '⚔️ FÍSICO' : 
+                 selectedMove.damage_class === 'special' ? '✨ ESPECIAL' : '📋 ESTADO'}
+              </span>
+            </div>
+
+            <div className="move-detail-ailment">
+              {selectedMove.meta?.ailment ? (
+                <>
+                  <span className="ailment-label">Efecto:</span>
+                  <span 
+                    className="ailment-badge-large"
+                    style={{ 
+                      backgroundColor: selectedMove.meta.ailment === 'burn' ? '#ff6b35' :
+                                     selectedMove.meta.ailment === 'poison' ? '#9b59b6' :
+                                     selectedMove.meta.ailment === 'sleep' ? '#3498db' :
+                                     selectedMove.meta.ailment === 'paralysis' ? '#f1c40f' :
+                                     selectedMove.meta.ailment === 'freeze' ? '#00cec9' : '#999'
+                    }}
+                  >
+                    {selectedMove.meta.ailment.toUpperCase()} ({selectedMove.meta.ailment_chance}%)
+                  </span>
+                </>
+              ) : (
+                <span className="ailment-label">Efectos: ninguno</span>
+              )}
+            </div>
+
+            <div className="move-detail-flags">
+              {selectedMove.flags?.protect && <span className="flag">🛡️ Bloqueable</span>}
+              {selectedMove.flags?.mirror && <span className="flag">🔄 Reflejable</span>}
+              {selectedMove.flags?.contact && <span className="flag">👊 Contacto</span>}
+              {selectedMove.flags?.recharge && <span className="flag">🔋 Recarga</span>}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -8,6 +8,7 @@ import {
   broadcast,
   sendTo,
   getConnection,
+  getRoomPlayers,
   joinRoom as wsJoinRoom,
   leaveRoom as wsLeaveRoom,
   roomExists,
@@ -285,14 +286,26 @@ async function handleLeaveRoom(sessionId: string): Promise<void> {
 
   if (roomCode) {
     // Notificar al servicio REST
+    let hostLeft = false;
     try {
-      await fetch(`http://localhost:3000/api/rooms/${roomCode}/leave`, {
+      const response = await fetch(`http://localhost:3000/api/rooms/${roomCode}/leave`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId })
       });
+      const result = await response.json();
+      hostLeft = result.host_left === true;
     } catch (e) {
       console.error('[WS] Error notifying leave to REST:', e);
+    }
+
+    // Si el host abandonó, notificar a todos los jugadores
+    if (hostLeft) {
+      broadcast(roomCode, {
+        type: 'room:closed',
+        data: { reason: 'host_left', message: 'El host abandonó la sala' }
+      }, sessionId); // excludeSessionId es el que ya salió
+      console.log(`[WS] Sala ${roomCode} cerrada por abandono del host`);
     }
   }
 
@@ -472,27 +485,46 @@ async function handleDraftPick(
   roomCode: string,
   data: Record<string, any> | undefined
 ): Promise<void> {
+  console.log(`[DRAFT:PICK] handleDraftPick called: sessionId=${sessionId}, roomCode=${roomCode}`);
+
   const pokemon = data?.pokemon as TeamMember | undefined;
+  console.log(`[DRAFT:PICK] Pokemon:`, pokemon);
 
   if (!pokemon || !pokemon.pokeapi_id) {
+    console.log(`[DRAFT:PICK] ERROR: No pokemon data`);
     sendTo(sessionId, { type: 'error', message: 'Pokémon requerido para el pick' });
     return;
   }
 
   const result = await draftPick(roomCode, sessionId, pokemon);
+  console.log(`[DRAFT:PICK] draftPick result:`, JSON.stringify(result));
 
   if (!result.success) {
+    console.log(`[DRAFT:PICK] ERROR: ${result.message}`);
     sendTo(sessionId, { type: 'draft:error', message: result.message });
     return;
   }
 
   // Obtener sala actualizada para broadcast
   const room = await getRoomByCode(roomCode);
-  if (!room) return;
+  if (!room) {
+    console.log(`[DRAFT:PICK] ERROR: Room not found after pick`);
+    return;
+  }
 
   // Broadcast del pick a todos los jugadores
   const playerNumber = room.players.player1.session_id === sessionId ? 1 : 2;
+  console.log(`[DRAFT:PICK] Player number: ${playerNumber}, Current turn: ${room.draft_state?.current_turn}`);
 
+  // Log the in-memory room state for debugging
+  const inMemoryPlayers = getRoomPlayers(roomCode);
+  console.log(`[DRAFT:PICK] In-memory room players for broadcast:`, inMemoryPlayers);
+  for (const sid of inMemoryPlayers) {
+    const conn = getConnection(sid);
+    console.log(`[DRAFT:PICK] Player ${sid}: connected=${!!conn}, readyState=${conn?.readyState}`);
+  }
+
+  console.log(`[DRAFT:PICK] Broadcasting draft:picked...`);
   broadcast(roomCode, {
     type: 'draft:picked',
     data: {
@@ -503,6 +535,7 @@ async function handleDraftPick(
       draft_completed: result.draft_completed
     }
   });
+  console.log(`[DRAFT:PICK] Broadcast sent`);
 
   // Si el draft se completó, cambiar estado a in_battle
   if (result.draft_completed && room.state !== 'in_battle') {
