@@ -8,6 +8,7 @@ interface PokemonSprite {
   pokeapi_id: number;
   name?: string;
   is_legendary?: boolean;
+  selected_moves?: MoveType[];
 }
 
 interface DraftProps {
@@ -40,6 +41,7 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
   const [selectedPokemonMoves, setSelectedPokemonMoves] = useState<MoveType[]>([]);
   const [loadingMoves, setLoadingMoves] = useState(false);
   const [selectedMove, setSelectedMove] = useState<MoveType | null>(null);
+  const [selectedMoves, setSelectedMoves] = useState<MoveType[]>([]);
   const [myPicks, setMyPicks] = useState<PokemonSprite[]>([]);
   const [opponentPicks, setOpponentPicks] = useState<PokemonSprite[]>([]);
   const [currentTurn, setCurrentTurn] = useState<'player1' | 'player2' | null>(null);
@@ -296,10 +298,23 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
   const confirmPick = () => {
     if (!selectedPokemon) return;
 
+    // Validar que el Pokémon tiene movimientos disponibles
+    if (selectedPokemonMoves.length === 0) {
+      setError('Este Pokémon no tiene movimientos disponibles');
+      return;
+    }
+
+    // Validar que hay al menos 1 movimiento seleccionado
+    if (selectedMoves.length === 0) {
+      setError('Selecciona al menos 1 ataque para el Pokémon');
+      return;
+    }
+
     const pokemonData: PokemonSprite = {
       pokeapi_id: selectedPokemon.pokeapi_id,
       name: selectedPokemon.name,
-      is_legendary: selectedPokemon.is_legendary
+      is_legendary: selectedPokemon.is_legendary,
+      selected_moves: selectedMoves
     };
 
     // === OPTIMISTIC UPDATE: actualizar UI inmediatamente ===
@@ -320,6 +335,8 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
     });
 
     setSelectedPokemon(null);
+    setSelectedPokemonMoves([]);
+    setSelectedMoves([]);
     setError(null);
   };
 
@@ -329,6 +346,8 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
   const cancelPick = () => {
     setSelectedPokemon(null);
     setSelectedPokemonMoves([]);
+    setSelectedMoves([]);
+    setError(null);
   };
 
   /**
@@ -336,6 +355,29 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
    */
   const handleMoveClick = (move: MoveType) => {
     setSelectedMove(move);
+  };
+
+  /**
+   * Verificar si un movimiento ya está seleccionado
+   */
+  const isMoveSelected = (moveId: number): boolean => {
+    return selectedMoves.some(m => m.move_id === moveId);
+  };
+
+  /**
+   * Añadir un movimiento a la selección
+   */
+  const handleAddMove = (move: MoveType) => {
+    if (selectedMoves.length >= 4) return;
+    if (isMoveSelected(move.move_id)) return;
+    setSelectedMoves([...selectedMoves, move]);
+  };
+
+  /**
+   * Quitar un movimiento de la selección
+   */
+  const handleRemoveMove = (moveId: number) => {
+    setSelectedMoves(selectedMoves.filter(m => m.move_id !== moveId));
   };
 
   /**
@@ -433,12 +475,12 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
               <div className="selected-preview-top">
                 <div className="selected-preview-visual">
                   <img
-                    src={getSpriteUrl(selectedPokemon.pokeapi_id)}
+                    src={selectedPokemon.sprites.front_default || getSpriteUrl(selectedPokemon.pokeapi_id)}
                     alt={selectedPokemon.name}
                     className="preview-sprite"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
-                      target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${selectedPokemon.pokeapi_id}.png`;
+                      target.src = selectedPokemon.sprites.static_front_default || getSpriteUrl(selectedPokemon.pokeapi_id);
                     }}
                   />
                   <h3>{selectedPokemon.name}</h3>
@@ -507,7 +549,11 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
                     ) : selectedPokemonMoves.length > 0 ? (
                       <div className="pokemon-moves-list">
                         {selectedPokemonMoves.map((move) => (
-                          <div key={move.move_id} className="pokemon-move-row" onClick={() => handleMoveClick(move)}>
+                          <div 
+                            key={move.move_id} 
+                            className={`pokemon-move-row ${isMoveSelected(move.move_id) ? 'selected' : ''}`}
+                            onClick={() => handleMoveClick(move)}
+                          >
                             <div className="pokemon-move-main">
                               <span className="pokemon-move-name">
                                 {move.names?.es?.toUpperCase() || move.name.toUpperCase()}
@@ -534,8 +580,16 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
                 </div>
               </div>
               <div className="preview-actions">
-                <button className="confirm-btn" onClick={confirmPick}>
-                  ✓ Seleccionar
+                <button 
+                  className="confirm-btn" 
+                  onClick={confirmPick}
+                  disabled={selectedMoves.length === 0 || selectedPokemonMoves.length === 0}
+                >
+                  {selectedPokemonMoves.length === 0 
+                    ? '⚠️ Sin movimientos disponibles' 
+                    : selectedMoves.length === 0 
+                      ? 'Selecciona al menos 1 ataque' 
+                      : `✓ Seleccionar (${selectedMoves.length}/4)`}
                 </button>
                 <button className="cancel-btn" onClick={cancelPick}>
                   ✗ Cancelar
@@ -566,12 +620,12 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
                       disabled={isDisabled}
                     >
                       <img
-                        src={getSpriteUrl(pokemon.pokeapi_id)}
+                        src={pokemon.sprites.front_default || getSpriteUrl(pokemon.pokeapi_id)}
                         alt={pokemon.name}
                         className="card-sprite"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
-                          target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.pokeapi_id}.png`;
+                          target.src = pokemon.sprites.static_front_default || getSpriteUrl(pokemon.pokeapi_id);
                         }}
                       />
                       <span className="card-name">#{pokemon.pokeapi_id} {pokemon.name}</span>
@@ -697,6 +751,31 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
               {selectedMove.flags?.mirror && <span className="flag">🔄 Reflejable</span>}
               {selectedMove.flags?.contact && <span className="flag">👊 Contacto</span>}
               {selectedMove.flags?.recharge && <span className="flag">🔋 Recarga</span>}
+            </div>
+
+            {/* Contador de ataques seleccionados */}
+            <div className="move-selected-counter">
+              {selectedMoves.length}/4 ataques seleccionados
+            </div>
+
+            {/* Botón de elegir/quitar ataque */}
+            <div className="move-action-buttons">
+              {isMoveSelected(selectedMove.move_id) ? (
+                <button 
+                  className="move-action-btn remove-move"
+                  onClick={() => handleRemoveMove(selectedMove.move_id)}
+                >
+                  ✕ Quitar Ataque
+                </button>
+              ) : (
+                <button 
+                  className="move-action-btn add-move"
+                  onClick={() => handleAddMove(selectedMove)}
+                  disabled={selectedMoves.length >= 4}
+                >
+                  {selectedMoves.length >= 4 ? 'Máximo 4 ataques' : '✓ Elegir Ataque'}
+                </button>
+              )}
             </div>
           </div>
         </div>

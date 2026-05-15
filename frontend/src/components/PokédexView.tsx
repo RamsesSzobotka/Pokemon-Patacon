@@ -340,12 +340,12 @@ const PokédexView: React.FC = () => {
               >
                 <div className="pokemon-sprite">
                   <img
-                    src={poke.sprites.animated_gif}
+                    src={poke.sprites.front_default || ''}
                     alt={poke.name}
                     className="sprite-img"
                     onError={(e) => {
                       const img = e.target as HTMLImageElement;
-                      img.src = poke.sprites.static_png;
+                      img.src = poke.sprites.static_front_default || '';
                     }}
                   />
                 </div>
@@ -436,11 +436,11 @@ const PokédexView: React.FC = () => {
               {/* Sprite grande */}
               <div className="detail-sprite">
                 <img
-                  src={selectedPokemon.sprites.animated_gif}
+                  src={selectedPokemon.sprites.front_default || ''}
                   alt={selectedPokemon.name}
                   onError={(e) => {
                     const img = e.target as HTMLImageElement;
-                    img.src = selectedPokemon.sprites.static_png;
+                    img.src = selectedPokemon.sprites.static_front_default || '';
                   }}
                 />
               </div>

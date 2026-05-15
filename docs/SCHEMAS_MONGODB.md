@@ -39,8 +39,19 @@
   "is_mythical": false,
   "move_ids": [33, 45, 73, 74, 102, ...],  // Array de IDs de movimientos válidos
   "sprites": {
-    "animated_gif": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/versions/generation-v/black-white/animated/1.gif",
-    "static_png": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/1.png"
+    // Sprites animados Gen V Black/White (batalla)
+    "front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/versions/generation-v/black-white/animated/1.gif",
+    "back_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/versions/generation-v/black-white/animated/back/1.gif",
+    "front_shiny": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/versions/generation-v/black-white/animated/shiny/1.gif",
+    "back_shiny": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/versions/generation-v/black-white/animated/back/shiny/1.gif",
+    // Sprites female - no disponibles en Gen V animated
+    "front_female": null,
+    "back_female": null,
+    "front_shiny_female": null,
+    "back_shiny_female": null,
+    // Sprites estáticos (fallback)
+    "static_front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/1.png",
+    "static_back_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/back/1.png"
   },
   "height_dm": 7,                           // Altura en decímetros (PokeAPI)
   "weight_hg": 69,                          // Peso en hectogramos (PokeAPI)
@@ -50,6 +61,20 @@
 ```
 
 **Nota:** El campo `move_ids` contiene únicamente los IDs de movimientos que el Pokémon puede aprender y que son válidos para combate (tienen poder > 0 O aplican estado primario).
+
+**Uso en batalla:**
+```javascript
+// Sprites para el combate
+playerSprite = pokemon.sprites.back_default   // Sprite del Pokémon del jugador (espalda)
+enemySprite = pokemon.sprites.front_default   // Sprite del Pokémon enemigo (frente)
+
+// Sprites shiny
+playerSpriteShiny = pokemon.sprites.back_shiny
+enemySpriteShiny = pokemon.sprites.front_shiny
+
+// Sprites estáticos (fallback si no hay animados)
+staticSprite = pokemon.sprites.static_front_default
+```
 
 ---
 

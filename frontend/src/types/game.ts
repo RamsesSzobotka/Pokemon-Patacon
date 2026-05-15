@@ -54,8 +54,19 @@ export interface PokemonType {
   is_mythical: boolean;
   move_ids: number[];  // Array de IDs de movimientos permitidos
   sprites: {
-    animated_gif: string;
-    static_png: string;
+    // Sprites animados Gen V Black/White
+    front_default: string | null;
+    back_default: string | null;
+    front_shiny: string | null;
+    back_shiny: string | null;
+    // Sprites female (no disponibles en Gen V)
+    front_female: string | null;
+    back_female: string | null;
+    front_shiny_female: string | null;
+    back_shiny_female: string | null;
+    // Sprites estáticos (fallback)
+    static_front_default: string | null;
+    static_back_default: string | null;
   };
   height_dm: number;
   weight_hg: number;
