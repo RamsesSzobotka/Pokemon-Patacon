@@ -1,7 +1,7 @@
 # MongoDB Schemas - Pokemon Patacon
 
-**Versión:** 2.0  
-**Fecha:** 13 de Mayo de 2026  
+**Versión:** 3.0  
+**Fecha:** 16 de Mayo de 2026  
 **Estado:** Especificación Técnica
 
 ---
@@ -10,20 +10,23 @@
 
 ### 1. `pokemon` - Caché de Pokémon desde PokeAPI
 
-**Propósito:** Almacenar datos de Pokémon para evitar llamadas repetidas a PokeAPI v2.
+**Propósito:** Almacenar datos de Pokémon para evitar llamadas repetidas a PokeAPI v2. Se importa automáticamente al iniciar el backend solo si no existen datos.
 
-**Índices Recomendados:**
+**Índices:**
 - `pokeapi_id` (único)
 - `name` (texto)
 - `is_legendary` (booleano)
 - `types` (array)
 - `move_ids` (array)
+- `generation` (1-5)
+- `cached_at` (TTL)
 
 ```javascript
 {
   "_id": ObjectId,                          // MongoDB ID único
   "pokeapi_id": 1,                          // ID de PokeAPI (1-649)
-  "name": "bulbasaur",
+  "name": "bulbasaur",                      // Nombre en inglés (minúsculas)
+  "name_es": "Bulbasaur",                   // Nombre en español
   "generation": 1,                          // 1-5 (Gen I-V)
   "types": ["grass", "poison"],             // Array de tipos (1-2)
   "stats": {
@@ -37,7 +40,7 @@
   "base_experience": 64,
   "is_legendary": false,
   "is_mythical": false,
-  "move_ids": [33, 45, 73, 74, 102, ...],  // Array de IDs de movimientos válidos
+  "move_ids": [1, 2, 3, 4, 5, 33, 45, 73, 74, 102, ...],  // TODOS los movimientos del Pokémon
   "sprites": {
     // Sprites animados Gen V Black/White (batalla)
     "front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/pokemon/versions/generation-v/black-white/animated/1.gif",
@@ -55,12 +58,12 @@
   },
   "height_dm": 7,                           // Altura en decímetros (PokeAPI)
   "weight_hg": 69,                          // Peso en hectogramos (PokeAPI)
-  "cached_at": ISODate("2026-05-13T12:00:00Z"),
-  "updated_at": ISODate("2026-05-13T12:00:00Z")
+  "cached_at": ISODate("2026-05-16T12:00:00Z"),
+  "updated_at": ISODate("2026-05-16T12:00:00Z")
 }
 ```
 
-**Nota:** El campo `move_ids` contiene únicamente los IDs de movimientos que el Pokémon puede aprender y que son válidos para combate (tienen poder > 0 O aplican estado primario).
+**Nota:** El campo `move_ids` contiene TODOS los movimientos que el Pokémon puede aprender en PokeAPI (sin filtro). Aproximadamente 20-100+ movimientos por Pokémon.
 
 **Uso en batalla:**
 ```javascript
@@ -78,38 +81,32 @@ staticSprite = pokemon.sprites.static_front_default
 
 ---
 
-### 1.1. `moves` - Movimientos Normalizados (Colección Independiente)
+### 2. `moves` - Movimientos Normalizados (Colección Independiente)
 
-**Propósito:** Almacenar todos los movimientos disponibles en una colección única y normalizada. Cada movimiento existe una sola vez y se referencia por ID desde los Pokémon.
+**Propósito:** Almacenar TODOS los movimientos disponibles en una colección única y normalizada. Cada movimiento existe una sola vez y se referencia por ID desde los Pokémon.
 
-**Validación de Movimientos para Combate:**
-El sistema permite únicamente movimientos que:
-- Tienen daño directo (`power > 0` y `damage_class` = physical/special), O
-- Aplican estado primario (paralysis, sleep, poison, burn, freeze)
+**Cambio v3.0:** Ya no hay filtro de validación. Se guardan TODOS los movimientos (con daño, sin daño, con estados, solo stats, etc.).
 
-Se excluyen:
-- Movimientos que solo modifican estadísticas (buff/debuff)
-- Movimientos de status sin efecto útil
-
-**Índices Recomendados:**
+**Índices:**
 - `move_id` (único)
 - `name` (texto)
 - `type` (para filtrar por tipo)
 - `damage_class` (physical/special/status)
 - `power` (orden descendente)
 - `meta.ailment` (para movimientos con estados)
+- `type: 1, damage_class: 1` (filtrado compuesto)
 
 ```javascript
 {
   "_id": ObjectId,                          // MongoDB ID único
   "move_id": 36,                            // ID único del movimiento (de PokeAPI)
-  "name": "flamethrower",                   // Nombre en inglés (base)
+  "name": "flamethrower",                   // Nombre en inglés (base, sin guiones)
   "names": {
     "es": "lanzallamas",                    // Nombre en español
     "en": "flamethrower",
     "ja": "ひのこ"                          // Nombre en japonés
   },
-  "description": "El usuario escupe un intenso chorro de llamas. Puede causar quemadura.",  // Descripción en español
+  "description": "El usuario escupe un intenso chorro de llamas. Puede causar quemadura.",  // Descripción en español/inglés
   "type": "fire",                           // Tipo del movimiento
   "damage_class": "special",               // "physical" | "special" | "status"
   "power": 90,                              // Potencia del movimiento (null para status)
@@ -118,9 +115,11 @@ Se excluyen:
   "priority": 0,                            // Prioridad del movimiento [-6, +6]
   "target": "selected-pokemon",            // "self" | "opponent" | "all" | "all-opponents"
   "meta": {
-    "ailment": "burn",                      // Estado primario aplicado (paralysis|sleep|poison|burn|freeze|null)
+    "ailment": "burn",                      // Estado aplicado (paralysis|sleep|poison|burn|freeze|null)
     "ailment_chance": 10,                  // Porcentaje de probabilidad de aplicar el estado
-    "stat_changes": [],                     // Cambios de estadísticas (buff/debuff)
+    "stat_changes": [
+      // Array de cambios de estadísticas [{ stat: "attack", change: 1 }]
+    ],
     "flinch_chance": 0,                     // Porcentaje de probabilidad de hacer flinch
     "heal": 0                               // Porcentaje de curación (0-100)
   },
@@ -133,23 +132,80 @@ Se excluyen:
     "powder": false,                       // Afectado por polvos (Bloom Wrap, etc.)
     "distance": false                      // Puede alcanzar a objetivos a distancia
   },
-  "created_at": ISODate("2026-05-13T12:00:00Z"),
-  "updated_at": ISODate("2026-05-13T12:00:00Z")
+  "created_at": ISODate("2026-05-16T12:00:00Z"),
+  "updated_at": ISODate("2026-05-16T12:00:00Z")
 }
 ```
 
 **Relación con Pokémon:**
-- Cada Pokémon en la colección `pokemon` tiene un campo `move_ids: number[]` que contiene los IDs de los movimientos que puede aprender.
+- Cada Pokémon en la colección `pokemon` tiene un campo `move_ids: number[]` que contiene los IDs de TODOS los movimientos que puede aprender.
 - La referencia es por `move_id`, no embebida - esto reduce redundancia y facilita el balanceo global.
 - Un mismo movimiento puede ser usado por múltiples Pokémon pero solo se almacena una vez en `moves`.
 
 ---
 
-### 2. `rooms` - Salas de Batalla Multijugador
+### 3. `types` - Tipos de Pokémon (Gen V + Fairy)
+
+**Propósito:** Almacenar los 18 tipos de Pokémon con sus relaciones de daño. Se importa automáticamente al iniciar el backend.
+
+**Índices:**
+- `type_id` (único)
+- `name` (único)
+
+```javascript
+{
+  "_id": ObjectId,
+  "type_id": 10,                            // ID de PokeAPI (1-18)
+  "name": "grass",                          // Nombre en inglés (único)
+  "names": {
+    "es": "Planta",                         // Nombre en español
+    "en": "Grass"
+  },
+  "damage_relations": {
+    "to": {
+      "double": ["water", "ground", "rock"],  // Tipo al que hace x2 daño
+      "half": ["fire", "grass", "poison", "flying", "bug", "dragon", "steel"],  // Tipo al que hace x0.5
+      "immune": []                            // Tipo al que hace x0
+    },
+    "from": {
+      "double": ["fire", "ice", "poison", "flying", "bug"],  // Tipo que hace x2 a este
+      "half": ["water", "electric", "grass", "ground"],       // Tipo que hace x0.5 a este
+      "immune": []                                                    // Tipo que hace x0 a este
+    }
+  },
+  "imported_at": ISODate("2026-05-16T12:00:00Z")
+}
+```
+
+**Lista de tipos (ID - Nombre ES - Nombre EN):**
+| ID | ES | EN |
+|----|----|----|
+| 1 | Normal | normal |
+| 2 | Lucha | fighting |
+| 3 | Volador | flying |
+| 4 | Veneno | poison |
+| 5 | Tierra | ground |
+| 6 | Roca | rock |
+| 7 | Bicho | bug |
+| 8 | Fantasma | ghost |
+| 9 | Acero | steel |
+| 10 | Fuego | fire |
+| 11 | Agua | water |
+| 12 | Planta | grass |
+| 13 | Eléctrico | electric |
+| 14 | Psíquico | psychic |
+| 15 | Hielo | ice |
+| 16 | Dragón | dragon |
+| 17 | Siniestro | dark |
+| 18 | Hada | fairy |
+
+---
+
+### 4. `rooms` - Salas de Batalla Multijugador
 
 **Propósito:** Gestionar salas, códigos de acceso, jugadores y estado de pre-batalla.
 
-**Índices Recomendados:**
+**Índices:**
 - `code` (único)
 - `created_at` (TTL: 30 minutos)
 - `state`
@@ -158,18 +214,18 @@ Se excluyen:
 {
   "_id": ObjectId,
   "code": "AB12CD",                         // Código 4-6 caracteres (único)
-  "created_at": ISODate("2026-05-13T12:00:00Z"),
-  "expires_at": ISODate("2026-05-13T12:30:00Z"),  // TTL para limpieza
+  "created_at": ISODate("2026-05-16T12:00:00Z"),
+  "expires_at": ISODate("2026-05-16T12:30:00Z"),  // TTL para limpieza
   "state": "waiting",                       // "waiting" | "in_draft" | "in_battle" | "finished"
   "players": {
     "player1": {
       "session_id": "uuid-here",
-      "joined_at": ISODate("2026-05-13T12:00:00Z"),
+      "joined_at": ISODate("2026-05-16T12:00:00Z"),
       "ready": false                        // Confirmó equipo
     },
     "player2": {
       "session_id": "uuid-here",
-      "joined_at": ISODate("2026-05-13T12:05:00Z"),
+      "joined_at": ISODate("2026-05-16T12:05:00Z"),
       "ready": false
     }
   },
@@ -201,11 +257,11 @@ Se excluyen:
 
 ---
 
-### 3. `battles` - Estado de Batalla en Progreso
+### 5. `battles` - Estado de Batalla en Progreso
 
 **Propósito:** Persistir estado de batalla para reconexión y historial.
 
-**Índices Recomendados:**
+**Índices:**
 - `room_code` (único)
 - `started_at` (TTL: 1 hora)
 
@@ -213,7 +269,7 @@ Se excluyen:
 {
   "_id": ObjectId,
   "room_code": "AB12CD",
-  "started_at": ISODate("2026-05-13T12:10:00Z"),
+  "started_at": ISODate("2026-05-16T12:10:00Z"),
   "current_turn": 15,
   "state": "active",                        // "active" | "finished"
   "players": {
@@ -269,7 +325,7 @@ Se excluyen:
       "last_action": {
         "action_type": "attack",            // "attack" | "switch" | "item"
         "action_data": "thunderbolt",
-        "timestamp": ISODate("2026-05-13T12:10:45Z")
+        "timestamp": ISODate("2026-05-16T12:10:45Z")
       }
     },
     "player2": {
@@ -294,7 +350,7 @@ Se excluyen:
         "data": { "from_index": 0, "to_index": 2 },
         "damage_dealt": 0
       },
-      "executed_at": ISODate("2026-05-13T12:10:50Z")
+      "executed_at": ISODate("2026-05-16T12:10:50Z")
     }
     // ... histórico de turnos anteriores
   ],
@@ -305,31 +361,11 @@ Se excluyen:
 
 ---
 
-### 4. `type_matchups` - Caché de Tabla de Tipos
-
-**Propósito:** Almacenar tabla de efectividad de tipos para no consultar PokeAPI en cada cálculo.
-
-**Índices Recomendados:**
-- `attacker_type` + `defender_type` (único compuesto)
-
-```javascript
-{
-  "_id": ObjectId,
-  "attacker_type": "electric",
-  "defender_type": "water",
-  "multiplier": 2.0,                        // 0.5 | 1 | 2 | etc.
-  "description": "Super effective",
-  "cached_at": ISODate("2026-05-13T12:00:00Z")
-}
-```
-
----
-
-### 5. `sessions` - Sesiones de Jugador (Opcional)
+### 6. `sessions` - Sesiones de Jugador (Opcional)
 
 **Propósito:** Rastrear sesiones anónimas para estadísticas y reconexión.
 
-**Índices Recomendados:**
+**Índices:**
 - `session_id` (único)
 - `created_at` (TTL: 24 horas)
 
@@ -337,8 +373,8 @@ Se excluyen:
 {
   "_id": ObjectId,
   "session_id": "uuid-v4",                  // Generado por cliente
-  "created_at": ISODate("2026-05-13T12:00:00Z"),
-  "last_active": ISODate("2026-05-13T12:45:00Z"),
+  "created_at": ISODate("2026-05-16T12:00:00Z"),
+  "last_active": ISODate("2026-05-16T12:45:00Z"),
   "stats": {
     "battles_played": 5,
     "battles_won": 2,
@@ -378,23 +414,21 @@ await db.collection('moves').createIndex({ 'meta.ailment': 1 });
 await db.collection('moves').createIndex({ type: 1, damage_class: 1 });  // Filtrado compuesto
 await db.collection('moves').createIndex({ power: 1, accuracy: 1 });  // Optimización de daño
 
+// === COLECCIÓN TYPES ===
+await db.collection('types').createIndex({ type_id: 1 }, { unique: true });
+await db.collection('types').createIndex({ name: 1 }, { unique: true });
+
 // === COLECCIÓN ROOMS ===
 await db.collection('rooms').createIndex({ code: 1 }, { unique: true });
 await db.collection('rooms').createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
 await db.collection('rooms').createIndex({ state: 1 });
-await db.collection('rooms').createIndex({ 'players.session_id': 1 });  // Buscar sala por sesión
+await db.collection('rooms').createIndex({ 'players.session_id: 1 });  // Buscar sala por sesión
 await db.collection('rooms').createIndex({ 'team_1.pokeapi_id': 1 });   // Validar equipo P1
 await db.collection('rooms').createIndex({ 'team_2.pokeapi_id': 1 });   // Validar equipo P2
 
 // === COLECCIÓN BATTLES ===
 await db.collection('battles').createIndex({ room_code: 1 }, { unique: true });
 await db.collection('battles').createIndex({ started_at: 1 }, { expireAfterSeconds: 3600 });
-
-// === COLECCIÓN TYPE_MATCHUPS ===
-await db.collection('type_matchups').createIndex(
-  { attacker_type: 1, defender_type: 1 },
-  { unique: true }
-);
 
 // === COLECCIÓN SESSIONS (Opcional) ===
 await db.collection('sessions').createIndex({ session_id: 1 }, { unique: true });
@@ -410,9 +444,16 @@ await db.collection('sessions').createIndex({ created_at: 1 }, { expireAfterSeco
 db.pokemon.findOne({ name: /pikachu/i })
 ```
 
+### Buscar Pokémon por nombre en español
+```javascript
+db.pokemon.findOne({ name_es: /pikachu/i })
+```
+
 ### Obtener tabla de tipos para un matchup
 ```javascript
-db.type_matchups.findOne({ attacker_type: "electric", defender_type: "water" })
+// Usando colección types
+const defenderType = db.types.findOne({ name: "water" });
+const effectiveness = defenderType.damage_relations.from.double.includes("electric") ? 2 : 1;
 ```
 
 ### Limpiar salas expiradas
@@ -496,10 +537,16 @@ db.battles.findOne({ room_code: "AB12CD" })
 ```javascript
 // 1. Obtener move_ids del Pokémon
 const pokemon = db.pokemon.findOne({ pokeapi_id: 25 });
-// pokemon.move_ids = [25, 87, 93, 98, 145, ...]
+// pokemon.move_ids = [25, 87, 93, 98, 145, ...] (TODOS los movimientos)
 
 // 2. Obtener detalles de los movimientos
 db.moves.find({ move_id: { $in: pokemon.move_ids } })
+```
+
+### Obtener nombre en español de un movimiento
+```javascript
+const move = db.moves.findOne({ move_id: 36 });
+// move.names.es = "lanzallamas"
 ```
 
 ### Buscar Pokémon que pueden aprender un movimiento específico
@@ -522,31 +569,124 @@ db.moves.find({ "meta.ailment": "paralysis" })
 db.moves.find({ power: { $gte: 100 } }).sort({ power: -1 }).limit(10)
 ```
 
+### Obtener todos los tipos disponibles
+```javascript
+db.types.find().sort({ type_id: 1 })
+```
+
 ---
 
-## 🚀 Data Seeding (Inicialización)
+## 🚀 Data Seeding (Inicialización Automática)
 
-Al iniciar la aplicación por primera vez:
+### Flujo de Importación (v3.0)
 
-1. Descargar 649 Pokémon desde PokeAPI v2
-2. Para cada Pokémon:
-   - Obtener todos sus movimientos disponibles
-   - Validar cada movimiento (solo válidos para combate)
-   - Guardar movimientos únicos en colección `moves`
-   - Guardar solo los `move_ids` en el Pokémon
-3. Descargar tabla de tipos (18×18 matchups)
-4. Insertar en colección `type_matchups`
-5. Crear índices automáticamente
+Al iniciar la aplicación, el backend ejecuta automáticamente `importAllData()`:
 
-**Flujo de Validación de Movimientos:**
 ```
-Para cada movimiento del Pokémon:
-  1. Obtener datos completos desde PokeAPI
-  2. Verificar si tiene poder > 0 (movimiento de daño)
-  3. O verificar si aplica estado primario (paralysis|sleep|poison|burn|freeze)
-  4. Si cumple 2 o 3 → GUARDAR en colección moves + agregar ID a move_ids
-  5. Si no → EXCLUIR (buffs/debuffs puros, status sin efecto)
+1. Verificar colección "types"
+   ├── Si existe → omitir importación
+   └── Si no existe → importar 18 tipos desde PokeAPI
+
+2. Verificar colección "moves"
+   ├── Contar documentos
+   └── Si < 10000 → reimportar pokemones (moves incompletos)
+
+3. Verificar colección "pokemon"
+   ├── Si existe → omitir importación
+   └── Si no existe → importar 649 pokemones + TODOS sus moves
 ```
 
-**Tiempo estimado:** ~2-5 minutos en primera conexión (incluye rate limiting de PokeAPI y validación de movimientos para ~650K+ movimientos totales)
+**Logging de ejemplo:**
+```
+============================================================
+🔄 INICIANDO IMPORTACIÓN DE DATOS DESDE POKEAPI
+============================================================
 
+📦 Verificando tipos en base de datos...
+🔄 Importando 18 tipos desde PokeAPI...
+  ✅ Normal (normal)
+  ✅ Lucha (fighting)
+  ...
+✅ Tipos importados: 18
+
+📦 Verificando movimientos en base de datos...
+⚠️ Solo hay 0 movimientos en BD (esperados: ~10000)
+   Los movimientos podrían estar incompletos o filtrados
+
+📦 Verificando pokemones en base de datos...
+🔄 Importando 649 pokemones desde PokeAPI...
+⚠️ Esto puede tomar varios minutos...
+
+   📋 Movimientos de bulbasaur:
+   - Viento Cortante (normal, power: 80)
+   - Danza Espada (normal, power: N/A)
+   - Corte (normal, power: 50)
+   ...
+   ... y 71 más
+
+🐾 [1] Bulbasaur (bulbasaur)
+
+============================================================
+📋 RESUMEN DE IMPORTACIÓN
+============================================================
+📦 Tipos:
+   - Existentes: 0
+   - Importados: 18
+📦 Movimientos:
+   - Existentes: 0
+   - Nuevos agregados: ~15000
+📦 Pokemones:
+   - Existentes: 0
+   - Importados: 649
+============================================================
+✨ Importación completada!
+============================================================
+```
+
+### Cambio Clave v2.0 → v3.0
+
+| Aspecto | v2.0 | v3.0 |
+|---------|------|------|
+| Movimientos | Solo válidos para combate (damage + estados primarios) | **TODOS** los movimientos |
+| Tipos | No existían | Nueva colección `types` (18 tipos) |
+| Importación | Scripts manuales | **Automática** al iniciar backend |
+| Verificación | No había | Verifica si existen datos antes de importar |
+| Nombres ES | No había | `name_es` en pokémon, `names.es` en moves |
+
+**Tiempo estimado primera importación:**
+- Tipos: ~2 segundos (18 tipos)
+- Movimientos: ~5-10 minutos (todas las move pools de 649 pokemones)
+- Total: ~10-15 minutos con rate limiting
+
+---
+
+## 📊 Estadísticas Esperadas
+
+| Colección | Documentos Estimados |
+|-----------|---------------------|
+| `pokemon` | 649 (Gen I-V) |
+| `moves` | ~15,000-20,000 (todos los moves únicos) |
+| `types` | 18 (Gen V + Fairy) |
+| `rooms` | Variable (activo por sesión) |
+| `battles` | Variable (activo por partida) |
+
+---
+
+## 🗑️ Reiniciar Datos
+
+Si necesitas reimportar todos los datos (por ejemplo, para aplicar el nuevo filtro de TODOS los movimientos):
+
+```javascript
+// En MongoDB shell:
+use pokemon-patacon
+
+// Opcional: borrar todo
+db.pokemon.drop()
+db.moves.drop()
+db.types.drop()
+
+// Opcional: solo reimportar moves (si pokemon ya existe)
+db.moves.drop()
+
+// Luego reiniciar el backend -会自动 reimportará
+```

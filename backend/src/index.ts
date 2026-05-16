@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { connectDB, disconnectDB } from './db/mongodb';
 import { pokemonService } from './services/pokemonService';
+import { importAllData } from './services/dataImportService';
 import { initializeRoomsIndexes } from './db/rooms';
 import pokemonRoutes from './routes/pokemon';
 import roomRoutes from './routes/rooms';
@@ -89,7 +90,10 @@ async function startServer() {
     await initializeRoomsIndexes();
     console.log('✅ Índices de rooms creados');
 
-    // 3. Inicializar servicio de Pokémon
+    // 3. Importar datos desde PokeAPI si no existen
+    await importAllData();
+
+    // 4. Inicializar servicio de Pokémon
     await pokemonService.initialize();
     console.log('🐾 Servicio de Pokémon inicializado');
 

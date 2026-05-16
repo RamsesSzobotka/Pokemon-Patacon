@@ -1,0 +1,476 @@
+/**
+ * Battle WebSocket Handler - Tarea 8
+ * Maneja los mensajes WebSocket relacionados con la batalla
+ * Conecta el motor de batalla (battleService) con los clientes
+ */
+
+import { broadcast, sendTo, getConnection, getRoomPlayers } from './roomManager.js';
+import { createBattleState, createPlayerBattleState, determineExecutionOrder, canPokemonAct, executeMove, executeSwitch, getAilmentDamagePerTurn, decrementAilmentTurns, checkBattleEnd } from '../services/battleService.js';
+import { getMovesByIds } from '../db/mongodb.js';
+import type { BattleState, PokemonInBattle, BattleMove, PlayerAction, PlayerBattleState } from '../types/battle.js';
+import type { Room } from '../db/rooms.js';
+
+// ============================================
+// GESTIÓN DE BATALLAS EN MEMORIA
+// ============================================
+
+// Mapa de salas a estados de batalla
+const activeBattles: Map<string, BattleState> = new Map();
+
+/**
+ * Inicia una nueva batalla en una sala
+ */
+export async function startBattle(roomCode: string, room: Room): Promise<BattleState | null> {
+  console.log(`[BATTLE] Iniciando batalla en sala ${roomCode}`);
+  
+  // Obtener equipos de ambos jugadores
+  const team1 = room.draft_picks?.player1 || [];
+  const team2 = room.draft_picks?.player2 || [];
+  
+  if (team1.length === 0 || team2.length === 0) {
+    console.error(`[BATTLE] Equipos no encontrados para sala ${roomCode}`);
+    return null;
+  }
+  
+  // Cargar movimientos para cada Pokémon
+  const team1WithMoves = await loadTeamMoves(team1);
+  const team2WithMoves = await loadTeamMoves(team2);
+  
+  // Crear estados de jugadores
+  const player1 = createPlayerBattleState(
+    'player1',
+    room.players.player1.player_name || 'Player 1',
+    room.players.player1.session_id,
+    team1WithMoves
+  );
+  
+  const player2 = createPlayerBattleState(
+    'player2',
+    room.players.player2.player_name || 'Player 2',
+    room.players.player2.session_id,
+    team2WithMoves
+  );
+  
+  // Crear estado de batalla
+  const battleState = createBattleState(roomCode, player1, player2);
+  
+  // Guardar en mapa de batallas activas
+  activeBattles.set(roomCode, battleState);
+  
+  // Notificar a ambos jugadores que la batalla comenzó
+  broadcast(roomCode, {
+    type: 'battle:start',
+    data: {
+      roomCode,
+      turn: battleState.turn,
+      phase: battleState.phase,
+      player1: {
+        name: player1.name,
+        activePokemon: serializePokemon(player1.team[player1.activePokemonIndex]),
+        team: player1.team.map(p => serializePokemon(p))
+      },
+      player2: {
+        name: player2.name,
+        activePokemon: serializePokemon(player2.team[player2.activePokemonIndex]),
+        team: player2.team.map(p => serializePokemon(p))
+      },
+      message: '¡La batalla está por comenzar!'
+    }
+  });
+  
+  console.log(`[BATTLE] Batalla iniciada en sala ${roomCode}`);
+  return battleState;
+}
+
+/**
+ * Carga los movimientos de un equipo desde la base de datos
+ */
+async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
+  const result: PokemonInBattle[] = [];
+  
+  for (const pokemon of team) {
+    // Obtener movimientos del Pokémon
+    const moveIds = pokemon.move_ids || [];
+    const moves = await getMovesByIds(moveIds);
+    
+    // Convertir movimientos al formato de batalla
+    const battleMoves: BattleMove[] = moves.map(m => ({
+      moveId: m.move_id,
+      name: m.name,
+      type: m.type,
+      damageClass: m.damage_class,
+      power: m.power,
+      accuracy: m.accuracy,
+      priority: m.priority,
+      pp: m.pp,
+      maxPp: m.pp,
+      meta: {
+        ailment: m.meta?.ailment,
+        ailmentChance: m.meta?.ailment_chance || 0,
+        statChanges: m.meta?.stat_changes || [],
+        flinchChance: m.meta?.flinch_chance || 0,
+        heal: m.meta?.heal || 0,
+        minHits: m.meta?.min_hits,
+        maxHits: m.meta?.max_hits,
+        minTurns: m.meta?.min_turns,
+        maxTurns: m.meta?.max_turns
+      },
+      flags: {
+        recharge: m.flags?.recharge || false,
+        charge: m.flags?.charge || false,
+        protect: m.flags?.protect || false,
+        mirror: m.flags?.mirror || false
+      }
+    }));
+    
+    result.push({
+      id: pokemon.pokeapi_id || Math.random(),
+      pokeapiId: pokemon.pokeapi_id,
+      name: pokemon.name,
+      types: pokemon.types || [],
+      hp: pokemon.stats?.hp || 100,
+      maxHp: pokemon.stats?.hp || 100,
+      attack: pokemon.stats?.attack || 50,
+      defense: pokemon.stats?.defense || 50,
+      spAttack: pokemon.stats?.sp_attack || 50,
+      spDefense: pokemon.stats?.sp_defense || 50,
+      sprites: pokemon.sprites || { front_default: null, back_default: null },
+      moveIds: moveIds,
+      moves: battleMoves,
+      ailments: [],
+      isCharging: false,
+      cannotActNextTurn: false,
+      hasFlinched: false,
+      isFainted: false,
+      savedHp: pokemon.stats?.hp || 100
+    });
+  }
+  
+  return result;
+}
+
+/**
+ * Serializa un Pokémon para enviar al cliente
+ */
+function serializePokemon(pokemon: PokemonInBattle) {
+  return {
+    id: pokemon.id,
+    pokeapiId: pokemon.pokeapiId,
+    name: pokemon.name,
+    types: pokemon.types,
+    hp: pokemon.hp,
+    maxHp: pokemon.maxHp,
+    sprites: pokemon.sprites,
+    isFainted: pokemon.isFainted
+  };
+}
+
+/**
+ * Obtiene el estado de batalla de una sala
+ */
+export function getBattle(roomCode: string): BattleState | undefined {
+  return activeBattles.get(roomCode);
+}
+
+/**
+ * Maneja la selección de acción de un jugador
+ */
+export async function handleBattleAction(
+  sessionId: string,
+  roomCode: string,
+  actionData: { type: 'attack' | 'change'; moveId?: number; pokemonId?: number }
+): Promise<void> {
+  
+  const battle = activeBattles.get(roomCode);
+  if (!battle) {
+    sendTo(sessionId, { type: 'error', message: 'No hay batalla activa' });
+    return;
+  }
+  
+  // Determinar qué jugador es
+  const isPlayer1 = battle.players.player1.sessionId === sessionId;
+  const isPlayer2 = battle.players.player2.sessionId === sessionId;
+  
+  if (!isPlayer1 && !isPlayer2) {
+    sendTo(sessionId, { type: 'error', message: 'No perteneces a esta batalla' });
+    return;
+  }
+  
+  const playerId = isPlayer1 ? 'player1' : 'player2';
+  const player = isPlayer1 ? battle.players.player1 : battle.players.player2;
+  const opponent = isPlayer1 ? battle.players.player2 : battle.players.player1;
+  
+  // Obtener el movimiento si es ataque
+  let move: BattleMove | undefined;
+  if (actionData.type === 'attack' && actionData.moveId) {
+    const activePokemon = player.team[player.activePokemonIndex];
+    move = activePokemon.moves.find(m => m.moveId === actionData.moveId);
+    
+    if (!move) {
+      sendTo(sessionId, { type: 'error', message: 'Movimiento no válido' });
+      return;
+    }
+  }
+  
+  // Crear la acción
+  const action: PlayerAction = {
+    playerId,
+    type: actionData.type,
+    moveId: actionData.moveId,
+    move,
+    pokemonId: actionData.pokemonId
+  };
+  
+  // Guardar la acción pendiente
+  if (isPlayer1) {
+    battle.pendingActions.player1 = action;
+  } else {
+    battle.pendingActions.player2 = action;
+  }
+  
+  // Notificar que el jugador seleccionó acción
+  broadcast(roomCode, {
+    type: 'battle:action-selected',
+    data: {
+      playerId,
+      actionType: actionData.type,
+      ready: !!(battle.pendingActions.player1 && battle.pendingActions.player2)
+    }
+  });
+  
+  console.log(`[BATTLE] ${player.name} seleccionó: ${actionData.type}`);
+  
+  // Si ambos jugadores han seleccionado, ejecutar el turno
+  if (battle.pendingActions.player1 && battle.pendingActions.player2) {
+    await executeTurn(roomCode, battle);
+  }
+}
+
+/**
+ * Ejecuta un turno completo de la batalla
+ */
+async function executeTurn(roomCode: string, battle: BattleState): Promise<void> {
+  console.log(`[BATTLE] Ejecutando turno ${battle.turn} en sala ${roomCode}`);
+  
+  // Fase 2: Determinar orden de ejecución
+  const { order, reason } = determineExecutionOrder(
+    battle.pendingActions.player1,
+    battle.pendingActions.player2
+  );
+  
+  battle.executionOrder = order;
+  battle.phase = 'executing';
+  
+  // Notificar inicio del turno
+  broadcast(roomCode, {
+    type: 'battle:turn-start',
+    data: {
+      turn: battle.turn,
+      executionOrder: order,
+      reason
+    }
+  });
+  
+  const player1 = battle.players.player1;
+  const player2 = battle.players.player2;
+  
+  // Obtener Pokémon activos
+  let p1Active = player1.team[player1.activePokemonIndex];
+  let p2Active = player2.team[player2.activePokemonIndex];
+  
+  // Ejecutar acciones en orden
+  for (const attackerId of order) {
+    const attacker = attackerId === 'player1' ? player1 : player2;
+    const defender = attackerId === 'player1' ? player2 : player1;
+    const attackerPokemon = attackerId === 'player1' ? p1Active : p2Active;
+    const defenderPokemon = attackerId === 'player1' ? p2Active : p1Active;
+    const action = attackerId === 'player1' ? battle.pendingActions.player1 : battle.pendingActions.player2;
+    
+    if (!action) continue;
+    
+    // Verificar si puede actuar
+    const canAct = canPokemonAct(attackerPokemon);
+    
+    let result;
+    if (!canAct.canAct) {
+      // No puede actuar por estado
+      result = {
+        success: false,
+        action,
+        message: canAct.reason,
+        failed: true,
+        failureReason: canAct.reason
+      };
+    } else if (action.type === 'attack' && action.move) {
+      // Ejecutar movimiento
+      result = executeMove(attackerPokemon, defenderPokemon, action.move, attackerId);
+    } else if (action.type === 'change' && action.pokemonId !== undefined) {
+      // Ejecutar cambio
+      const currentIndex = attacker.activePokemonIndex;
+      const newIndex = attacker.team.findIndex(p => p.id === action.pokemonId);
+      
+      if (newIndex >= 0 && newIndex !== currentIndex) {
+        const switchResult = executeSwitch(attacker, newIndex, currentIndex);
+        result = {
+          success: switchResult.success,
+          action,
+          message: switchResult.message,
+          failed: !switchResult.success
+        };
+        
+        // Actualizar referencia al Pokémon activo
+        if (attackerId === 'player1') {
+          p1Active = attacker.team[attacker.activePokemonIndex];
+        } else {
+          p2Active = attacker.team[attacker.activePokemonIndex];
+        }
+      } else {
+        result = {
+          success: false,
+          action,
+          message: 'Cambio no válido',
+          failed: true
+        };
+      }
+    } else {
+      result = {
+        success: false,
+        action,
+        message: 'Acción no válida',
+        failed: true
+      };
+    }
+    
+    // Notificar resultado de la acción
+    broadcast(roomCode, {
+      type: 'battle:action-result',
+      data: {
+        playerId: attackerId,
+        action: {
+          type: action.type,
+          moveId: action.moveId,
+          pokemonId: action.pokemonId
+        },
+        result: {
+          success: result.success,
+          message: result.message,
+          damage: result.damage,
+          targetHp: result.targetHpAfter,
+          ailmentApplied: result.ailmentApplied,
+          isCharging: result.isCharging,
+          cannotActNextTurn: result.cannotActNextTurn,
+          flinchedTarget: result.flinchedTarget
+        },
+        attackerHp: attackerPokemon.hp,
+        defenderHp: defenderPokemon.hp
+      }
+    });
+    
+    battle.actionResults.push(result);
+    
+    // Verificar si la batalla terminó
+    const endCheck = checkBattleEnd(player1, player2);
+    if (endCheck.ended) {
+      battle.phase = 'ended';
+      battle.winner = endCheck.winner;
+      
+      broadcast(roomCode, {
+        type: 'battle:end',
+        data: {
+          winner: endCheck.winner,
+          message: endCheck.message,
+          finalState: {
+            player1: {
+              activePokemon: serializePokemon(p1Active),
+              remainingPokemon: player1.team.filter(p => !p.isFainted).length
+            },
+            player2: {
+              activePokemon: serializePokemon(p2Active),
+              remainingPokemon: player2.team.filter(p => !p.isFainted).length
+            }
+          }
+        }
+      });
+      
+      // Limpiar batalla activa
+      activeBattles.delete(roomCode);
+      return;
+    }
+  }
+  
+  // Fase 4: Efectos finales del turno (daño por estados)
+  const p1Damage = getAilmentDamagePerTurn(p1Active);
+  const p2Damage = getAilmentDamagePerTurn(p2Active);
+  
+  if (p1Damage > 0) {
+    p1Active.hp = Math.max(0, p1Active.hp - p1Damage);
+  }
+  if (p2Damage > 0) {
+    p2Active.hp = Math.max(0, p2Active.hp - p2Damage);
+  }
+  
+  // Verificar KO por daño de estados
+  if (p1Active.hp <= 0) p1Active.isFainted = true;
+  if (p2Active.hp <= 0) p2Active.isFainted = true;
+  
+  // Decrementar turnos de estados
+  decrementAilmentTurns(p1Active);
+  decrementAilmentTurns(p2Active);
+  
+  // Limpiar flags de fatiga
+  p1Active.cannotActNextTurn = false;
+  p2Active.cannotActNextTurn = false;
+  
+  // Preparar siguiente turno
+  battle.turn++;
+  battle.phase = 'selecting';
+  battle.pendingActions.player1 = null;
+  battle.pendingActions.player2 = null;
+  battle.actionResults = [];
+  
+  // Notificar fin del turno
+  broadcast(roomCode, {
+    type: 'battle:turn-end',
+    data: {
+      turn: battle.turn - 1,
+      player1: {
+        activePokemon: serializePokemon(p1Active),
+        remaining: player1.team.filter(p => !p.isFainted).length
+      },
+      player2: {
+        activePokemon: serializePokemon(p2Active),
+        remaining: player2.team.filter(p => !p.isFainted).length
+      },
+      nextTurn: battle.turn
+    }
+  });
+  
+  console.log(`[BATTLE] Turno ${battle.turn - 1} completado, siguiente: turno ${battle.turn}`);
+}
+
+/**
+ * Maneja desconexión durante la batalla
+ */
+export function handleBattleDisconnect(roomCode: string, sessionId: string): void {
+  const battle = activeBattles.get(roomCode);
+  if (!battle) return;
+  
+  // Notificar al oponente
+  broadcast(roomCode, {
+    type: 'battle:player-disconnected',
+    data: {
+      sessionId,
+      message: 'El oponente se ha desconectado'
+    }
+  });
+}
+
+/**
+ * Termina una batalla (cuando la sala termina)
+ */
+export function endBattle(roomCode: string): void {
+  if (activeBattles.has(roomCode)) {
+    console.log(`[BATTLE] Batalla terminada en sala ${roomCode}`);
+    activeBattles.delete(roomCode);
+  }
+}

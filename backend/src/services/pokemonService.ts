@@ -9,9 +9,7 @@ import {
   insertMove,
   getMovesByIds,
   getAllMoves,
-  insertMovesBatch,
-  isMoveValidForCombat,
-  PRIMARY_AILMENTS
+  insertMovesBatch
 } from '../db/mongodb';
 
 interface Move {
@@ -467,18 +465,18 @@ export class PokemonService {
   }
 
   /**
-   * Obtiene los movimientos válidos para un Pokémon
+   * Obtiene TODOS los movimientos de un Pokémon (sin filtro)
    * 1. Obtiene datos completos del movimiento desde PokeAPI
-   * 2. Valida si es válido para combate (tiene daño O aplica estado primario)
+   * 2. Obtiene nombres en español e inglés
    * 3. Guarda el movimiento en la colección moves (normalizado)
-   * 4. Retorna solo los move_ids para el Pokémon
+   * 4. Retorna los move_ids para el Pokémon
    */
   private async getValidMoves(moves: any[]): Promise<number[]> {
     const validMoveIds: number[] = [];
     const seenMoveIds = new Set<number>();
     const movesToInsert: any[] = [];
 
-    // Procesar TODOS los movimientos disponibles
+    // Procesar TODOS los movimientos disponibles (SIN FILTRO)
     for (const moveData of moves) {
       try {
         const moveResponse = await axios.get(moveData.move.url, {
@@ -492,10 +490,17 @@ export class PokemonService {
         if (seenMoveIds.has(moveId)) continue;
         seenMoveIds.add(moveId);
 
-        // Crear objeto de movimiento normalizado
+        // Obtener nombres en español e inglés
+        const names = this.extractMoveNames(move.names || []);
+        
+        // Obtener descripción en español (o inglés como fallback)
+        const description = this.extractMoveDescription(move.flavor_text_entries || []);
+
+        // Crear objeto de movimiento normalizado (TODOS los moves)
         const normalizedMove = {
           move_id: moveId,
           name: move.name.replace(/-/g, ' ').toLowerCase(),
+          names: names,  // { es, en, ja }
           type: move.type.name.toLowerCase(),
           damage_class: move.damage_class?.name || 'status',
           power: move.power || null,
@@ -503,6 +508,7 @@ export class PokemonService {
           pp: move.pp || 5,
           priority: move.priority || 0,
           target: move.target?.name || 'selected-pokemon',
+          description: description,  // Descripción en español/inglés
           meta: {
             ailment: move.meta?.ailment?.name || null,
             ailment_chance: move.meta?.ailment_chance || 0,
@@ -524,22 +530,15 @@ export class PokemonService {
           updated_at: new Date().toISOString()
         };
 
-        // Validar si el movimiento es válido para combate
-        const validation = isMoveValidForCombat(normalizedMove);
-        
-        if (validation.isValid) {
-          validMoveIds.push(moveId);
-          movesToInsert.push(normalizedMove);
-          console.log(`  ✅ Move válido: ${normalizedMove.name} (power: ${normalizedMove.power}, ailment: ${normalizedMove.meta.ailment})`);
-        } else {
-          console.log(`  ❌ Move excluido: ${normalizedMove.name} - ${validation.reason}`);
-        }
+        validMoveIds.push(moveId);
+        movesToInsert.push(normalizedMove);
+        console.log(`  ✅ Move guardado: ${names.es} (ID: ${moveId})`);
       } catch (error) {
         console.warn(`⚠️ Error fetching move: ${moveData.move.name}`);
       }
     }
 
-    // Insertar movimientos válidos en la colección moves (batch para eficiencia)
+    // Insertar TODOS los movimientos en la colección moves (batch para eficiencia)
     if (movesToInsert.length > 0) {
       try {
         await insertMovesBatch(movesToInsert);
@@ -557,8 +556,64 @@ export class PokemonService {
     // Ordenar IDs para mejor visualización
     validMoveIds.sort((a, b) => a - b);
 
-    console.log(`✅ ${validMoveIds.length} movimientos válidos para este Pokémon`);
+    console.log(`✅ ${validMoveIds.length} movimientos guardados para este Pokémon`);
     return validMoveIds;
+  }
+
+  /**
+   * Extrae nombres del movimiento en español, inglés y japonés
+   */
+  private extractMoveNames(names: any[]): { es: string; en: string; ja: string } {
+    let esName = '';
+    let enName = '';
+    let jaName = '';
+
+    for (const nameEntry of names) {
+      switch (nameEntry.language.name) {
+        case 'es':
+          esName = nameEntry.name;
+          break;
+        case 'en':
+          enName = nameEntry.name;
+          break;
+        case 'ja':
+          jaName = nameEntry.name;
+          break;
+      }
+    }
+
+    return {
+      es: esName || '',
+      en: enName || '',
+      ja: jaName || ''
+    };
+  }
+
+  /**
+   * Extrae descripción del movimiento (prioridad: español > inglés)
+   */
+  private extractMoveDescription(flavorTextEntries: any[]): string | null {
+    // Prioridad: español > inglés
+    let descES = null;
+    let descEN = null;
+
+    for (const entry of flavorTextEntries) {
+      if (entry.language.name === 'es') {
+        descES = entry.flavor_text
+          .replace(/\f/g, ' ')
+          .replace(/\n/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      } else if (entry.language.name === 'en' && !descEN) {
+        descEN = entry.flavor_text
+          .replace(/\f/g, ' ')
+          .replace(/\n/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+    }
+
+    return descES || descEN || null;
   }
 
   /**

@@ -1,0 +1,461 @@
+/**
+ * Servicio unificado de importación de datos desde PokeAPI
+ * Se ejecuta al iniciar el backend para verificar y cargar datos si no existen
+ * 
+ * Datos importados:
+ * - Tipos (18 tipos con relaciones de daño)
+ * - Movimientos (todos los movimientos de cada Pokémon)
+ * - Pokémons (649 de Gen I-V)
+ */
+
+import axios from 'axios';
+import {
+  getPokemonCollection,
+  getMovesCollection,
+  getTypesCollection,
+  insertPokemon,
+  insertMovesBatch
+} from '../db/mongodb';
+
+const POKEAPI_BASE = 'https://pokeapi.co/api/v2';
+
+// IDs de tipos en PokeAPI (Gen V + Fairy)
+const TYPE_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+
+// Pokémons válidos: Gen I-V (1-649)
+const POKEMON_IDS = Array.from({ length: 649 }, (_, i) => i + 1);
+
+// 35 legendarios
+const LEGENDARY_IDS = [
+  144, 145, 146, 150, 243, 244, 245, 249, 250,
+  377, 378, 379, 380, 381, 382, 383, 384, 385, 386,
+  480, 481, 482, 483, 484, 485, 486, 487, 488, 491, 492
+];
+
+// 13 míticos
+const MYTHICAL_IDS = [151, 251, 385, 386, 489, 490, 491, 492, 493];
+
+interface ImportStats {
+  types: { existing: number; imported: number };
+  moves: { existing: number; imported: number };
+  pokemon: { existing: number; imported: number };
+  errors: string[];
+}
+
+const stats: ImportStats = {
+  types: { existing: 0, imported: 0 },
+  moves: { existing: 0, imported: 0 },
+  pokemon: { existing: 0, imported: 0 },
+  errors: []
+};
+
+/**
+ * Punto de entrada principal - importa todos los datos si no existen
+ */
+export async function importAllData(): Promise<ImportStats> {
+  console.log('\n' + '='.repeat(60));
+  console.log('🔄 INICIANDO IMPORTACIÓN DE DATOS DESDE POKEAPI');
+  console.log('='.repeat(60));
+
+  try {
+    // 1. Importar tipos si no existen
+    await importTypesIfNeeded();
+
+    // 2. Verificar movimientos (se cargan con cada Pokémon)
+    await checkMovesStatus();
+
+    // 3. Importar pokemones si no existen
+    await importPokemonIfNeeded();
+
+    // Mostrar resumen final
+    printSummary();
+
+  } catch (error) {
+    console.error('❌ Error en importación:', error);
+    stats.errors.push(`Error general: ${error}`);
+  }
+
+  return stats;
+}
+
+/**
+ * 1. Importar tipos desde PokeAPI si no existen en la BD
+ */
+async function importTypesIfNeeded(): Promise<void> {
+  console.log('\n📦 Verificando tipos en base de datos...');
+
+  const typesCollection = getTypesCollection();
+  const existingTypes = await typesCollection.countDocuments();
+
+  if (existingTypes > 0) {
+    stats.types.existing = existingTypes;
+    console.log(`✅ Ya existen ${existingTypes} tipos en BD - omitiendo importación`);
+    return;
+  }
+
+  console.log(`🔄 Importando ${TYPE_IDS.length} tipos desde PokeAPI...`);
+
+  for (const typeId of TYPE_IDS) {
+    try {
+      const response = await axios.get(`${POKEAPI_BASE}/type/${typeId}`, { timeout: 10000 });
+      const data = response.data;
+
+      // Extraer nombres en español e inglés
+      const nameEs = data.names.find((n: any) => n.language.name === 'es')?.name || data.name;
+      const nameEn = data.names.find((n: any) => n.language.name === 'en')?.name || data.name;
+
+      const typeDocument = {
+        type_id: data.id,
+        name: data.name,
+        names: { es: nameEs, en: nameEn },
+        damage_relations: {
+          to: {
+            double: data.damage_relations.double_damage_to.map((d: any) => d.name),
+            half: data.damage_relations.half_damage_to.map((d: any) => d.name),
+            immune: data.damage_relations.no_damage_to.map((d: any) => d.name)
+          },
+          from: {
+            double: data.damage_relations.double_damage_from.map((d: any) => d.name),
+            half: data.damage_relations.half_damage_from.map((d: any) => d.name),
+            immune: data.damage_relations.no_damage_from.map((d: any) => d.name)
+          }
+        },
+        imported_at: new Date()
+      };
+
+      await typesCollection.updateOne(
+        { type_id: typeId },
+        { $set: typeDocument },
+        { upsert: true }
+      );
+
+      stats.types.imported++;
+      console.log(`  ✅ ${nameEs} (${data.name})`);
+
+      // Rate limiting
+      await sleep(50);
+    } catch (error) {
+      const msg = `Error importando tipo ${typeId}: ${error}`;
+      stats.errors.push(msg);
+      console.log(`  ❌ ${msg}`);
+    }
+  }
+
+  console.log(`✅ Tipos importados: ${stats.types.imported}`);
+}
+
+/**
+ * 2. Verificar estado de movimientos en la BD
+ */
+async function checkMovesStatus(): Promise<void> {
+  console.log('\n📦 Verificando movimientos en base de datos...');
+
+  const movesCollection = getMovesCollection();
+  const existingMoves = await movesCollection.countDocuments();
+
+  stats.moves.existing = existingMoves;
+  console.log(`✅ ${existingMoves} movimientos en la base de datos`);
+}
+
+/**
+ * 3. Importar pokemones si no existen en la BD
+ * Verifica cada pokémon individualmente: si no existe, lo importa
+ * Si existe pero no tiene movimientos, importa solo los movimientos
+ */
+async function importPokemonIfNeeded(): Promise<void> {
+  console.log('\n📦 Verificando pokemones en base de datos...');
+
+  const pokemonCollection = getPokemonCollection();
+  let imported = 0;
+  let skipped = 0;
+  let updatedMoves = 0;
+
+  console.log('🔄 Verificando cada pokémon individualmente...\n');
+
+  for (let i = 0; i < POKEMON_IDS.length; i++) {
+    const pokeId = POKEMON_IDS[i];
+
+    try {
+      // 1. Verificar si el pokémon ya existe
+      const existingPokemon = await pokemonCollection.findOne({ pokeapi_id: pokeId });
+      
+      if (existingPokemon) {
+        // El pokémon existe, verificar si tiene movimientos
+        const hasMoves = existingPokemon.move_ids && existingPokemon.move_ids.length > 0;
+        
+        if (!hasMoves) {
+          // El pokémon existe pero no tiene movimientos → importar movimientos
+          console.log(`  ⚠️ [${pokeId}] ${existingPokemon.name} sin movimientos - importando...`);
+          
+          const pokemonResponse = await axios.get(`${POKEAPI_BASE}/pokemon/${pokeId}`, { timeout: 10000 });
+          const moveIds = await fetchAndSaveMoves(pokemonResponse.data.moves, existingPokemon.name);
+          
+          // Actualizar el pokémon con los nuevos movimientos
+          await pokemonCollection.updateOne(
+            { pokeapi_id: pokeId },
+            { 
+              $set: { 
+                move_ids: moveIds,
+                updated_at: new Date().toISOString()
+              } 
+            }
+          );
+          
+          updatedMoves++;
+        } else {
+          skipped++;
+        }
+      } else {
+        // El pokémon no existe → importar todo
+        const pokemonResponse = await axios.get(`${POKEAPI_BASE}/pokemon/${pokeId}`, { timeout: 10000 });
+        const pokemonData = pokemonResponse.data;
+
+        // Obtener generación y nombre en español desde species
+        const speciesResponse = await axios.get(pokemonData.species.url, { timeout: 10000 });
+        const speciesData = speciesResponse.data;
+        const generation = extractGenerationNumber(speciesData.generation.url);
+        
+        // Extraer nombre en español
+        const nameEs = speciesData.names?.find((n: any) => n.language.name === 'es')?.name || pokemonData.name;
+
+        // Obtener TODOS los movimientos del Pokémon
+        const moveIds = await fetchAndSaveMoves(pokemonData.moves, pokemonData.name);
+
+        const isLegendary = LEGENDARY_IDS.includes(pokeId);
+        const isMythical = MYTHICAL_IDS.includes(pokeId);
+
+        const pokemonDoc = {
+          pokeapi_id: pokeId,
+          name: pokemonData.name,
+          name_es: nameEs,
+          generation,
+          types: pokemonData.types.map((t: any) => t.type.name.toLowerCase()),
+          stats: {
+            hp: pokemonData.stats[0]?.base_stat || 0,
+            attack: pokemonData.stats[1]?.base_stat || 0,
+            defense: pokemonData.stats[2]?.base_stat || 0,
+            sp_attack: pokemonData.stats[3]?.base_stat || 0,
+            sp_defense: pokemonData.stats[4]?.base_stat || 0,
+            speed: pokemonData.stats[5]?.base_stat || 0
+          },
+          base_experience: pokemonData.base_experience || 0,
+          is_legendary: isLegendary,
+          is_mythical: isMythical,
+          move_ids: moveIds,
+          sprites: {
+            front_default: pokemonData.sprites.versions?.['generation-v']?.['black-white']?.animated?.front_default || null,
+            back_default: pokemonData.sprites.versions?.['generation-v']?.['black-white']?.animated?.back_default || null,
+            front_shiny: pokemonData.sprites.versions?.['generation-v']?.['black-white']?.animated?.front_shiny || null,
+            back_shiny: pokemonData.sprites.versions?.['generation-v']?.['black-white']?.animated?.back_shiny || null,
+            front_female: null,
+            back_female: null,
+            front_shiny_female: null,
+            back_shiny_female: null,
+            static_front_default: pokemonData.sprites.front_default || null,
+            static_back_default: pokemonData.sprites.back_default || null
+          },
+          height_dm: pokemonData.height,
+          weight_hg: pokemonData.weight,
+          cached_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        await insertPokemon(pokemonDoc);
+        imported++;
+        
+        // 📝 LOG: Pokémon importado
+        console.log(`✅ [${pokeId}] ${nameEs} (${pokemonData.name}) - ${moveIds.length} movimientos`);
+      }
+
+      // Progreso cada 50 pokemones
+      if ((imported + updatedMoves) % 50 === 0) {
+        console.log(`📈 Progreso: ${imported} nuevos, ${updatedMoves} actualizados, ${skipped} omitidos`);
+      }
+
+      // Rate limiting
+      await sleep(100);
+    } catch (error) {
+      const msg = `Error procesando pokémon ${pokeId}: ${error}`;
+      stats.errors.push(msg);
+      console.log(`  ❌ ${msg}`);
+    }
+  }
+
+  stats.pokemon.imported = imported;
+  stats.pokemon.existing = skipped;
+  
+  console.log(`\n✅ Pokemones importados: ${imported}`);
+  console.log(`✅ Pokemones actualizados (movimientos): ${updatedMoves}`);
+  console.log(`✅ Pokemones omitidos: ${skipped}`);
+}
+
+/**
+ * Fetch y guarda TODOS los movimientos de un pokémon
+ * @param moves - Lista de movimientos del pokémon desde PokeAPI
+ * @param pokemonName - Nombre del pokémon para logging
+ */
+async function fetchAndSaveMoves(moves: any[], pokemonName: string): Promise<number[]> {
+  const moveIds: number[] = [];
+  const seenMoveIds = new Set<number>();
+  const movesToInsert: any[] = [];
+  const movesLog: string[] = [];
+
+  for (const moveData of moves) {
+    try {
+      const moveResponse = await axios.get(moveData.move.url, { timeout: 5000 });
+      const move = moveResponse.data;
+      const moveId = move.id;
+
+      if (seenMoveIds.has(moveId)) continue;
+      seenMoveIds.add(moveId);
+      moveIds.push(moveId);
+
+      // Extraer nombres en español, inglés, japonés
+      const names = extractMoveNames(move.names || []);
+      
+      // Extraer descripción (español > inglés)
+      const description = extractMoveDescription(move.flavor_text_entries || []);
+
+      const normalizedMove = {
+        move_id: moveId,
+        name: move.name.replace(/-/g, ' ').toLowerCase(),
+        names: names,
+        type: move.type.name.toLowerCase(),
+        damage_class: move.damage_class?.name || 'status',
+        power: move.power || null,
+        accuracy: move.accuracy || null,
+        pp: move.pp || 5,
+        priority: move.priority || 0,
+        target: move.target?.name || 'selected-pokemon',
+        description: description,
+        meta: {
+          ailment: move.meta?.ailment?.name || null,
+          ailment_chance: move.meta?.ailment_chance || 0,
+          stat_changes: (move.stat_changes || []).map((sc: any) => ({
+            stat: sc.stat.name,
+            change: sc.change
+          })),
+          flinch_chance: move.meta?.flinch_chance || 0,
+          heal: move.meta?.heal || 0
+        },
+        flags: {
+          contact: move.flags?.contact || false,
+          recharge: move.flags?.recharge || false,
+          protect: move.flags?.protect || false,
+          mirror: move.flags?.mirror_move || false,
+          sound: move.flags?.sound || false
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      movesToInsert.push(normalizedMove);
+      
+      // 📝 LOG: Nombre del movimiento en español
+      const moveNameES = names.es || move.name;
+      movesLog.push(`   - ${moveNameES} (${move.type.name}, power: ${move.power || 'N/A'})`);
+    } catch (error) {
+      // Silencioso - no detener por un move fallido
+    }
+  }
+
+  // Insertar todos los moves en batch
+  if (movesToInsert.length > 0) {
+    try {
+      await insertMovesBatch(movesToInsert);
+      stats.moves.imported += movesToInsert.length;
+      
+      // 📝 LOG: Mostrar todos los movimientos del pokémon (solo los primeros 10 si son muchos)
+      console.log(`   📋 Movimientos de ${pokemonName}:`);
+      const displayMoves = movesLog.length > 15 ? movesLog.slice(0, 15) : movesLog;
+      displayMoves.forEach(m => console.log(m));
+      if (movesLog.length > 15) {
+        console.log(`   ... y ${movesLog.length - 15} más`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ Error guardando movimientos en batch: ${error}`);
+    }
+  }
+
+  moveIds.sort((a, b) => a - b);
+  return moveIds;
+}
+
+/**
+ * Extrae el número de generación desde la URL
+ */
+function extractGenerationNumber(url: string): number {
+  const match = url.match(/\/(\d+)\//);
+  return match ? parseInt(match[1]) : 1;
+}
+
+/**
+ * Extrae nombres del movimiento (es, en, ja)
+ */
+function extractMoveNames(names: any[]): { es: string; en: string; ja: string } {
+  let esName = '';
+  let enName = '';
+  let jaName = '';
+
+  for (const nameEntry of names) {
+    switch (nameEntry.language.name) {
+      case 'es': esName = nameEntry.name; break;
+      case 'en': enName = nameEntry.name; break;
+      case 'ja': jaName = nameEntry.name; break;
+    }
+  }
+
+  return { es: esName || '', en: enName || '', ja: jaName || '' };
+}
+
+/**
+ * Extrae descripción del movimiento (prioridad: español > inglés)
+ */
+function extractMoveDescription(flavorTextEntries: any[]): string | null {
+  let descES = null;
+  let descEN = null;
+
+  for (const entry of flavorTextEntries) {
+    if (entry.language.name === 'es') {
+      descES = entry.flavor_text.replace(/\f/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+    } else if (entry.language.name === 'en' && !descEN) {
+      descEN = entry.flavor_text.replace(/\f/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+  }
+
+  return descES || descEN || null;
+}
+
+/**
+ * Utility: sleep para rate limiting
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Imprime el resumen final de la importación
+ */
+function printSummary(): void {
+  console.log('\n' + '='.repeat(60));
+  console.log('📋 RESUMEN DE IMPORTACIÓN');
+  console.log('='.repeat(60));
+  console.log(`📦 Tipos:`);
+  console.log(`   - Existentes: ${stats.types.existing}`);
+  console.log(`   - Importados: ${stats.types.imported}`);
+  console.log(`\n📦 Movimientos:`);
+  console.log(`   - Existentes: ${stats.moves.existing}`);
+  console.log(`   - Nuevos agregados: ${stats.moves.imported}`);
+  console.log(`\n📦 Pokemones:`);
+  console.log(`   - Existentes: ${stats.pokemon.existing}`);
+  console.log(`   - Importados: ${stats.pokemon.imported}`);
+
+  if (stats.errors.length > 0) {
+    console.log(`\n⚠️ Errores: ${stats.errors.length}`);
+    stats.errors.forEach(e => console.log(`   - ${e}`));
+  }
+
+  console.log('='.repeat(60));
+  console.log('✨ Importación completada!');
+  console.log('='.repeat(60) + '\n');
+}

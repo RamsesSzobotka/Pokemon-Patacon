@@ -472,12 +472,26 @@ export async function getDraftState(code: string, sessionId: string): Promise<{ 
   try {
     const upperCode = code.toUpperCase();
     const draft = await roomsDB.getDraftState(upperCode);
-    if (!draft) return { success: false, message: 'El draft no ha iniciado' };
+    if (!draft) return { success: false, message: 'El draft no ha inicio' };
     return { success: true, draft };
   } catch (error) {
     console.error('Error obteniendo estado del draft:', error);
     return { success: false, message: 'Error interno' };
   }
+}
+
+/**
+ * Actualiza el estado del draft (para marcar countdown_started, etc.)
+ */
+export async function updateDraftState(code: string, updates: Record<string, any>): Promise<{ success: boolean; message?: string }> {
+  try {
+    const upperCode = code.toUpperCase();
+    const result = await roomsDB.updateDraftState(upperCode, updates);
+    return result;
+  } catch (error) {
+    console.error('Error actualizando estado del draft:', error);
+    return { success: false, message: 'Error interno' };
+}
 }
 
 /**

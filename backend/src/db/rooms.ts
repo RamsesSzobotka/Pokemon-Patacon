@@ -644,3 +644,33 @@ export async function getDraftState(code: string): Promise<DraftState | null> {
   const room = await getRoomByCode(code);
   return room?.draft_state || null;
 }
+
+/**
+ * Actualiza el estado del draft
+ * @param code - Código de la sala
+ * @param updates - Objeto con los campos a actualizar
+ */
+export async function updateDraftState(code: string, updates: Record<string, any>): Promise<{ success: boolean; message?: string }> {
+  try {
+    const room = await getRoomByCode(code);
+    if (!room) {
+      return { success: false, message: 'Sala no encontrada' };
+    }
+
+    // Actualizar los campos del draft_state
+    const newDraftState = {
+      ...room.draft_state,
+      ...updates
+    };
+
+    await roomsCollection.updateOne(
+      { code: code },
+      { $set: { draft_state: newDraftState } }
+    );
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error actualizando draft_state:', error);
+    return { success: false, message: 'Error al actualizar' };
+  }
+}

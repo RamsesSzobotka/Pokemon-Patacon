@@ -31,7 +31,16 @@ interface WSEventMap {
   'draft:picks': (data: any) => void;
   'draft:state': (data: any) => void;
   'draft:completed': (data: any) => void;
+  'draft:error': (data: any) => void;
   'battle:starting': (data: any) => void;
+  'battle:start': (data: any) => void;
+  'battle:action-selected': (data: any) => void;
+  'battle:turn-start': (data: any) => void;
+  'battle:action-result': (data: any) => void;
+  'battle:turn-end': (data: any) => void;
+  'battle:end': (data: any) => void;
+  'battle:state': (data: any) => void;
+  'battle:player-disconnected': (data: any) => void;
   'error': (data: any) => void;
   'pong': (data: any) => void;
   'ping': (data: any) => void;

@@ -64,6 +64,38 @@
   color: #B3B3B3;
 }
 
+/* Contador antes de batalla */
+.countdown-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.countdown-number {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #F1C40F;
+  animation: countdownPulse 1s infinite;
+  text-shadow: 0 0 10px rgba(241, 196, 15, 0.8);
+}
+
+.countdown-text {
+  font-size: 1rem;
+  color: #F1C40F;
+  font-weight: bold;
+}
+
+@keyframes countdownPulse {
+  0%, 100% { 
+    transform: scale(1); 
+    opacity: 1; 
+  }
+  50% { 
+    transform: scale(1.2); 
+    opacity: 0.8; 
+  }
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }

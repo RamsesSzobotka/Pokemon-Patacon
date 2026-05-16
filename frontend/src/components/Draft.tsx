@@ -48,6 +48,7 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [battleStarting, setBattleStarting] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
   
   // Estados de paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -266,17 +267,44 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
       }
     }));
 
-    // Batalla comenzando
+    // Contador del draft (5 segundos antes de batalla)
+    unsubscribes.push(socket.on('draft:countdown', (data) => {
+      console.log('[Draft] Countdown:', data);
+      const seconds = data?.seconds || 5;
+      setCountdown(seconds);
+      
+      // Decrementar el contador cada segundo
+      const interval = setInterval(() => {
+        setCountdown(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(interval);
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }));
+
+    // Esperar a que el oponente seleccione 6 Pokémon
+    unsubscribes.push(socket.on('draft:waiting', (data) => {
+      console.log('[Draft] Waiting:', data);
+      setError(data?.message || 'Esperando al oponente...');
+    }));
+
+    // Batalla comenzando (con contador de carga de 5 segundos)
     unsubscribes.push(socket.on('battle:starting', (data) => {
       console.log('[Draft] Battle starting:', data);
+      const loadingSeconds = data?.loading_seconds || 5;
       setBattleStarting(true);
+      
+      // Después del contador de carga, redirigir a batalla
       setTimeout(() => {
         if (onBattleStart) {
           onBattleStart();
         } else {
           navigate('/battle/' + roomCode);
         }
-      }, 2000);
+      }, loadingSeconds * 1000);
     }));
 
     // Cleanup
@@ -423,15 +451,12 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
   };
 
   /**
-   * Confirmar equipo completo
+   * Confirmar equipo completo (YA NO SE USA - se hace automático)
+   * Mantenido por compatibilidad
    */
   const confirmTeam = () => {
-    if (myPicks.length !== 6) return;
-
-    socket.send({
-      type: 'draft:confirm',
-      data: {}
-    });
+    // Ya no se usa - el sistema detecta automáticamente cuando ambos tienen 6
+    console.log('[Draft] confirmTeam ya no se usa - se hace automático');
   };
 
   // Resetear página cuando cambia la búsqueda
@@ -484,13 +509,20 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
     <div className="draft-container">
       <div className="draft-header">
         <h1>SELECCIÓN DE EQUIPO</h1>
-        <div className="turn-indicator">
-          {isCurrentTurnMine(currentTurn, playerNumber) ? (
-            <span className="your-turn">¡ES TU TURNO!</span>
-          ) : (
-            <span className="waiting-turn">Esperando al oponente...</span>
-          )}
-        </div>
+        {countdown !== null ? (
+          <div className="countdown-indicator">
+            <span className="countdown-number">{countdown}</span>
+            <span className="countdown-text">¡La batalla está por comenzar!</span>
+          </div>
+        ) : (
+          <div className="turn-indicator">
+            {isCurrentTurnMine(currentTurn, playerNumber) ? (
+              <span className="your-turn">¡ES TU TURNO!</span>
+            ) : (
+              <span className="waiting-turn">Esperando al oponente...</span>
+            )}
+          </div>
+        )}
         <button className="exit-btn" onClick={handleExit}>Salir</button>
       </div>
 
@@ -757,13 +789,7 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
         </div>
       </div>
 
-      {myPicks.length === 6 && (
-        <div className="confirm-team-section">
-          <button className="confirm-team-btn" onClick={confirmTeam}>
-            ✓ Confirmar Equipo
-          </button>
-        </div>
-      )}
+      {/* Ya no hay botón de confirmar - se hace automáticamente cuando ambos tienen 6 */}
 
       {/* Modal de descripción del movimiento */}
       {selectedMove && (

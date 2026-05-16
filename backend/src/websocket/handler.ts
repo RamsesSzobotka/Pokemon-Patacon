@@ -152,6 +152,55 @@ export async function handleMessageFromSession(sessionId: string, rawMessage: st
       }
       break;
 
+    // ========== EVENTOS DE BATALLA ==========
+
+    case 'battle:action':
+      // El jugador selecciona una acción (atacar o cambiar)
+      const roomCodeBattle = getPlayerRoom(sessionId);
+      if (roomCodeBattle) {
+        const { handleBattleAction } = await import('./battleHandler.js');
+        await handleBattleAction(sessionId, roomCodeBattle, message.data);
+      }
+      break;
+
+    case 'battle:state':
+      // Solicitar estado actual de la batalla
+      const roomCodeState = getPlayerRoom(sessionId);
+      if (roomCodeState) {
+        const { getBattle } = await import('./battleHandler.js');
+        const battle = getBattle(roomCodeState);
+        if (battle) {
+          sendTo(sessionId, {
+            type: 'battle:state',
+            data: {
+              turn: battle.turn,
+              phase: battle.phase,
+              player1: {
+                activePokemon: battle.players.player1.team[battle.players.player1.activePokemonIndex],
+                team: battle.players.player1.team
+              },
+              player2: {
+                activePokemon: battle.players.player2.team[battle.players.player2.activePokemonIndex],
+                team: battle.players.player2.team
+              }
+            }
+          });
+        }
+      }
+      break;
+
+    case 'battle:change':
+      // Cambio de Pokémon (alternativa a battle:action)
+      const roomCodeChange = getPlayerRoom(sessionId);
+      if (roomCodeChange) {
+        const { handleBattleAction } = await import('./battleHandler.js');
+        await handleBattleAction(sessionId, roomCodeChange, {
+          type: 'change',
+          pokemonId: message.data?.pokemonId
+        });
+      }
+      break;
+
     default:
       sendTo(sessionId, { type: 'error', message: `Unknown message type: ${message.type}` });
   }
@@ -537,18 +586,32 @@ async function handleDraftPick(
   });
   console.log(`[DRAFT:PICK] Broadcast sent`);
 
-  // Si el draft se completó, cambiar estado a in_battle
-  if (result.draft_completed && room.state !== 'in_battle') {
-    const { changeRoomState } = await import('../services/roomService');
-    await changeRoomState(roomCode, sessionId, 'in_battle');
+  // Verificar si ambos equipos tienen 6 pokemones para iniciar el contador
+  const p1Picks = room.draft_picks?.player1 || [];
+  const p2Picks = room.draft_picks?.player2 || [];
 
-    broadcast(roomCode, {
-      type: 'draft:completed',
-      data: {
-        team_1: room.draft_picks.player1,
-        team_2: room.draft_picks.player2
-      }
-    });
+  if (p1Picks.length === 6 && p2Picks.length === 6) {
+    console.log(`[DRAFT] Ambos equipos tienen 6 Pokémon - iniciando contador de 5 segundos`);
+    
+    // Verificar que no haya un contador ya activo (para no duplicar)
+    const activeCountdown = room.draft_state?.countdown_started;
+    
+    if (!activeCountdown) {
+      // Marcar que el countdown started
+      const { updateDraftState } = await import('../services/roomService');
+      await updateDraftState(roomCode, { countdown_started: true });
+      
+      // Enviar evento de countdown a ambos jugadores
+      broadcast(roomCode, {
+        type: 'draft:countdown',
+        data: { seconds: 5 }
+      });
+      
+      // Iniciar batalla después de 5 segundos
+      setTimeout(async () => {
+        await startBattleFromDraft(roomCode);
+      }, 5000);
+    }
   }
 }
 
@@ -659,53 +722,96 @@ async function handleDraftStart(sessionId: string, roomCode: string): Promise<vo
 }
 
 /**
- * Confirmar equipo (terminar draft)
+ * Verificar si ambos equipos tienen 6 Pokémon y iniciar contador automático
+ */
+async function checkAndStartBattleCountdown(roomCode: string): Promise<void> {
+  const room = await getRoomByCode(roomCode);
+  
+  if (!room || !room.draft_picks) return;
+  
+  const p1Picks = room.draft_picks.player1 || [];
+  const p2Picks = room.draft_picks.player2 || [];
+  
+  // Solo iniciar si ambos tienen 6 Pokémon
+  if (p1Picks.length === 6 && p2Picks.length === 6) {
+    console.log(`[DRAFT] Ambos equipos tienen 6 Pokémon - iniciando contador de 5 segundos`);
+    
+    // Enviar evento de countdown a ambos jugadores
+    broadcast(roomCode, {
+      type: 'draft:countdown',
+      data: { seconds: 5 }
+    });
+    
+    // Iniciar batalla después de 5 segundos
+    setTimeout(async () => {
+      await startBattleFromDraft(roomCode);
+    }, 5000);
+  }
+}
+
+/**
+ * Iniciar la batalla desde el draft
+ */
+async function startBattleFromDraft(roomCode: string): Promise<void> {
+  const room = await getRoomByCode(roomCode);
+  
+  if (!room) return;
+  
+  // Importar servicios
+  const { changeRoomState } = await import('../services/roomService');
+  
+  // Cambiar estado a in_battle
+  await changeRoomState(roomCode, '', 'in_battle');
+  
+  // Importar y llamar al inicio de batalla
+  const { startBattle } = await import('./battleHandler.js');
+  const battle = await startBattle(roomCode, room);
+  
+  if (battle) {
+    console.log(`[BATTLE] Starting in room ${roomCode}`);
+    
+    // Notificar a ambos jugadores que la batalla está por comenzar
+    broadcast(roomCode, {
+      type: 'battle:starting',
+      data: { loading_seconds: 5 }
+    });
+  }
+}
+
+/**
+ * Confirmar equipo (YA NO SE USA - se elimina el botón)
+ * Mantenido por compatibilidad pero ahora hace lo mismo que checkAndStartBattleCountdown
  */
 async function handleDraftConfirm(sessionId: string, roomCode: string): Promise<void> {
+  // Verificar que el equipo tiene 6 Pokémon
   const room = await getRoomByCode(roomCode);
-
+  
   if (!room) {
     sendTo(sessionId, { type: 'error', message: 'Sala no encontrada' });
     return;
   }
 
-  // Verificar que el draft esté completo (ambos tienen 6 Pokémon)
-  if (!room.draft_picks || !room.draft_state?.completed) {
-    sendTo(sessionId, { type: 'error', message: 'El draft no está completo' });
-    return;
-  }
-
-  // Verificar que el equipo tiene 6 Pokémon
   const playerIsP1 = room.players.player1.session_id === sessionId;
-  const team = playerIsP1 ? room.draft_picks.player1 : room.draft_picks.player2;
+  const team = playerIsP1 ? room.draft_picks?.player1 : room.draft_picks?.player2;
 
-  if (team.length !== 6) {
+  if (!team || team.length !== 6) {
     sendTo(sessionId, { type: 'error', message: 'Necesitas seleccionar 6 Pokémon' });
     return;
   }
 
-  // Importar servicios
-  const { changeRoomState } = await import('../services/roomService');
-
-  // Cambiar estado a in_battle
-  const result = await changeRoomState(roomCode, sessionId, 'in_battle');
-
-  if (!result.success) {
-    sendTo(sessionId, { type: 'error', message: 'No se pudo iniciar la batalla' });
-    return;
+  // Ahora verificar si el otro también tiene 6 para iniciar el contador
+  const otherTeam = playerIsP1 ? room.draft_picks?.player2 : room.draft_picks?.player1;
+  
+  if (otherTeam && otherTeam.length === 6) {
+    // Ambos tienen 6 → iniciar contador
+    await checkAndStartBattleCountdown(roomCode);
+  } else {
+    // El otro no tiene 6 aún → esperar
+    sendTo(sessionId, { 
+      type: 'draft:waiting', 
+      data: { message: 'Esperando a que el oponente seleccione sus 6 Pokémon' } 
+    });
   }
-
-  // Broadcast de inicio de batalla
-  broadcast(roomCode, {
-    type: 'battle:starting',
-    data: {
-      team_1: room.draft_picks.player1,
-      team_2: room.draft_picks.player2,
-      message: '¡La batalla está por comenzar!'
-    }
-  });
-
-  console.log(`[BATTLE] Starting in room ${roomCode}`);
 }
 
 /**
