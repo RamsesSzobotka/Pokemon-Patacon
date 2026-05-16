@@ -1,10 +1,23 @@
 # Product Requirements Document (PRD)
 ## Pokemon Patacon - Battle Arena
 
-**Versión:** 1.0  
-**Fecha:** 12 de Mayo de 2026  
-**Estado:** Inicial  
-**Entrega Esperada:** Próxima semana
+**Versión:** 1.1
+**Fecha:** 15 de Mayo de 2026
+**Estado:** En Desarrollo (Fase 1 - Draft y Salas Completado)
+**Entrega Esperada:** Fase 1 (MVP) en progreso
+
+---
+
+## 📋 Resumen de Cambios (v1.0 → v1.1)
+
+| Fecha | Cambio |
+|-------|--------|
+| 15/May/2026 | Actualización de estado: Sistema de Salas y Draft completados |
+| 15/May/2026 | Añadida nueva arquitectura WebSocket: conexión única por sessionId |
+| 15/May/2026 | Actualizada estructura de carpetas: React + Vite (no TanStack Start) |
+| 15/May/2026 | Añadidos endpoints REST y WebSocket implementados |
+| 15/May/2026 | Actualizada sección de criterios de éxito con estado real |
+| 15/May/2026 | Añadida documentación de WebSocket (WEBSOCKET_PROTOCOL.md) |
 
 ---
 
@@ -338,12 +351,13 @@ if (status.remainingTurns <= 0) removeStatus(target)
 
 ### 4.1 Stack Tecnológico
 
-| Capa | Tecnología | Propósito |
-|------|-----------|----------|
-| **Frontend** | TanStack Start + Vite | Web progresiva (SPA), UI moderna, sin compilación nativa |
-| **Backend** | Bun + Hono | Servidor HTTP/WebSocket rápido y ligero, sin Node.js |
-| **Base de Datos** | MongoDB | Almacenar Pokémon cacheados, salas, historial |
-| **API Externa** | PokeAPI v2 | Datos de Pokémon (https://pokeapi.co/api/v2/) |
+| Capa | Tecnología | Propósito | Estado |
+|------|-----------|----------|--------|
+| **Frontend** | React + Vite + React Router | Web progresiva (SPA), UI moderna | ✅ Implementado |
+| **Backend** | Bun + Hono | Servidor HTTP/WebSocket rápido y ligero | ✅ Implementado |
+| **Base de Datos** | MongoDB | Almacenar Pokémon cacheados, salas, historial | ✅ Implementado |
+| **API Externa** | PokeAPI v2 | Datos de Pokémon (https://pokeapi.co/api/v2/) | ✅ Implementado |
+| **WebSocket** | Bun native WebSocket | Tiempo real para draft y batalla | ✅ Implementado |
 
 ### 4.2 Arquitectura
 
@@ -351,40 +365,95 @@ if (status.remainingTurns <= 0) removeStatus(target)
 
 ```
 ┌─────────────────────────────────────────┐
-│      Navegador (TanStack Start + Vite)  │
+│      Navegador (React + Vite)           │
 │  - UI Batalla en tiempo real             │
 │  - Selección de Equipo (draft)           │
 │  - Gestión de Salas Multijugador         │
 │  - WebSocket conectado permanente        │
 └────────────┬────────────────────────────┘
-             │ HTTP + WebSocket (ws://)
-             ↓
+              │ HTTP + WebSocket (ws://)
+              ↓
 ┌─────────────────────────────────────────┐
-│      Hono Server (Bun Runtime)          │
+│      Hono Server (Bun Runtime)           │
 │  - REST API: GET /api/pokemon/:id       │
-│  - WebSocket: ws://host/battle/:roomId  │
+│  - WebSocket: ws://host/ws?session_id= │
 │  - Motor de Batalla: turnos, daño       │
 │  - Sincronización en tiempo real         │
-│  - Gestión de salas en memoria          │
+│  - Gestión de salas en MongoDB          │
 └────────────┬────────────────────────────┘
-             │
-   ┌─────────┼─────────┐
-   ↓         ↓         ↓
+              │
+    ┌─────────┼─────────┐
+    ↓         ↓         ↓
 MongoDB   PokeAPI   Cache Local
 (persistencia) (fetch on-demand) (sprites, type matchups)
 ```
 
-**Notas de Implementación:**
-- CORS habilitado en Bun para desarrollo (`localhost:*`) y producción (dominio específico)
-- WebSocket nativo: Bun maneja upgrade de HTTP a WS automáticamente
-- Salas: estado en memoria de Bun + persistencia opcional en MongoDB para historial
-- Sprites: descargados on-demand desde PokeAPI, cacheados en navegador + MongoDB
+**Notas de Implementación (Actualizado 15/May/2026):**
+
+- **Nueva Arquitectura WebSocket:** Una sola conexión WebSocket por cliente (`ws://host/ws?session_id=xxx`), reusable para múltiples salas
+- **Frontend:** React con React Router para navegación (MainMenu → Pokédex → Draft → Batalla)
+- **Draft System:** Implementado con selección alternada, máximo 1 legendario, no repetibles, paginación
+- **CORS:** Habilitado para desarrollo (`localhost:5173`) y producción
+- **Salas:** Persistidas en MongoDB con TTL de 30 minutos para auto-limpieza
+- **Sprites:** Gen V Black/White animated .gif desde PokeAPI con fallback a PNG
+
+**Estado de Implementación:**
+- ✅ Sistema de Salas (crear, unirse, expire, cleanup)
+- ✅ Sistema de Draft (selección alternada, validación de equipos)
+- ✅ Pokédex con paginación y búsqueda
+- ✅ Tipos de Pokémon y movimientos
+- 🔄 Motor de Batalla (en desarrollo)
+- 🔄 Sistema de Batalla (en desarrollo)
 
 ### 4.3 Endpoints Básicos
 
-#### REST API
+#### REST API (Implementados)
 
 ```
+GET    /api/pokemon                  # Lista Pokémon con paginación y filtros
+GET    /api/pokemon/:id              # Obtiene un Pokémon específico
+GET    /api/pokemon/:id/moves        # Obtiene movimientos de un Pokémon
+GET    /api/pokemon/search?query=    # Búsqueda por nombre
+
+POST   /api/rooms                    # Crea una nueva sala
+GET    /api/rooms/:code              # Obtiene sala por código
+DELETE /api/rooms/:code              # Elimina una sala (solo host)
+```
+
+**Endpoints implementados (15/May/2026):**
+- ✅ Sistema de Pokédex con paginación
+- ✅ Búsqueda de Pokémon por nombre/tipo
+- ✅ Sistema de Salas REST
+- 🔄 Sistema de Batalla REST (pendiente)
+
+#### WebSocket (Implementado)
+
+**Conexión:** `ws://host/ws?session_id=xxx`
+
+```
+// Eventos implementados (Draft):
+draft:state              → Estado actual del draft
+draft:picks              → Picks de ambos jugadores
+draft:pick               → Seleccionar Pokémon
+draft:started            → Draft iniciado
+draft:confirm            → Confirmar equipo
+battle:starting          → Batalla por comenzar
+
+// Eventos de sala:
+room:joined              → Jugador se unió a la sala
+room:reconnected         → Reconexión a sala
+room:closed              → Sala cerrada
+
+// Eventos de batalla (en desarrollo):
+battle:start            → Inicia la batalla
+turn:action             → Jugador selecciona acción
+turn:execute            → Servidor ejecuta turno
+pokemon:fainted         → Pokémon debilitado
+item:used               → Objeto consumido en batalla
+battle:end               → Batalla finalizada
+```
+
+**WebSocket Protocol:** Ver `docs/WEBSOCKET_PROTOCOL.md` para detalle completo.
 GET    /api/pokemon/search?query=pikachu
 GET    /api/pokemon/:id
 GET    /api/moves/:move_id
@@ -410,6 +479,74 @@ battle:end           → Batalla finalizada
 
 ### 4.4 Estructura de Carpetas del Proyecto
 
+```
+pokemon-patacon/
+│
+├── frontend/                      # React + Vite + React Router
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── MainMenu.tsx          # Menú principal
+│   │   │   ├── PokédexView.tsx       # Vista de Pokédex con paginación
+│   │   │   ├── Draft.tsx             # Sistema de draft (selección de equipo)
+│   │   │   ├── Battle.tsx            # Pantalla de batalla (en desarrollo)
+│   │   │   └── ... (otros componentes)
+│   │   ├── types/
+│   │   │   └── game.ts               # Tipos TypeScript del proyecto
+│   │   ├── styles/
+│   │   │   ├── main.css               # Estilos globales
+│   │   │   ├── MainMenu.css          # Estilos menú principal
+│   │   │   ├── Pokedex.css           # Estilos Pokédex
+│   │   │   └── Draft.css             # Estilos draft
+│   │   ├── websocket.ts              # Cliente WebSocket
+│   │   ├── App.tsx                  # Router principal
+│   │   └── main.tsx                  # Entry point
+│   ├── public/
+│   │   └── assets/
+│   │       ├── music/                 # Música de fondo
+│   │       └── Title.png             # Imagen título
+│   ├── index.html
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   └── package.json
+│
+├── backend/                       # Bun + Hono
+│   ├── src/
+│   │   ├── routes/
+│   │   │   ├── pokemon.ts             # GET /api/pokemon, /:id, /:id/moves
+│   │   │   └── rooms.ts               # POST /api/rooms, GET /api/rooms/:code
+│   │   ├── websocket/
+│   │   │   ├── handler.ts             # Event handlers de WebSocket
+│   │   │   └── roomManager.ts         # Gestión de conexiones por sala
+│   │   ├── services/
+│   │   │   ├── pokemonService.ts      # Servicio de Pokémon (PokeAPI + caché)
+│   │   │   └── roomService.ts         # Lógica de negocio de salas
+│   │   ├── db/
+│   │   │   ├── mongodb.ts             # Conexión a MongoDB
+│   │   │   └── rooms.ts               # Colección de salas y funciones DB
+│   │   └── index.ts                   # Servidor principal (Hono + WS)
+│   ├── .env.example
+│   ├── bun.lockb
+│   ├── tsconfig.json
+│   └── package.json
+│
+├── docs/
+│   ├── PRD.md                      # Este documento (actualizado 15/May/2026)
+│   ├── API_ENDPOINTS.md            # Documentación de endpoints REST
+│   ├── WEBSOCKET_PROTOCOL.md       # Protocolo WebSocket
+│   ├── SCHEMAS_MONGODB.md          # Esquemas de MongoDB
+│   └── ... (otros documentos)
+│
+├── scripts/
+│   └── updatePokemonSprites.ts      # Script para actualizar sprites
+│
+├── data/
+│   └── README.md
+│
+├── .gitignore
+├── AGENT.md
+├── README_INICIAL.md
+├── SETUP_MONGODB.md
+└── ... (otros archivos)
 ```
 pokemon-patacon/
 │
@@ -1136,33 +1273,48 @@ Implementación:
 
 ## 12. Criterios de Éxito — MVP
 
+### Estado de Implementación (15/May/2026)
+
+| Componente | Estado | Notas |
+|------------|--------|-------|
+| **Pokédex** | ✅ Completo | 649 Pokémon, sprites Gen V, paginación, búsqueda |
+| **Sistema de Salas** | ✅ Completo | Crear, unirse, expire, validación |
+| **Sistema de Draft** | ✅ Completo | Selección alternada, máximo 1 legendario, 4 movimientos |
+| **WebSocket** | ✅ Completo | Conexión única por sesión, eventos de draft |
+| **Motor de Batalla** | 🔄 En desarrollo | Cálculo de daño, efectos de estado |
+| **UI de Batalla** | 🔄 En desarrollo | Panel de acciones, animaciones |
+| **Objetos (Batalla)** | ⏳ Pendiente | Pociones, revivir |
+| **Fin de Batalla** | ⏳ Pendiente | Victoria/derrota, estadísticas |
+
 ### Funcionales
 
-- ✅ **Pokédex funcional:** Mínimo 300 Pokémon cargados desde PokeAPI, con sprites Gen V
-- ✅ **Movimientos válidos:** Cada Pokémon tiene exactamente 4 movimientos en batalla
-- ✅ **Sistema de Salas:** Crear sala → generar código → unirse por código → iniciar
-- ✅ **Batalla 1v1 completa:** Selección equipo → draft → batalla → fin de partida
-- ✅ **Cálculo de daño correcto:** Fórmula con tipo, STAB, crítico, aleatorio, quemadura
-- ✅ **Efectos de tipo:** Vulnerabilidades, resistencias, inmunidades funcionan (desde PokeAPI)
-- ✅ **Estados temporales:** Duran exactamente 3 turnos, se eliminen al cambiar Pokémon
-- ✅ **Orden de turnos:** Coinflip justo (50/50) para determinar quién ataca primero
-- ✅ **Victorias/Derrotas:** Sistema determina ganador correctamente
-- ✅ **Sincronización real-time:** WebSocket sin lag perceptible
+- ✅ **Pokédex funcional:** 649 Pokémon desde PokeAPI, sprites Gen V Black/White animated
+- ✅ **Movimientos:** Cada Pokémon tiene movimientos disponibles desde PokeAPI
+- ✅ **Sistema de Salas:** Crear sala → generar código (6 caracteres) → unirse por código
+- ✅ **Sistema de Draft:** Selección alternada P1→P2→P1..., validación equipos (6 Pokémon, 4 movimientos c/u, 1 legendario máx)
+- ⏳ **Batalla 1v1 completa:** En desarrollo - falta motor de batalla completo
+- ⏳ **Cálculo de daño:** Pendiente de implementación completa
+- ⏳ **Efectos de tipo:** Pendiente de implementación completa
+- ⏳ **Estados temporales:** Pendiente de implementación completa
+- ⏳ **Orden de turnos:** Pendiente (coinflip diseñado pero no implementado)
+- ⏳ **Victorias/Derrotas:** Pendiente de implementación completa
+- ✅ **Sincronización real-time:** WebSocket implementado para draft
 
 ### Técnicos
 
-- ✅ **MongoDB:** Pokémon persistidos, salas, historial de batalla funcionales
-- ✅ **Backend (Hono+Bun):** Endpoints activos, WebSocket estable
-- ✅ **Frontend (TanStack Start + Vite):** UI responsiva, sin errores críticos
-- ✅ **Docker:** docker-compose.yml funcional, levanta todo en 1 comando
-- ✅ **Sin hardcodeo:** Datos desde PokeAPI, no tablas fijas
+- ✅ **MongoDB:** Pokémon cacheados, salas persistidas, TTL 30 min
+- ✅ **Backend (Hono+Bun):** Endpoints REST activos, WebSocket estable
+- ✅ **Frontend (React + Vite):** UI responsiva, navegación funcionando
+- ⏳ **Docker:** Pendiente configurar docker-compose
+- ✅ **Sin hardcodeo:** Datos desde PokeAPI con caché en MongoDB
 
 ### Calidad
 
-- ✅ **Sprites consistentes:** Gen V Black/White, sin mezcla de estilos
-- ✅ **Animaciones básicas:** Ataque, daño, cambio de Pokémon visibles
-- ✅ **Sin lag:** Latencia < 100ms en turnos de batalla
-- ✅ **2+ jugadores simultáneos:** Salas paralelas funcionan
+- ✅ **Sprites consistentes:** Gen V Black/White animated .gif con fallback PNG
+- ✅ **Interfaz Draft:** Funcional con paginación, búsqueda, selección de movimientos
+- ✅ **Pokédex:** Paginación 25/50/100 por página, búsqueda por nombre
+- ⏳ **Animaciones de Batalla:** Pendiente desarrollo
+- ⏳ **Sin lag:** Pendiente prueba de carga
 
 ---
 
@@ -1191,14 +1343,13 @@ Implementación:
 
 ---
 
-**Documento actualizado desde:** PDF Especificaciones (v1.0 - 2026-05-12) + PRD (v1.0 - 2026-05-12)  
-**Última actualización:** 13 de Mayo, 2026  
-**Estado:** Alineado con PDF, priorizando PRD en conflictos  
-**Próxima revisión:** Después de Fase 1
-- **MongoDB Docs:** https://docs.mongodb.com/
+**Documento actualizado desde:** PDF Especificaciones (v1.0 - 2026-05-12) + PRD (v1.1 - 2026-05-15)
+**Última actualización:** 15 de Mayo, 2026
+**Estado:** En Desarrollo - Fase 1 (Salas + Draft) completada
+**Próxima revisión:** Después de completar motor de batalla
 
 ---
 
-**Documento preparado por:** Sistema IA  
-**Última actualización:** 12 de Mayo, 2026  
-**Próxima revisión:** Después de Fase 1
+**Documento preparado por:** Sistema IA
+**Versión actual:** 1.1 (15 Mayo 2026)
+**Próxima revisión:** Fase 2 - Motor de Batalla
