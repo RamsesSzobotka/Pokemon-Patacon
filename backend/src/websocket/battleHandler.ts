@@ -129,10 +129,12 @@ async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
     console.log(`[BATTLE] Movimientos encontrados: ${moves.length}`);
     
     // Convertir movimientos al formato de batalla (si hay movimientos)
+    // Usar nombre en español si está disponible, si no usar el nombre en inglés
     const battleMoves: BattleMove[] = (moves && moves.length > 0)
       ? moves.map(m => ({
         moveId: m.move_id,
-        name: m.name,
+        name: m.names?.es || m.name_es || m.name, // Prioridad: names.es > name_es > name
+        description: m.description || m.names?.description_es || '', // Descripción en español
         type: m.type,
         damageClass: m.damage_class,
         power: m.power,
@@ -204,7 +206,8 @@ function serializePokemon(pokemon: PokemonInBattle, includeMoves: boolean = true
     isFainted: pokemon.isFainted,
     ...(includeMoves && moves.length > 0 && { moves: moves.map(m => ({
       moveId: m.moveId,
-      name: m.name,
+      name: m.name, // Ya contiene el nombre en español
+      description: m.description || '', // Descripción en español
       type: m.type,
       damageClass: m.damageClass,
       power: m.power,
@@ -279,13 +282,13 @@ export async function handleBattleAction(
     pokemonId: actionData.pokemonId
   };
   
-  // Guardar la acción pendiente
+// Guardar la acción pendiente
   if (isPlayer1) {
     battle.pendingActions.player1 = action;
   } else {
     battle.pendingActions.player2 = action;
   }
-  
+
   // Notificar que el jugador seleccionó acción
   broadcast(roomCode, {
     type: 'battle:action-selected',
@@ -295,9 +298,58 @@ export async function handleBattleAction(
       ready: !!(battle.pendingActions.player1 && battle.pendingActions.player2)
     }
   });
-  
+
   console.log(`[BATTLE] ${player.name} seleccionó: ${actionData.type}, pending p1:`, !!battle.pendingActions.player1, 'pending p2:', !!battle.pendingActions.player2);
-  
+
+  // Verificar si el jugador necesita cambio obligatorio (su pokemon active tiene HP=0)
+  const activePokemon = player.team[player.activePokemonIndex];
+  const needsMandatorySwitch = activePokemon.hp <= 0 || activePokemon.isFainted;
+
+  // Si el jugador necesita cambio obligatorio, ejecutar el cambio inmediatamente (sin esperar al oponente)
+  if (needsMandatorySwitch && actionData.type === 'change' && actionData.pokemonId !== undefined) {
+    console.log(`[BATTLE] Mandatory switch for ${playerId}, executing immediately`);
+
+    const currentIndex = player.activePokemonIndex;
+    const newIndex = player.team.findIndex(p => p.id === actionData.pokemonId);
+
+    if (newIndex >= 0 && newIndex !== currentIndex) {
+      const switchResult = executeSwitch(player, newIndex, currentIndex);
+
+      // Obtener el nuevo pokemon activo
+      const newActivePokemon = player.team[player.activePokemonIndex];
+
+      // Notificar el cambio exitoso
+      broadcast(roomCode, {
+        type: 'battle:switch-success',
+        data: {
+          playerId,
+          pokemonId: actionData.pokemonId,
+          pokemon: serializePokemon(newActivePokemon),
+          message: switchResult.message
+        }
+      });
+
+      // Limpiar la acción pendiente de este jugador
+      if (isPlayer1) {
+        battle.pendingActions.player1 = null;
+      } else {
+        battle.pendingActions.player2 = null;
+      }
+
+      // Ahora verificar si el oponente también necesita seleccionar
+      // Si el oponente ya tenía acción, ejecutamos el turno normal
+      const opponentPending = isPlayer1 ? battle.pendingActions.player2 : battle.pendingActions.player1;
+      if (opponentPending) {
+        console.log('[BATTLE] Opponent has action, executing turn with switch');
+        await executeTurn(roomCode, battle);
+      }
+      // Si el oponente no ha seleccionado aún, esperar (la batalla queda en fase de selección)
+      // hasta que seleccione su acción
+
+      return;
+    }
+  }
+
   // Si ambos jugadores han seleccionado, ejecutar el turno
   if (battle.pendingActions.player1 && battle.pendingActions.player2) {
     console.log('[BATTLE] Both players ready, executing turn');
