@@ -438,6 +438,12 @@ export function executeMove(
   
   // Construir mensaje
   let message = `${attacker.name} usó ${move.name}!`;
+  
+  // V1: Si no hace daño, mostrar "No hizo efecto"
+  if (damage === 0 && !attacker.isCharging) {
+    message += ' ¡No hizo efecto!';
+  }
+  
   if (isCritical) message += ' ¡Golpe crítico!';
   if (effectiveness > 1) message += ' ¡Es muy efectivo!';
   if (effectiveness < 1 && effectiveness > 0) message += ' No es muy efectivo...';

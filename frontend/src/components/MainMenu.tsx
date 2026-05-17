@@ -29,6 +29,10 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
   const [player1DisplayName, setPlayer1DisplayName] = useState<string>('Jugador 1');
   const [player2DisplayName, setPlayer2DisplayName] = useState<string>('Esperando oponente...');
   const [playerNumber, setPlayerNumber] = useState<number>(0); // 1 o 2, 0 = no know
+  const [gameMode, setGameMode] = useState<'normal' | 'random'>('normal'); // Modo de juego
+  const [showRandomLoading, setShowRandomLoading] = useState(false);
+  const [randomTeams, setRandomTeams] = useState<{player1: any[], player2: any[]} | null>(null);
+  const [randomCountdown, setRandomCountdown] = useState<number>(5);
 
 // Audio background music ref
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -42,6 +46,26 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
       });
     }
   }, []);
+
+  // Contador decremento automático
+  useEffect(() => {
+    if (!showRandomLoading || randomCountdown === null) return;
+    if (randomCountdown <= 0) return;
+    
+    const timer = setTimeout(() => {
+      setRandomCountdown(randomCountdown - 1);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, [showRandomLoading, randomCountdown]);
+
+  // Navegar a la batalla cuando el contador llega a 0
+  useEffect(() => {
+    if (showRandomLoading && randomCountdown === 0 && createdRoomCode) {
+      console.log('[MainMenu] Countdown finished, navigating to battle');
+      navigate(`/battle/${createdRoomCode}`);
+    }
+  }, [showRandomLoading, randomCountdown, createdRoomCode, navigate]);
 
   // Si ya había creado o entrado en una sala, restaurar código
   useEffect(() => {
@@ -137,6 +161,40 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
       }
       if (data.player2_name) {
         setPlayer2DisplayName(data.player2_name);
+      }
+    }));
+
+    // Modo de juego cambiado
+    unsubscribes.push(socket.on('room:mode_changed', (data) => {
+      console.log('[MainMenu] Mode changed:', data);
+      if (data.mode) {
+        setGameMode(data.mode);
+      }
+    }));
+
+    // Equipos aleatorios generados - mostrar pantalla de carga
+    unsubscribes.push(socket.on('random:teams_generated', (data) => {
+      console.log('[MainMenu] Random teams generated:', data);
+      // El servidor envía player1_team y player2_team
+      setRandomTeams({
+        player1: data.player1_team || [],
+        player2: data.player2_team || []
+      });
+      setShowRandomLoading(true);
+      setRandomCountdown(5);
+    }));
+
+    // Contador para modo aleatorio (simplemente guardar el valor)
+    unsubscribes.push(socket.on('draft:countdown', (data) => {
+      console.log('[MainMenu] Draft countdown:', data);
+      setRandomCountdown(5); // Reiniciar a 5 cuando llega el mensaje
+    }));
+
+    // Battle starting - navegar a batalla
+    unsubscribes.push(socket.on('battle:starting', (data) => {
+      console.log('[MainMenu] Battle starting:', data);
+      if (showRandomLoading && createdRoomCode) {
+        navigate(`/battle/${createdRoomCode}`);
       }
     }));
 
@@ -313,8 +371,13 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
       return;
     }
 
-    // Enviar evento para iniciar draft
-    socket.send({ type: 'draft:start' });
+    // Si el modo es aleatorio, enviar evento de inicio aleatorio
+    if (gameMode === 'random') {
+      socket.send({ type: 'room:start_random' });
+    } else {
+      // Modo normal - iniciar draft
+      socket.send({ type: 'draft:start' });
+    }
   };
 
   const handleLeaveRoom = async () => {
@@ -330,6 +393,58 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
     setPlayerNumber(0);
     setScreen('menu');
   };
+
+  // Pantalla de carga para modo aleatorio
+  if (showRandomLoading && randomTeams) {
+    // Determinar qué equipo es el del jugador
+    const myTeam = playerNumber === 1 ? randomTeams.player1 : (playerNumber === 2 ? randomTeams.player2 : randomTeams.player1);
+    const opponentTeam = playerNumber === 1 ? randomTeams.player2 : (playerNumber === 2 ? randomTeams.player1 : randomTeams.player2);
+    
+    return (
+      <div className="main-menu-container">
+        <div className="random-loading-screen">
+          <h2>¡Equipos aleatorios seleccionados!</h2>
+          
+          <div className="countdown-display">
+            <span className="countdown-number">{randomCountdown}</span>
+            <p>La batalla está por comenzar...</p>
+          </div>
+          
+          <div className="teams-preview">
+            <div className="team-section">
+              <h3>Tu Equipo</h3>
+              <div className="team-pokemons">
+                {(myTeam || []).slice(0, 6).map((pokemon: any, index: number) => (
+                  <div key={index} className="pokemon-preview">
+                    <img 
+                      src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.pokeapi_id}.png`} 
+                      alt={String(pokemon.pokeapi_id)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="team-section">
+              <h3>Equipo del oponente</h3>
+              <div className="team-pokemons">
+                {(opponentTeam || []).slice(0, 6).map((pokemon: any, index: number) => (
+                  <div key={index} className="pokemon-preview">
+                    <img 
+                      src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.pokeapi_id}.png`} 
+                      alt={String(pokemon.pokeapi_id)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <p className="loading-text">Preparando batalla...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="main-menu-container">
@@ -443,6 +558,40 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
                       </li>
                     </ul>
                   </div>
+                  
+                  {/* Selector de modo de juego - solo visible para el host */}
+                  {isHost && (
+                    <div className="game-mode-selector">
+                      <h4>Modo de Juego</h4>
+                      <div className="mode-buttons">
+                        <button 
+                          className={`mode-btn ${gameMode === 'normal' ? 'active' : ''}`}
+                          onClick={() => setGameMode('normal')}
+                        >
+                          📋 Normal
+                        </button>
+                        <button 
+                          className={`mode-btn ${gameMode === 'random' ? 'active' : ''}`}
+                          onClick={() => {
+                            setGameMode('random');
+                            // Enviar cambio al servidor
+                            socket.send({ 
+                              type: 'room:set_mode', 
+                              data: { mode: 'random' } 
+                            });
+                          }}
+                        >
+                          🎲 Aleatorio
+                        </button>
+                      </div>
+                      <p className="mode-description">
+                        {gameMode === 'normal' 
+                          ? 'Ambos jugadores eligen sus 6 Pokémon en el draft' 
+                          : 'Los equipos se generan automáticamente - sin draft'}
+                      </p>
+                    </div>
+                  )}
+                  
                   <div className="loading-bar"></div>
                   <p className="timeout-text">Timeout: 5 min</p>
                 </div>

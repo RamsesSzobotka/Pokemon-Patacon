@@ -463,6 +463,34 @@ export async function changeRoomState(code: string, sessionId: string, newState:
   }
 }
 
+/**
+ * Cambia el modo de juego de la sala (normal/random)
+ */
+export async function changeRoomGameMode(code: string, mode: 'normal' | 'random'): Promise<{ success: boolean; message?: string }> {
+  try {
+    const upperCode = code.toUpperCase();
+    const result = await roomsDB.updateRoomGameMode(upperCode, mode);
+    return result;
+  } catch (error) {
+    console.error('Error cambiando modo de juego:', error);
+    return { success: false, message: 'Error interno' };
+  }
+}
+
+/**
+ * Guarda los equipos aleatorios generados para el modo random
+ */
+export async function setRandomTeams(code: string, team1: any[], team2: any[]): Promise<{ success: boolean; message?: string }> {
+  try {
+    const upperCode = code.toUpperCase();
+    const result = await roomsDB.setRandomTeams(upperCode, team1, team2);
+    return result;
+  } catch (error) {
+    console.error('Error guardando equipos aleatorios:', error);
+    return { success: false, message: 'Error interno' };
+  }
+}
+
 // ============ FUNCIONES DE DRAFT ============
 
 /**

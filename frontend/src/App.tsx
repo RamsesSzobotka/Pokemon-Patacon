@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import MainMenu from './components/MainMenu';
 import PokédexView from './components/PokédexView';
 import Draft from './components/Draft';
+import Battle from './components/battle/Battle';
 import './App.css';
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
           </div>
         } />
         <Route path="/draft/:roomCode" element={<Draft />} />
+        <Route path="/battle/:roomCode" element={<Battle />} />
       </Routes>
     </BrowserRouter>
   );

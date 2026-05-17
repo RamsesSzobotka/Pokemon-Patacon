@@ -291,20 +291,18 @@ const Draft: React.FC<DraftProps> = ({ onExit, onBattleStart }) => {
       setError(data?.message || 'Esperando al oponente...');
     }));
 
-    // Batalla comenzando (con contador de carga de 5 segundos)
+    // Batalla comenzando - navegar inmediatamente a la batalla
+    // El componente Battle mostrará el contador de carga
     unsubscribes.push(socket.on('battle:starting', (data) => {
-      console.log('[Draft] Battle starting:', data);
-      const loadingSeconds = data?.loading_seconds || 5;
+      console.log('[Draft] Battle starting, navigating to battle:', data);
       setBattleStarting(true);
       
-      // Después del contador de carga, redirigir a batalla
-      setTimeout(() => {
-        if (onBattleStart) {
-          onBattleStart();
-        } else {
-          navigate('/battle/' + roomCode);
-        }
-      }, loadingSeconds * 1000);
+      // Navegar inmediatamente - el componente Battle mostrará el countdown
+      if (onBattleStart) {
+        onBattleStart();
+      } else {
+        navigate('/battle/' + roomCode);
+      }
     }));
 
     // Cleanup

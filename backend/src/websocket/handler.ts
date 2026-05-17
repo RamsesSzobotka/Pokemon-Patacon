@@ -152,6 +152,22 @@ export async function handleMessageFromSession(sessionId: string, rawMessage: st
       }
       break;
 
+    case 'room:set_mode':
+      // El host cambia el modo de juego (normal/random)
+      const roomCode6 = getPlayerRoom(sessionId);
+      if (roomCode6) {
+        await handleSetGameMode(sessionId, roomCode6, message.data?.mode);
+      }
+      break;
+
+    case 'room:start_random':
+      // Iniciar modo aleatorio (cuando ambos jugadores están listos)
+      const roomCode7 = getPlayerRoom(sessionId);
+      if (roomCode7) {
+        await handleStartRandomMode(sessionId, roomCode7);
+      }
+      break;
+
     // ========== EVENTOS DE BATALLA ==========
 
     case 'battle:action':
@@ -812,6 +828,119 @@ async function handleDraftConfirm(sessionId: string, roomCode: string): Promise<
       data: { message: 'Esperando a que el oponente seleccione sus 6 Pokémon' } 
     });
   }
+}
+
+/**
+ * Cambiar modo de juego (solo el host puede)
+ */
+async function handleSetGameMode(sessionId: string, roomCode: string, mode: string): Promise<void> {
+  const room = await getRoomByCode(roomCode);
+  
+  if (!room) {
+    sendTo(sessionId, { type: 'error', message: 'Sala no encontrada' });
+    return;
+  }
+
+  // Solo el host (player1) puede cambiar el modo
+  if (room.players.player1.session_id !== sessionId) {
+    sendTo(sessionId, { type: 'error', message: 'Solo el host puede cambiar el modo de juego' });
+    return;
+  }
+
+  const newMode = mode === 'random' ? 'random' : 'normal';
+  
+  // Actualizar el modo
+  const { changeRoomGameMode } = await import('../services/roomService');
+  await changeRoomGameMode(roomCode, newMode);
+
+  // Notificar a ambos jugadores
+  broadcast(roomCode, {
+    type: 'room:mode_changed',
+    data: { mode: newMode }
+  });
+  
+  console.log(`[ROOM] Modo de juego cambiado a: ${newMode}`);
+}
+
+/**
+ * Iniciar modo aleatorio (cuando ambos jugadores están listos)
+ */
+async function handleStartRandomMode(sessionId: string, roomCode: string): Promise<void> {
+  const room = await getRoomByCode(roomCode);
+  
+  if (!room) {
+    sendTo(sessionId, { type: 'error', message: 'Sala no encontrada' });
+    return;
+  }
+
+  // Verificar que el modo sea random
+  if (room.game_mode !== 'random') {
+    sendTo(sessionId, { type: 'error', message: 'El modo de juego no es aleatorio' });
+    return;
+  }
+
+  // Verificar que ambos jugadores estén conectados
+  if (!room.players.player1.session_id || !room.players.player2.session_id) {
+    sendTo(sessionId, { type: 'error', message: 'Ambos jugadores deben estar en la sala' });
+    return;
+  }
+
+  console.log(`[RANDOM] Generando equipos aleatorios para sala ${roomCode}`);
+
+  // Generar equipos aleatorios para ambos jugadores
+  const { generateRandomTeam } = await import('../services/randomModeService');
+  
+  const player1Team = await generateRandomTeam();
+  const player2Team = await generateRandomTeam();
+
+  // Guardar los equipos
+  const { setRandomTeams } = await import('../services/roomService');
+  await setRandomTeams(roomCode, player1Team, player2Team);
+
+  // Enviar los equipos a ambos jugadores
+  broadcast(roomCode, {
+    type: 'random:teams_generated',
+    data: {
+      player1_team: player1Team,
+      player2_team: player2Team
+    }
+  });
+
+  // Iniciar contador de 5 segundos y luego batalla
+  broadcast(roomCode, {
+    type: 'draft:countdown',
+    data: { seconds: 5 }
+  });
+
+  setTimeout(async () => {
+    // Obtener la sala actualizada con los equipos aleatorios
+    const updatedRoom = await getRoomByCode(roomCode);
+    if (!updatedRoom) {
+      console.error('[RANDOM] Sala no encontrada al iniciar batalla');
+      return;
+    }
+    
+    // Cambiar estado a in_battle
+    const { changeRoomState } = await import('../services/roomService');
+    await changeRoomState(roomCode, '', 'in_battle');
+
+    // Crear estado de batalla (sin enviar battle:start todavía)
+    const { startBattle, sendBattleStart } = await import('./battleHandler.js');
+    const battle = await startBattle(roomCode, updatedRoom);
+    
+    if (battle) {
+      // Notificar que la batalla está por comenzar
+      broadcast(roomCode, {
+        type: 'battle:starting',
+        data: { loading_seconds: 5 }
+      });
+      
+      // Después de 5 segundos, enviar battle:start
+      setTimeout(() => {
+        sendBattleStart(roomCode);
+      }, 5000);
+    }
+  }, 5000);
 }
 
 /**

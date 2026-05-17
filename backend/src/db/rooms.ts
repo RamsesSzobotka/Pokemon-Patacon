@@ -37,6 +37,7 @@ export interface Room {
   created_at: Date;
   expires_at: Date;
   state: 'waiting' | 'in_draft' | 'in_battle' | 'finished';
+  game_mode: 'normal' | 'random';  // Modo de juego: normal (draft) o random
   players: {
     player1: RoomPlayer;
     player2: RoomPlayer;
@@ -113,6 +114,7 @@ export async function createRoom(creatorSessionId: string, playerName: string = 
     created_at: now,
     expires_at: expiresAt,
     state: 'waiting',
+    game_mode: 'normal',  // Por defecto modo normal (draft)
     players: {
       player1: {
         session_id: creatorSessionId,
@@ -278,6 +280,59 @@ export async function updateRoomState(code: string, newState: Room['state']): Pr
   if (!updatedRoom) return null;
 
   return updatedRoom;
+}
+
+/**
+ * Actualiza el modo de juego de la sala
+ * @param code - Código de la sala
+ * @param mode - Nuevo modo (normal/random)
+ */
+export async function updateRoomGameMode(code: string, mode: 'normal' | 'random'): Promise<{ success: boolean; message?: string }> {
+  try {
+    const collection = getRoomsCollection();
+    
+    await collection.updateOne(
+      { code },
+      { $set: { game_mode: mode } }
+    );
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error actualizando modo de juego:', error);
+    return { success: false, message: 'Error al actualizar' };
+  }
+}
+
+/**
+ * Guarda los equipos aleatorios para el modo random
+ * @param code - Código de la sala
+ * @param team1 - Equipo del jugador 1
+ * @param team2 - Equipo del jugador 2
+ */
+export async function setRandomTeams(code: string, team1: any[], team2: any[]): Promise<{ success: boolean; message?: string }> {
+  try {
+    const collection = getRoomsCollection();
+    
+    await collection.updateOne(
+      { code },
+      { 
+        $set: { 
+          team_1: team1,
+          team_2: team2,
+          draft_picks: {
+            player1: team1,
+            player2: team2
+          },
+          state: 'in_battle'
+        } 
+      }
+    );
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error guardando equipos aleatorios:', error);
+    return { success: false, message: 'Error al guardar equipos' };
+  }
 }
 
 /**

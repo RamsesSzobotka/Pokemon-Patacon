@@ -10,7 +10,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import { useWebSocket } from '../../hooks/useWebSocket';
+import { joinRoom } from '../../websocket';
 import './Battle.css';
 
 // ============================================
@@ -149,7 +151,7 @@ function CommandPanel({
   moves,
   disabled
 }: { 
-  onAttack: () => void; 
+  onAttack: (moveId: number) => void; 
   onChange: () => void;
   moves?: any[];
   disabled?: boolean;
@@ -201,7 +203,7 @@ function CommandPanel({
                 key={move?.moveId || index}
                 className="move-btn"
                 onClick={() => {
-                  onAttack();
+                  onAttack(move?.moveId);
                   setShowMoves(false);
                 }}
                 disabled={disabled}
@@ -295,14 +297,23 @@ function BattleMessage({
 // ============================================
 
 export default function Battle() {
+  const { roomCode } = useParams<{ roomCode: string }>();
   const { sendMessage, lastMessage } = useWebSocket();
+  
+  // Unirse a la sala al montar el componente
+  useEffect(() => {
+    if (roomCode) {
+      console.log('[Battle] Uniéndose a la sala:', roomCode);
+      joinRoom(roomCode, '');
+    }
+  }, [roomCode]);
   
   // Estado de la batalla
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [lastBattleMessage, setLastBattleMessage] = useState<string>('¡La batalla está por comenzar!');
   const [showPokemonSelector, setShowPokemonSelector] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
-  const [loadingCountdown, setLoadingCountdown] = useState<number | null>(5); // Contador de carga de 5 segundos
+const [loadingCountdown, setLoadingCountdown] = useState<number | null>(5); // Iniciar con 5 segundos visible
   
   // Asumimos que somos player1 por ahora (se puede mejorar después)
   const playerNumber = 1;
@@ -312,7 +323,7 @@ export default function Battle() {
     if (loadingCountdown === null) return;
     
     if (loadingCountdown <= 0) {
-      setLoadingCountdown(null);
+      // Cuando llega a 0, esperar el mensaje battle:start indefinidamente
       return;
     }
     
@@ -322,12 +333,18 @@ export default function Battle() {
     
     return () => clearTimeout(timer);
   }, [loadingCountdown]);
-
+  
   // Efecto para escuchar mensajes WebSocket
   useEffect(() => {
     if (!lastMessage) return;
     
     const message: BattleMessage = lastMessage;
+    
+    // También escuchar battle:starting para iniciar el contador
+    if (message.type === 'battle:starting') {
+      setLoadingCountdown(5);
+      return;
+    }
     
     switch (message.type) {
       case 'battle:start':
@@ -417,6 +434,7 @@ export default function Battle() {
   
   // Handlers
   const handleAttack = useCallback((moveId: number) => {
+    if (!moveId) return;
     sendMessage({
       type: 'battle:action',
       data: {

@@ -6,7 +6,7 @@
 
 import { broadcast, sendTo, getConnection, getRoomPlayers } from './roomManager.js';
 import { createBattleState, createPlayerBattleState, determineExecutionOrder, canPokemonAct, executeMove, executeSwitch, getAilmentDamagePerTurn, decrementAilmentTurns, checkBattleEnd } from '../services/battleService.js';
-import { getMovesByIds } from '../db/mongodb.js';
+import { getMovesByIds, getPokemonById } from '../db/mongodb.js';
 import type { BattleState, PokemonInBattle, BattleMove, PlayerAction, PlayerBattleState } from '../types/battle.js';
 import type { Room } from '../db/rooms.js';
 
@@ -26,6 +26,9 @@ export async function startBattle(roomCode: string, room: Room): Promise<BattleS
   // Obtener equipos de ambos jugadores
   const team1 = room.draft_picks?.player1 || [];
   const team2 = room.draft_picks?.player2 || [];
+  
+  console.log(`[BATTLE] Equipo 1: ${team1.length} Pokémon`, team1);
+  console.log(`[BATTLE] Equipo 2: ${team2.length} Pokémon`, team2);
   
   if (team1.length === 0 || team2.length === 0) {
     console.error(`[BATTLE] Equipos no encontrados para sala ${roomCode}`);
@@ -57,6 +60,27 @@ export async function startBattle(roomCode: string, room: Room): Promise<BattleS
   // Guardar en mapa de batallas activas
   activeBattles.set(roomCode, battleState);
   
+  console.log(`[BATTLE] Batalla iniciada en sala ${roomCode}`);
+  return battleState;
+}
+
+/**
+ * Envía el mensaje de inicio de batalla a los clientes
+ * Debe llamarse después del temporizador de 5 segundos
+ */
+export function sendBattleStart(roomCode: string): void {
+  const battleState = activeBattles.get(roomCode);
+  if (!battleState) {
+    console.error(`[BATTLE] No se encontró estado de batalla para sala ${roomCode}`);
+    return;
+  }
+  
+  const player1 = battleState.players.player1;
+  const player2 = battleState.players.player2;
+  
+  console.log(`[BATTLE] player1 team[0]:`, player1.team[0]);
+  console.log(`[BATTLE] player1.activePokemonIndex:`, player1.activePokemonIndex);
+  
   // Notificar a ambos jugadores que la batalla comenzó
   broadcast(roomCode, {
     type: 'battle:start',
@@ -77,9 +101,6 @@ export async function startBattle(roomCode: string, room: Room): Promise<BattleS
       message: '¡La batalla está por comenzar!'
     }
   });
-  
-  console.log(`[BATTLE] Batalla iniciada en sala ${roomCode}`);
-  return battleState;
 }
 
 /**
@@ -88,53 +109,69 @@ export async function startBattle(roomCode: string, room: Room): Promise<BattleS
 async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
   const result: PokemonInBattle[] = [];
   
-  for (const pokemon of team) {
-    // Obtener movimientos del Pokémon
-    const moveIds = pokemon.move_ids || [];
-    const moves = await getMovesByIds(moveIds);
+  for (const teamMember of team) {
+    console.log(`[BATTLE] Procesando Pokémon:`, teamMember);
     
-    // Convertir movimientos al formato de batalla
-    const battleMoves: BattleMove[] = moves.map(m => ({
-      moveId: m.move_id,
-      name: m.name,
-      type: m.type,
-      damageClass: m.damage_class,
-      power: m.power,
-      accuracy: m.accuracy,
-      priority: m.priority,
-      pp: m.pp,
-      maxPp: m.pp,
-      meta: {
-        ailment: m.meta?.ailment,
-        ailmentChance: m.meta?.ailment_chance || 0,
-        statChanges: m.meta?.stat_changes || [],
-        flinchChance: m.meta?.flinch_chance || 0,
-        heal: m.meta?.heal || 0,
-        minHits: m.meta?.min_hits,
-        maxHits: m.meta?.max_hits,
-        minTurns: m.meta?.min_turns,
-        maxTurns: m.meta?.max_turns
-      },
-      flags: {
-        recharge: m.flags?.recharge || false,
-        charge: m.flags?.charge || false,
-        protect: m.flags?.protect || false,
-        mirror: m.flags?.mirror || false
-      }
-    }));
+    // Cargar datos completos del Pokémon desde la DB
+    const pokeData = await getPokemonById(teamMember.pokeapi_id);
+    
+    if (!pokeData) {
+      console.error(`[BATTLE] Pokémon no encontrado en DB: ${teamMember.pokeapi_id}`);
+      continue;
+    }
+    
+    console.log(`[BATTLE] Pokemon encontrado: ${pokeData.name}, moves: ${teamMember.selected_moves?.length || 0}`);
+    
+    // Obtener movimientos seleccionados
+    const moveIds = teamMember.selected_moves || [];
+    console.log(`[BATTLE] Buscando movimientos:`, moveIds);
+    const moves = await getMovesByIds(moveIds);
+    console.log(`[BATTLE] Movimientos encontrados: ${moves.length}`);
+    
+    // Convertir movimientos al formato de batalla (si hay movimientos)
+    const battleMoves: BattleMove[] = (moves && moves.length > 0)
+      ? moves.map(m => ({
+        moveId: m.move_id,
+        name: m.name,
+        type: m.type,
+        damageClass: m.damage_class,
+        power: m.power,
+        accuracy: m.accuracy,
+        priority: m.priority,
+        pp: m.pp,
+        maxPp: m.pp,
+        meta: {
+          ailment: m.meta?.ailment,
+          ailmentChance: m.meta?.ailment_chance || 0,
+          statChanges: m.meta?.stat_changes || [],
+          flinchChance: m.meta?.flinch_chance || 0,
+          heal: m.meta?.heal || 0,
+          minHits: m.meta?.min_hits,
+          maxHits: m.meta?.max_hits,
+          minTurns: m.meta?.min_turns,
+          maxTurns: m.meta?.max_turns
+        },
+        flags: {
+          recharge: m.flags?.recharge || false,
+          charge: m.flags?.charge || false,
+          protect: m.flags?.protect || false,
+          mirror: m.flags?.mirror || false
+        }
+      }))
+      : [];
     
     result.push({
-      id: pokemon.pokeapi_id || Math.random(),
-      pokeapiId: pokemon.pokeapi_id,
-      name: pokemon.name,
-      types: pokemon.types || [],
-      hp: pokemon.stats?.hp || 100,
-      maxHp: pokemon.stats?.hp || 100,
-      attack: pokemon.stats?.attack || 50,
-      defense: pokemon.stats?.defense || 50,
-      spAttack: pokemon.stats?.sp_attack || 50,
-      spDefense: pokemon.stats?.sp_defense || 50,
-      sprites: pokemon.sprites || { front_default: null, back_default: null },
+      id: teamMember.pokeapi_id,
+      pokeapiId: teamMember.pokeapi_id,
+      name: pokeData.name || teamMember.name || `Pokemon ${teamMember.pokeapi_id}`,
+      types: pokeData.types || [],
+      hp: pokeData.stats?.hp || 100,
+      maxHp: pokeData.stats?.hp || 100,
+      attack: pokeData.stats?.attack || 50,
+      defense: pokeData.stats?.defense || 50,
+      spAttack: pokeData.stats?.sp_attack || 50,
+      spDefense: pokeData.stats?.sp_defense || 50,
+      sprites: pokeData.sprites || { front_default: null, back_default: null },
       moveIds: moveIds,
       moves: battleMoves,
       ailments: [],
@@ -142,7 +179,7 @@ async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
       cannotActNextTurn: false,
       hasFlinched: false,
       isFainted: false,
-      savedHp: pokemon.stats?.hp || 100
+      savedHp: pokeData.stats?.hp || 100
     });
   }
   
@@ -152,7 +189,10 @@ async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
 /**
  * Serializa un Pokémon para enviar al cliente
  */
-function serializePokemon(pokemon: PokemonInBattle) {
+function serializePokemon(pokemon: PokemonInBattle, includeMoves: boolean = true) {
+  // Validar que el Pokémon tenga movimientos
+  const moves = pokemon.moves || [];
+  
   return {
     id: pokemon.id,
     pokeapiId: pokemon.pokeapiId,
@@ -161,7 +201,18 @@ function serializePokemon(pokemon: PokemonInBattle) {
     hp: pokemon.hp,
     maxHp: pokemon.maxHp,
     sprites: pokemon.sprites,
-    isFainted: pokemon.isFainted
+    isFainted: pokemon.isFainted,
+    ...(includeMoves && moves.length > 0 && { moves: moves.map(m => ({
+      moveId: m.moveId,
+      name: m.name,
+      type: m.type,
+      damageClass: m.damageClass,
+      power: m.power,
+      accuracy: m.accuracy,
+      priority: m.priority,
+      pp: m.pp,
+      maxPp: m.maxPp
+    }))})
   };
 }
 
