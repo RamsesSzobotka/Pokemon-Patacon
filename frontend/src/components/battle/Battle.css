@@ -24,6 +24,9 @@
   display: flex;
   justify-content: space-between;
   padding: 20px 40px;
+  background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 100%); /* Fondo azul cielo típico de batallas */
+  border-radius: 8px;
+  margin: 10px;
 }
 
 /* Posición del enemigo (arriba derecha) */
@@ -56,6 +59,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent; /* Fondo transparente para los sprites */
 }
 
 .pokemon-sprite.player {

@@ -308,15 +308,28 @@ export default function Battle() {
     }
   }, [roomCode]);
   
+  // Efecto para capturar el playerNumber de los mensajes de sala
+  useEffect(() => {
+    if (!lastMessage) return;
+    
+    const message = lastMessage;
+    
+    // Capturar player_number de room:created o room:joined
+    if (message.type === 'room:created' || message.type === 'room:joined') {
+      if (message.data?.player_number) {
+        console.log('[Battle] Player number:', message.data.player_number);
+        setPlayerNumber(message.data.player_number);
+      }
+    }
+  }, [lastMessage]);
+  
   // Estado de la batalla
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [lastBattleMessage, setLastBattleMessage] = useState<string>('¡La batalla está por comenzar!');
   const [showPokemonSelector, setShowPokemonSelector] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
-const [loadingCountdown, setLoadingCountdown] = useState<number | null>(5); // Iniciar con 5 segundos visible
-  
-  // Asumimos que somos player1 por ahora (se puede mejorar después)
-  const playerNumber = 1;
+  const [loadingCountdown, setLoadingCountdown] = useState<number | null>(5); // Iniciar con 5 segundos visible
+  const [playerNumber, setPlayerNumber] = useState<number>(1); // Determinar si somos player1 o player2
   
   // Efecto para el contador de carga de la batalla
   useEffect(() => {
@@ -461,10 +474,19 @@ const [loadingCountdown, setLoadingCountdown] = useState<number | null>(5); // I
     setShowPokemonSelector(true);
   }, []);
   
-  // Obtener datos del jugador actual
-  const myTeam = battleState?.player1?.team || [];
-  const myPokemon = battleState?.player1?.activePokemon || null;
-  const opponentPokemon = battleState?.player2?.activePokemon || null;
+  // Obtener datos del jugador actual según playerNumber
+  // Si playerNumber === 1: somos player1, nuestro equipo está en player1
+  // Si playerNumber === 2: somos player2, nuestro equipo está en player2
+  const isPlayer1 = playerNumber === 1;
+  const myTeam = isPlayer1 
+    ? (battleState?.player1?.team || []) 
+    : (battleState?.player2?.team || []);
+  const myPokemon = isPlayer1 
+    ? battleState?.player1?.activePokemon 
+    : battleState?.player2?.activePokemon;
+  const opponentPokemon = isPlayer1 
+    ? battleState?.player2?.activePokemon 
+    : battleState?.player1?.activePokemon;
   
   // Obtener movimientos del Pokémon activo
   const moves = myPokemon?.moves || [];
@@ -491,29 +513,62 @@ const [loadingCountdown, setLoadingCountdown] = useState<number | null>(5); // I
     <div className="battle-container">
       {/* Campo de batalla */}
       <div className="battle-field">
-        {/* Pokemon enemigo (arriba derecha) */}
-        <div className="enemy-position">
-          <PokemonInfoPanel 
-            pokemon={opponentPokemon} 
-            isPlayer={false}
-          />
-          <PokemonSprite 
-            pokemon={opponentPokemon} 
-            isPlayer={false}
-          />
-        </div>
-        
-        {/* Pokemon jugador (abajo izquierda) */}
-        <div className="player-position">
-          <PokemonSprite 
-            pokemon={myPokemon} 
-            isPlayer={true}
-          />
-          <PokemonInfoPanel 
-            pokemon={myPokemon} 
-            isPlayer={true}
-          />
-        </div>
+        {/* 
+          Posiciones según el jugador:
+          - Player 1: su pokémon abajo (player-position), oponente arriba (enemy-position)
+          - Player 2: su pokémon arriba (enemy-position), oponente abajo (player-position)
+        */}
+        {isPlayer1 ? (
+          <>
+            {/* Player 1: oponente arriba (de frente), jugador abajo (de espalda) */}
+            <div className="enemy-position">
+              <PokemonInfoPanel 
+                pokemon={opponentPokemon} 
+                isPlayer={false}
+              />
+              <PokemonSprite 
+                pokemon={opponentPokemon} 
+                isPlayer={false}
+              />
+            </div>
+            
+            <div className="player-position">
+              <PokemonSprite 
+                pokemon={myPokemon} 
+                isPlayer={true}
+              />
+              <PokemonInfoPanel 
+                pokemon={myPokemon} 
+                isPlayer={true}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Player 2: oponente arriba (de frente), jugador abajo (de espalda) - INVERTIDO */}
+            <div className="enemy-position">
+              <PokemonInfoPanel 
+                pokemon={opponentPokemon} 
+                isPlayer={false}
+              />
+              <PokemonSprite 
+                pokemon={opponentPokemon} 
+                isPlayer={false}
+              />
+            </div>
+            
+            <div className="player-position">
+              <PokemonSprite 
+                pokemon={myPokemon} 
+                isPlayer={true}
+              />
+              <PokemonInfoPanel 
+                pokemon={myPokemon} 
+                isPlayer={true}
+              />
+            </div>
+          </>
+        )}
       </div>
       
       {/* Panel de comandos */}
