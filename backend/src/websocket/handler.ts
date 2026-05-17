@@ -172,10 +172,14 @@ export async function handleMessageFromSession(sessionId: string, rawMessage: st
 
     case 'battle:action':
       // El jugador selecciona una acción (atacar o cambiar)
+      console.log('[WS] battle:action received from', sessionId, 'data:', message.data);
       const roomCodeBattle = getPlayerRoom(sessionId);
+      console.log('[WS] Room code from session:', roomCodeBattle);
       if (roomCodeBattle) {
         const { handleBattleAction } = await import('./battleHandler.js');
         await handleBattleAction(sessionId, roomCodeBattle, message.data);
+      } else {
+        console.log('[WS] No room found for session');
       }
       break;
 

@@ -231,8 +231,8 @@ export function applyAilment(
 /**
  * Verifica si un Pokémon es immune a un estado
  */
-function isImmuneToAilment(pokemon: PokemonInBattle, ailment: AilmentType): boolean {
-  const immunityRules: Record<AilmentType, string[]> = {
+function isImmuneToAilment(pokemon: PokemonInBattle, ailment: string): boolean {
+  const immunityRules: Record<string, string[]> = {
     burn: ['fire'],
     poison: ['steel'],
     toxic: ['steel'],
@@ -244,6 +244,11 @@ function isImmuneToAilment(pokemon: PokemonInBattle, ailment: AilmentType): bool
     leech_seed: [],
     curse: []
   };
+  
+  // Verificar si el tipo de estado es válido
+  if (!immunityRules[ailment]) {
+    return false;
+  }
   
   const immuneTypes = immunityRules[ailment];
   return immuneTypes.some(type => pokemon.types.includes(type));
@@ -659,6 +664,7 @@ export function createPlayerBattleState(
     spDefense: pokemon.stats?.sp_defense || 50,
     sprites: pokemon.sprites || { front_default: null, back_default: null, front_shiny: null, back_shiny: null },
     moveIds: pokemon.move_ids || pokemon.moveIds || [],
+    moves: pokemon.moves || [], // ← Agregar movimientos del equipo
     ailments: [],
     isCharging: false,
     chargingMoveId: undefined,

@@ -231,9 +231,11 @@ export async function handleBattleAction(
   roomCode: string,
   actionData: { type: 'attack' | 'change'; moveId?: number; pokemonId?: number }
 ): Promise<void> {
+  console.log('[BATTLE] handleBattleAction called', { sessionId, roomCode, actionData });
   
   const battle = activeBattles.get(roomCode);
   if (!battle) {
+    console.log('[BATTLE] No battle found for room:', roomCode);
     sendTo(sessionId, { type: 'error', message: 'No hay batalla activa' });
     return;
   }
@@ -242,7 +244,10 @@ export async function handleBattleAction(
   const isPlayer1 = battle.players.player1.sessionId === sessionId;
   const isPlayer2 = battle.players.player2.sessionId === sessionId;
   
+  console.log('[BATTLE] sessionId:', sessionId, 'player1:', battle.players.player1.sessionId, 'player2:', battle.players.player2.sessionId);
+  
   if (!isPlayer1 && !isPlayer2) {
+    console.log('[BATTLE] Player not in battle');
     sendTo(sessionId, { type: 'error', message: 'No perteneces a esta batalla' });
     return;
   }
@@ -255,9 +260,11 @@ export async function handleBattleAction(
   let move: BattleMove | undefined;
   if (actionData.type === 'attack' && actionData.moveId) {
     const activePokemon = player.team[player.activePokemonIndex];
-    move = activePokemon.moves.find(m => m.moveId === actionData.moveId);
+    console.log('[BATTLE] Active pokemon:', activePokemon.name, 'moves:', activePokemon.moves?.map(m => m.moveId));
+    move = activePokemon.moves?.find(m => m.moveId === actionData.moveId);
     
     if (!move) {
+      console.log('[BATTLE] Move not found:', actionData.moveId);
       sendTo(sessionId, { type: 'error', message: 'Movimiento no válido' });
       return;
     }
@@ -289,10 +296,11 @@ export async function handleBattleAction(
     }
   });
   
-  console.log(`[BATTLE] ${player.name} seleccionó: ${actionData.type}`);
+  console.log(`[BATTLE] ${player.name} seleccionó: ${actionData.type}, pending p1:`, !!battle.pendingActions.player1, 'pending p2:', !!battle.pendingActions.player2);
   
   // Si ambos jugadores han seleccionado, ejecutar el turno
   if (battle.pendingActions.player1 && battle.pendingActions.player2) {
+    console.log('[BATTLE] Both players ready, executing turn');
     await executeTurn(roomCode, battle);
   }
 }
@@ -486,10 +494,12 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
       turn: battle.turn - 1,
       player1: {
         activePokemon: serializePokemon(p1Active),
+        team: player1.team.map(p => serializePokemon(p)),
         remaining: player1.team.filter(p => !p.isFainted).length
       },
       player2: {
         activePokemon: serializePokemon(p2Active),
+        team: player2.team.map(p => serializePokemon(p)),
         remaining: player2.team.filter(p => !p.isFainted).length
       },
       nextTurn: battle.turn

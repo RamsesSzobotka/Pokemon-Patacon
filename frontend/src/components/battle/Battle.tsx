@@ -9,7 +9,7 @@
  * - Campo de batalla (centro)
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { joinRoom } from '../../websocket';
@@ -304,7 +304,8 @@ export default function Battle() {
   useEffect(() => {
     if (roomCode) {
       console.log('[Battle] Uniéndose a la sala:', roomCode);
-      joinRoom(roomCode, '');
+      const success = joinRoom(roomCode, '');
+      console.log('[Battle] Join room result:', success);
     }
   }, [roomCode]);
   
@@ -330,6 +331,10 @@ export default function Battle() {
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [loadingCountdown, setLoadingCountdown] = useState<number | null>(5); // Iniciar con 5 segundos visible
   const [playerNumber, setPlayerNumber] = useState<number>(1); // Determinar si somos player1 o player2
+  
+  // Ref para evitar loops infinitos en useEffect
+  const playerNumberRef = useRef(playerNumber);
+  playerNumberRef.current = playerNumber;
   
   // Efecto para el contador de carga de la batalla
   useEffect(() => {
@@ -369,6 +374,7 @@ export default function Battle() {
           player2: message.data.player2
         });
         setLastBattleMessage('¡La batalla está por comenzar!');
+        setIsMyTurn(true); // Habilitar selección de acciones al inicio de la batalla
         break;
         
       case 'battle:turn-start':
@@ -379,9 +385,8 @@ export default function Battle() {
             phase: 'executing'
           } : null);
         }
-        // Determinar si es mi turno
-        const firstPlayer = message.data.executionOrder[0];
-        setIsMyTurn(firstPlayer === `player${playerNumber}`);
+        // Durante la ejecución de acciones, deshabilitamos la selección
+        setIsMyTurn(false);
         setLastBattleMessage(`Turno ${message.data.turn} - ${message.data.reason}`);
         break;
         
@@ -415,8 +420,22 @@ export default function Battle() {
         
       case 'battle:turn-end':
         setLastBattleMessage(`Turno ${message.data.turn} completado.`);
-        setIsMyTurn(true); // Mi turno de seleccionar
-        // Actualizar estados
+        
+        // Verificar si mi pokemon activo faintó - forzar cambio
+        // Usar playerNumber directamente para evitar re-renders infinitos
+        const amIPlayer1 = playerNumber === 1 || playerNumber === 0;
+        const myActivePokemon = amIPlayer1 ? message.data.player1.activePokemon : message.data.player2.activePokemon;
+        
+        if (myActivePokemon?.isFainted) {
+          // Mi pokemon faintó, mostrar selector de cambio
+          setShowPokemonSelector(true);
+          setLastBattleMessage(`¡${myActivePokemon.name} faintó! Selecciona un Pokémon.`);
+        } else {
+          // No faintó, habilitar selección para siguiente turno
+          setIsMyTurn(true);
+        }
+        
+        // Actualizar estados del turno
         if (battleState) {
           setBattleState(prev => {
             if (!prev) return null;
@@ -455,6 +474,7 @@ export default function Battle() {
         moveId
       }
     });
+    // Deshabilitar selección mientras se ejecuta el turno
     setIsMyTurn(false);
   }, [sendMessage]);
   
@@ -477,7 +497,8 @@ export default function Battle() {
   // Obtener datos del jugador actual según playerNumber
   // Si playerNumber === 1: somos player1, nuestro equipo está en player1
   // Si playerNumber === 2: somos player2, nuestro equipo está en player2
-  const isPlayer1 = playerNumber === 1;
+  // Fallback: si no hay playerNumber, asumir que somos player1
+  const isPlayer1 = playerNumber === 1 || playerNumber === 0; // 0 es el valor por defecto de useState
   const myTeam = isPlayer1 
     ? (battleState?.player1?.team || []) 
     : (battleState?.player2?.team || []);
@@ -577,7 +598,7 @@ export default function Battle() {
           message={lastBattleMessage}
         />
         <CommandPanel 
-          onAttack={() => handleAttack(moves[0]?.moveId)}
+          onAttack={(moveId: number) => handleAttack(moveId)}
           onChange={handleOpenChange}
           moves={moves}
           disabled={!isMyTurn || battleState.phase === 'ended'}
