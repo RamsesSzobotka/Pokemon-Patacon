@@ -684,8 +684,9 @@
 .cancel-btn {
   width: 100%;
   padding: 12px;
-  background: #e8e8e8;
-  border: 2px solid #333;
+  background: #e53935;
+  color: white;
+  border: 2px solid #c62828;
   border-radius: 5px;
   font-weight: bold;
   cursor: pointer;
@@ -693,7 +694,7 @@
 }
 
 .cancel-btn:hover {
-  background: #d8d8d8;
+  background: #c62828;
 }
 
 /* ============================================ */
@@ -757,9 +758,9 @@
 }
 
 .select-btn {
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.8) 0%, rgba(69, 160, 73, 0.8) 100%);
   color: white;
-  border-color: #388E3C;
+  border-color: rgba(56, 142, 60, 0.8);
 }
 
 .select-btn:hover:not(:disabled) {
@@ -768,16 +769,16 @@
 }
 
 .select-btn:disabled {
-  background: #ccc;
-  border-color: #999;
+  background: rgba(204, 204, 204, 0.6);
+  border-color: rgba(153, 153, 153, 0.6);
   cursor: not-allowed;
   opacity: 0.5;
 }
 
 .details-btn {
-  background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.8) 0%, rgba(25, 118, 210, 0.8) 100%);
   color: white;
-  border-color: #1565C0;
+  border-color: rgba(21, 101, 192, 0.8);
 }
 
 .details-btn:hover {
@@ -1046,9 +1047,9 @@
 .select-pokemon-btn {
   flex: 1;
   padding: 12px;
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.8) 0%, rgba(69, 160, 73, 0.8) 100%);
   color: white;
-  border: 2px solid #388E3C;
+  border: 2px solid rgba(56, 142, 60, 0.8);
   border-radius: 8px;
   font-size: 14px;
   font-weight: bold;
@@ -1064,9 +1065,9 @@
 .cancel-detail-btn {
   flex: 1;
   padding: 12px;
-  background: #e0e0e0;
+  background: rgba(224, 224, 224, 0.8);
   color: #333;
-  border: 2px solid #999;
+  border: 2px solid rgba(153, 153, 153, 0.8);
   border-radius: 8px;
   font-size: 14px;
   font-weight: bold;
@@ -1075,7 +1076,7 @@
 }
 
 .cancel-detail-btn:hover {
-  background: #d0d0d0;
+  background: rgba(208, 208, 208, 0.9);
 }
 
 /* ============================================ */
@@ -1127,13 +1128,13 @@
 
 .move-detail-type {
   font-size: 13px;
-  color: #333;
+  color: #1a1a1a;
   text-transform: uppercase;
 }
 
 /* Descripción del movimiento */
 .move-description-box {
-  background: #fff;
+  background: #f8f8f8;
   border: 2px solid #ccc;
   border-radius: 8px;
   padding: 14px;
@@ -1146,7 +1147,7 @@
 .move-description-box p {
   margin: 0;
   font-size: 13px;
-  color: #555;
+  color: #222;
   line-height: 1.5;
   font-style: italic;
 }
@@ -1159,17 +1160,17 @@
 }
 
 .move-stat-item {
-  background: #fff;
+  background: #f5f5f5;
   padding: 12px 10px;
   border-radius: 8px;
   text-align: center;
-  border: 2px solid #ccc;
+  border: 2px solid #bbb;
 }
 
 .move-stat-label {
   display: block;
   font-size: 11px;
-  color: #666;
+  color: #222;
   text-transform: uppercase;
   margin-bottom: 4px;
 }
@@ -1177,11 +1178,11 @@
 .move-stat-value {
   font-size: 18px;
   font-weight: bold;
-  color: #333;
+  color: #111;
 }
 
 .move-stat-value.power {
-  color: #e53935;
+  color: #c62828;
   font-size: 22px;
 }
 
@@ -1195,7 +1196,7 @@
 
 .class-label {
   font-size: 12px;
-  color: #666;
+  color: #222;
 }
 
 .class-badge {
@@ -1222,8 +1223,8 @@
 .close-move-btn {
   width: 100%;
   padding: 10px;
-  background: #e0e0e0;
-  border: 2px solid #999;
+  background: rgba(224, 224, 224, 0.8);
+  border: 2px solid rgba(153, 153, 153, 0.8);
   border-radius: 8px;
   font-weight: bold;
   cursor: pointer;
@@ -1231,7 +1232,7 @@
 }
 
 .close-move-btn:hover {
-  background: #d0d0d0;
+  background: rgba(208, 208, 208, 0.9);
 }
 
 /* ============================================ */

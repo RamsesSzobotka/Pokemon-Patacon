@@ -380,8 +380,6 @@ function MoveDetailModal({
   return (
     <div className="move-detail-overlay" onClick={onClose}>
       <div className="move-detail-modal" onClick={e => e.stopPropagation()}>
-        <button className="close-detail-btn" onClick={onClose}>×</button>
-
         <div className="move-detail-header" style={{ backgroundColor: getTypeColor(move?.type) }}>
           <span className="move-detail-type-icon">{getTypeIcon(move?.type)}</span>
           <h2 className="move-detail-name">{formatMoveName(move?.name)}</h2>
