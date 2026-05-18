@@ -795,6 +795,12 @@ async function startBattleFromDraft(roomCode: string): Promise<void> {
       type: 'battle:starting',
       data: { loading_seconds: 5 }
     });
+    
+    // Después de 5 segundos, enviar battle:start (igual que modo aleatorio)
+    setTimeout(async () => {
+      const { sendBattleStart } = await import('./battleHandler.js');
+      sendBattleStart(roomCode);
+    }, 5000);
   }
 }
 

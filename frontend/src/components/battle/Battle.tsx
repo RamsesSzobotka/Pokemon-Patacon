@@ -143,12 +143,16 @@ function PokemonSprite({
   pokemon,
   isPlayer,
   isFainting = false,
-  showSprite = true
+  showSprite = true,
+  isAttacking = false,
+  isHit = false
 }: {
   pokemon: BattlePokemon | null;
   isPlayer: boolean;
   isFainting?: boolean;
   showSprite?: boolean;
+  isAttacking?: boolean;
+  isHit?: boolean;
 }) {
   // Si no hay sprite para mostrar (cuando está cambiando), mostrar placeholder
   if (!showSprite) {
@@ -175,13 +179,20 @@ function PokemonSprite({
     spriteClass = 'fainted';
   }
 
+  // Agregar clase de ataque si está atacando o recibiendo daño
+  const spriteClasses = [
+    spriteClass,
+    isAttacking ? 'attacking' : '',
+    isHit ? 'hit' : ''
+  ].filter(Boolean).join(' ');
+
   return (
-    <div className={`pokemon-sprite ${isPlayer ? 'player' : 'enemy'}`}>
+    <div className={`pokemon-sprite ${isPlayer ? 'player' : 'enemy'} ${isAttacking ? 'attacking' : ''} ${isHit ? 'hit' : ''}`}>
       {sprite ? (
         <img
           src={sprite}
           alt={pokemon.name}
-          className={spriteClass}
+          className={spriteClasses}
         />
       ) : (
         <div className="no-sprite">?</div>
@@ -293,34 +304,55 @@ function CommandPanel({
             ← VOLVER
           </button>
           <div className="moves-grid">
-            {moves?.map((move: any, index: number) => (
-              <button
-                key={move?.moveId || index}
-                className="move-btn"
-                style={{
-                  backgroundColor: getTypeColor(move?.type),
-                  borderColor: getTypeColor(move?.type)
-                }}
-                onClick={() => {
-                  onAttack(move?.moveId);
-                  setShowMoves(false);
-                }}
-                disabled={disabled}
-              >
-                <div className="move-name">
-                  {formatMoveName(move?.name)}
-                </div>
-                <div className="move-info">
-                  <span className="move-type">{getTypeIcon(move?.type)}</span>
-                  <span className="move-power">
-                    {move?.power || 0} PWR
-                  </span>
-                  <span className="move-pp">
-                    PP {move?.pp || 0}/{move?.maxPp || 0}
-                  </span>
-                </div>
-              </button>
-            )) || <span className="no-moves">No hay movimientos</span>}
+            {/* Siempre mostrar 4 slots de movimientos */}
+            {[0, 1, 2, 3].map((index) => {
+              const move = moves?.[index];
+              if (move) {
+                return (
+                  <button
+                    key={move?.moveId || index}
+                    className="move-btn"
+                    style={{
+                      backgroundColor: getTypeColor(move?.type),
+                      borderColor: getTypeColor(move?.type)
+                    }}
+                    onClick={() => {
+                      onAttack(move?.moveId);
+                      setShowMoves(false);
+                    }}
+                    disabled={disabled}
+                  >
+                    <div className="move-name">
+                      {formatMoveName(move?.name)}
+                    </div>
+                    <div className="move-info">
+                      <span className="move-type">{getTypeIcon(move?.type)}</span>
+                      <span className="move-power">
+                        {move?.power || 0} PWR
+                      </span>
+                      <span className="move-pp">
+                        PP {move?.pp || 0}/{move?.maxPp || 0}
+                      </span>
+                    </div>
+                  </button>
+                );
+              }
+              // Slot vacío - mostrar indicador
+              return (
+                <button
+                  key={`empty-${index}`}
+                  className="move-btn move-btn-empty"
+                  disabled={disabled}
+                >
+                  <div className="move-name">—</div>
+                  <div className="move-info">
+                    <span className="move-type">-</span>
+                    <span className="move-power">-</span>
+                    <span className="move-pp">-</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -520,22 +552,39 @@ function PokemonDetailModal({
         <div className="detail-moves-section">
           <h3 className="detail-moves-title">Movimientos</h3>
           <div className="detail-moves-grid">
-            {pokemon.moves?.map((move: any, index: number) => (
-              <button
-                key={move?.moveId || index}
-                className="detail-move-item"
-                style={{
-                  backgroundColor: getTypeColor(move?.type),
-                  borderColor: getTypeColor(move?.type)
-                }}
-                onClick={() => setSelectedMove(move)}
-              >
-                <span className="detail-move-name">{formatMoveName(move?.name)}</span>
-                <span className="detail-move-info">
-                  {move?.power || 0} PWR | PP {move?.pp || 0}/{move?.maxPp || 0}
-                </span>
-              </button>
-            ))}
+            {/* Siempre mostrar 4 slots de movimientos */}
+            {[0, 1, 2, 3].map((index) => {
+              const move = pokemon.moves?.[index];
+              if (move) {
+                return (
+                  <button
+                    key={move?.moveId || index}
+                    className="detail-move-item"
+                    style={{
+                      backgroundColor: getTypeColor(move?.type),
+                      borderColor: getTypeColor(move?.type)
+                    }}
+                    onClick={() => setSelectedMove(move)}
+                  >
+                    <span className="detail-move-name">{formatMoveName(move?.name)}</span>
+                    <span className="detail-move-info">
+                      {move?.power || 0} PWR | PP {move?.pp || 0}/{move?.maxPp || 0}
+                    </span>
+                  </button>
+                );
+              }
+              // Slot vacío
+              return (
+                <button
+                  key={`empty-${index}`}
+                  className="detail-move-item detail-move-item-empty"
+                  disabled
+                >
+                  <span className="detail-move-name">—</span>
+                  <span className="detail-move-info">-</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -716,52 +765,17 @@ export default function Battle() {
   const [showPlayer1Sprite, setShowPlayer1Sprite] = useState(true);
   const [showPlayer2Sprite, setShowPlayer2Sprite] = useState(true);
 
-  // Sistema de cola de mensajes progresivos
-  const [messageQueue, setMessageQueue] = useState<string[]>([]);
-  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
-  const messageQueueRef = useRef<string[]>([]);
-  messageQueueRef.current = messageQueue;
-
-  // Procesar cola de mensajes con delays
-  useEffect(() => {
-    if (messageQueue.length === 0) {
-      setIsProcessingQueue(false);
-      return;
-    }
-
-    setIsProcessingQueue(true);
-
-    const processQueue = async () => {
-      while (messageQueueRef.current.length > 0) {
-        // Tomar el siguiente mensaje de la cola
-        const nextMessage = messageQueueRef.current[0];
-        setLastBattleMessage(nextMessage);
-
-        // Esperar antes de mostrar el siguiente mensaje
-        await new Promise(resolve => setTimeout(resolve, 1800));
-
-        // Remover el mensaje procesado
-        setMessageQueue(prev => prev.slice(1));
-      }
-
-      setIsProcessingQueue(false);
-    };
-
-    processQueue();
-
-    // Cleanup al desmontar
-    return () => {
-      messageQueueRef.current = [];
-    };
-  }, [messageQueue.length > 0]);
-
-  // Función para agregar mensajes a la cola
-  const addMessagesToQueue = useCallback((messages: string[]) => {
-    if (messages.length > 0) {
-      setMessageQueue(prev => [...prev, ...messages]);
-    }
-  }, []);
+  // Estado para animación de ataque simple
+  const [attackingPlayer, setAttackingPlayer] = useState<'player1' | 'player2' | null>(null);
   
+  // Estado para animación de recibir daño
+  const [hitPlayer, setHitPlayer] = useState<'player1' | 'player2' | null>(null);
+
+  // Estado para saber si ya sélectioné mi acción (para bloquear botones)
+  const [hasSelectedAction, setHasSelectedAction] = useState(false);
+  const hasSelectedActionRef = useRef(false);
+  hasSelectedActionRef.current = hasSelectedAction;
+
   // Ref para evitar loops infinitos en useEffect
   const playerNumberRef = useRef(playerNumber);
   playerNumberRef.current = playerNumber;
@@ -854,8 +868,7 @@ export default function Battle() {
         break;
         
       case 'battle:action-result':
-        // No mostrar mensaje inmediatamente - agregarlo a la cola
-        // Actualizar HP
+        // Procesar resultado del ataque - mostrar mensaje directamente
         if (battleState) {
           const isP1Action = message.data.playerId === 'player1';
           const defenderPlayerId = isP1Action ? 'player2' : 'player1';
@@ -868,17 +881,27 @@ export default function Battle() {
 
           const justFainted = defenderPreviousHp && defenderPreviousHp > 0 && defenderHp <= 0;
 
+          // Animación de ataque
+          setAttackingPlayer(message.data.playerId as 'player1' | 'player2');
+          setTimeout(() => setAttackingPlayer(null), 400);
+
           if (justFainted) {
-            // Activar animación de defeat para el jugador que perdió el Pokemon
+            // Animación de defeat
             setPlayerFainting(defenderPlayerId);
-            // Ocultar el sprite después de la animación
             setTimeout(() => {
+              setPlayerFainting(null);
               if (defenderPlayerId === 'player1') {
                 setShowPlayer1Sprite(false);
               } else {
                 setShowPlayer2Sprite(false);
               }
-            }, 2200); // Después de la animación completa
+            }, 1500);
+          } else {
+            // Animación de hit
+            setTimeout(() => {
+              setHitPlayer(defenderPlayerId);
+              setTimeout(() => setHitPlayer(null), 400);
+            }, 400);
           }
 
           setBattleState(prev => {
@@ -904,67 +927,38 @@ export default function Battle() {
           });
         }
 
-        // Agregar mensaje(s) a la cola
-        const playerName = message.data.playerId === (isPlayer1 ? 'player1' : 'player2') ? 'Tú' : 'Oponente';
-        const messages: string[] = [];
-
+        // Mostrar mensaje de resultado directamente (V1 - solo daño)
         if (message.data.action.type === 'attack') {
-          messages.push(`${playerName} usó un ataque!`);
-          if (message.data.result.message) {
-            // El mensaje del backend contiene toda la información
-            messages.push(message.data.result.message);
-          }
-          // Agregar info de HP
-          const defenderName = message.data.playerId === (isPlayer1 ? 'player1' : 'player2')
-            ? 'Oponente'
-            : 'Tu Pokémon';
-          const targetHp = message.data.result.targetHp || 0;
-          // Intentar obtener el HP del defensoresultado del mensaje
-          const defenderInfo = message.data.playerId === (isPlayer1 ? 'player1' : 'player2')
-            ? (isPlayer1 ? battleState?.player2.activePokemon : battleState?.player1.activePokemon)
-            : (isPlayer1 ? battleState?.player1.activePokemon : battleState?.player2.activePokemon);
-
-          if (defenderInfo) {
-            messages.push(`HP: ${defenderInfo.hp}/${defenderInfo.maxHp}`);
-          }
+          const result = message.data.result;
+          setLastBattleMessage(result.message);
         } else if (message.data.action.type === 'change') {
-          messages.push(message.data.result.message || '¡Pokémon cambiado!');
+          setLastBattleMessage(message.data.result.message || '¡Pokémon cambiado!');
         }
-
-        // Si hay un mensaje de KO en el resultado, agregarlo
-        if (message.data.result.message?.includes('faintó') || message.data.result.message?.includes('KO')) {
-          messages.push(message.data.result.message);
-        }
-
-        addMessagesToQueue(messages);
         break;
         
-      case 'battle:turn-end':
-        setLastBattleMessage(`Turno ${message.data.turn} completado.`);
-
-        // Verificar si mi pokemon activo faintó - forzar cambio
-        // Usar playerNumber directamente para evitar re-renders infinitos
+      case 'battle:turn-end': {
+        // Manejar fin de turno
         const amIPlayer1 = playerNumber === 1 || playerNumber === 0;
         const myActivePokemon = amIPlayer1 ? message.data.player1.activePokemon : message.data.player2.activePokemon;
 
         if (myActivePokemon?.isFainted || myActivePokemon?.hp <= 0) {
-          // Mi pokemon faintó, mostrar selector de cambio
-          setShowPokemonSelector(true);
           setLastBattleMessage(`¡${myActivePokemon.name} faintó! Selecciona un Pokémon.`);
-          setIsMyTurn(false); // No puede actuar mientras no cambie
+          setShowPokemonSelector(true);
+          setIsMyTurn(false);
+          setHasSelectedAction(false);
 
-          // Ocultar el sprite del Pokemon faintado
           if (amIPlayer1) {
             setShowPlayer1Sprite(false);
           } else {
             setShowPlayer2Sprite(false);
           }
         } else {
-          // No faintó, habilitar selección para siguiente turno
+          setLastBattleMessage(`Turno ${message.data.nextTurn} - ¡Es tu turno!`);
           setIsMyTurn(true);
+          setHasSelectedAction(false);
         }
 
-        // Actualizar estados del turno - pero mantener los sprites visibles
+        // Actualizar estados del turno
         if (battleState) {
           setBattleState(prev => {
             if (!prev) return null;
@@ -978,6 +972,7 @@ export default function Battle() {
           });
         }
         break;
+      }
 
       case 'battle:switch-success':
         // El cambio de pokemon se ejecutó exitosamente
@@ -1021,6 +1016,7 @@ export default function Battle() {
 
           if (isMyPlayer) {
             setIsMyTurn(true);
+            setHasSelectedAction(false); // Permitir seleccionar acción después del cambio
           }
         }
         break;
@@ -1033,11 +1029,18 @@ export default function Battle() {
         setLastBattleMessage(message.data.message);
         break;
         
-      case 'battle:action-selected':
+      case 'battle:action-selected': {
         // Notificación de que el oponente seleccionó
+        // Si yo ya seleccioné, no necesito hacer nada especial
+        // Si yo NO he seleccionado, los botones ya están bloqueados por hasSelectedAction
+        const amIReady = hasSelectedActionRef.current;
+        if (!amIReady) {
+          setLastBattleMessage('El oponente ya seleccionó. ¡Rápido, elige tu acción!');
+        }
         break;
+      }
     }
-  }, [lastMessage, battleState, playerNumber]);
+  }, [lastMessage]);
   
   // Handlers
   const handleAttack = useCallback((moveId: number) => {
@@ -1049,7 +1052,8 @@ export default function Battle() {
         moveId
       }
     });
-    // Deshabilitar selección mientras se ejecuta el turno
+    // Bloquear botones para que no pueda actuar de nuevo hasta que ambos seleccionen
+    setHasSelectedAction(true);
     setIsMyTurn(false);
   }, [sendMessage]);
   
@@ -1062,6 +1066,8 @@ export default function Battle() {
       }
     });
     setShowPokemonSelector(false);
+    // Bloquear botones
+    setHasSelectedAction(true);
     setIsMyTurn(false);
   }, [sendMessage]);
   
@@ -1127,6 +1133,8 @@ export default function Battle() {
                 isPlayer={false}
                 isFainting={playerFainting === 'player2'}
                 showSprite={showPlayer2Sprite}
+                isAttacking={attackingPlayer === 'player2'}
+                isHit={hitPlayer === 'player2'}
               />
             </div>
 
@@ -1136,6 +1144,8 @@ export default function Battle() {
                 isPlayer={true}
                 isFainting={playerFainting === 'player1'}
                 showSprite={showPlayer1Sprite}
+                isAttacking={attackingPlayer === 'player1'}
+                isHit={hitPlayer === 'player1'}
               />
               <PokemonInfoPanel
                 pokemon={myPokemon}
@@ -1156,6 +1166,8 @@ export default function Battle() {
                 isPlayer={false}
                 isFainting={playerFainting === 'player1'}
                 showSprite={showPlayer1Sprite}
+                isAttacking={attackingPlayer === 'player1'}
+                isHit={hitPlayer === 'player1'}
               />
             </div>
 
@@ -1165,6 +1177,8 @@ export default function Battle() {
                 isPlayer={true}
                 isFainting={playerFainting === 'player2'}
                 showSprite={showPlayer2Sprite}
+                isAttacking={attackingPlayer === 'player2'}
+                isHit={hitPlayer === 'player2'}
               />
               <PokemonInfoPanel
                 pokemon={myPokemon}
@@ -1184,7 +1198,7 @@ export default function Battle() {
           onAttack={(moveId: number) => handleAttack(moveId)}
           onChange={handleOpenChange}
           moves={moves}
-          disabled={!isMyTurn || battleState.phase === 'ended'}
+          disabled={!isMyTurn || battleState.phase === 'ended' || hasSelectedAction}
         />
       </div>
       

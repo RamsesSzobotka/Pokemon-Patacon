@@ -99,17 +99,41 @@
   90% { transform: translateX(-1px); }
 }
 
-/* Animación de Pokémon activo */
-.pokemon-sprite img.active {
-  animation: idleBounce 2s ease-in-out infinite;
+/* Animación de ataque - avance rápido */
+.pokemon-sprite.attacking img {
+  animation: attackLung 0.4s ease-out;
 }
 
-@keyframes idleBounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
+.pokemon-sprite.enemy.attacking img {
+  animation: attackLungEnemy 0.4s ease-out;
 }
 
-/* Animación de entrada del Pokémon */
+@keyframes attackLung {
+  0% { transform: translateX(0) scale(1); }
+  30% { transform: translateX(60px) scale(1.1); }
+  60% { transform: translateX(100px) scale(1.05); }
+  100% { transform: translateX(0) scale(1); }
+}
+
+@keyframes attackLungEnemy {
+  0% { transform: translateX(0) scale(1); }
+  30% { transform: translateX(-60px) scale(1.1); }
+  60% { transform: translateX(-100px) scale(1.05); }
+  100% { transform: translateX(0) scale(1); }
+}
+
+/* Animación de efectividad - brillo (simplificada) */
+.pokemon-sprite img.super-effective {
+  animation: superEffective 0.6s ease-out;
+}
+
+@keyframes superEffective {
+  0% { filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.3)) brightness(1); }
+  50% { filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.3)) brightness(1.5) drop-shadow(0 0 15px gold); }
+  100% { filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.3)) brightness(1); }
+}
+
+/* Animación de entrada del Pokémon (simplificada) */
 .pokemon-sprite img.entering {
   animation: pokemonEnter 0.5s ease-out;
 }
@@ -553,6 +577,19 @@
   opacity: 0.5;
   cursor: not-allowed;
   filter: grayscale(50%);
+}
+
+/* Botón de movimiento vacío */
+.move-btn-empty {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+  border-style: dashed !important;
+  opacity: 0.6;
+}
+
+.move-btn-empty .move-name,
+.move-btn-empty .move-info {
+  color: #666;
 }
 
 .move-name {
@@ -1025,6 +1062,19 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* Botón de detalle de movimiento vacío */
+.detail-move-item-empty {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+  border-style: dashed !important;
+  opacity: 0.6;
+}
+
+.detail-move-item-empty .detail-move-name,
+.detail-move-item-empty .detail-move-info {
+  color: #666;
 }
 
 .detail-move-name {

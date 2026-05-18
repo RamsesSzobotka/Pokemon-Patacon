@@ -161,6 +161,10 @@ export interface ActionResult {
   targetHpBefore?: number;
   targetHpAfter?: number;
   
+  // Efectos del ataque (para frontend)
+  isCritical?: boolean;
+  effectiveness?: number; // 0 = sin efecto, 0.5 = poco efectivo, 1 = normal, 2 = super efectivo
+  
   // Estado aplicado
   ailmentApplied?: AilmentType;
   ailmentSuccess?: boolean;
@@ -184,6 +188,11 @@ export interface ActionResult {
   // Multi-hit
   hits?: number;
   totalDamage?: number;
+  
+  // Información del atacante (para frontend)
+  attackerName?: string;
+  defenderName?: string;
+  moveName?: string;
 }
 
 /**

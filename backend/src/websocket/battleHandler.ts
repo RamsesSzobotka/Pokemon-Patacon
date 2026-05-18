@@ -5,7 +5,7 @@
  */
 
 import { broadcast, sendTo, getConnection, getRoomPlayers } from './roomManager.js';
-import { createBattleState, createPlayerBattleState, determineExecutionOrder, canPokemonAct, executeMove, executeSwitch, getAilmentDamagePerTurn, decrementAilmentTurns, checkBattleEnd } from '../services/battleService.js';
+import { createBattleState, createPlayerBattleState, determineExecutionOrder, executeMove, executeSwitch, checkBattleEnd } from '../services/battleService.js';
 import { getMovesByIds, getPokemonById } from '../db/mongodb.js';
 import type { BattleState, PokemonInBattle, BattleMove, PlayerAction, PlayerBattleState } from '../types/battle.js';
 import type { Room } from '../db/rooms.js';
@@ -123,7 +123,13 @@ async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
     console.log(`[BATTLE] Pokemon encontrado: ${pokeData.name}, moves: ${teamMember.selected_moves?.length || 0}`);
     
     // Obtener movimientos seleccionados
-    const moveIds = teamMember.selected_moves || [];
+    // Soportar tanto array de números (modo aleatorio) como array de objetos (modo draft)
+    let moveIds: number[] = [];
+    if (teamMember.selected_moves && Array.isArray(teamMember.selected_moves)) {
+      moveIds = teamMember.selected_moves.map((m: any) => 
+        typeof m === 'number' ? m : (m.move_id || m.id || m)
+      );
+    }
     console.log(`[BATTLE] Buscando movimientos:`, moveIds);
     const moves = await getMovesByIds(moveIds);
     console.log(`[BATTLE] Movimientos encontrados: ${moves.length}`);
@@ -190,33 +196,64 @@ async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
 
 /**
  * Serializa un Pokémon para enviar al cliente
+ * Valida que todos los campos requeridos existan
  */
 function serializePokemon(pokemon: PokemonInBattle, includeMoves: boolean = true) {
-  // Validar que el Pokémon tenga movimientos
-  const moves = pokemon.moves || [];
-  
-  return {
-    id: pokemon.id,
-    pokeapiId: pokemon.pokeapiId,
-    name: pokemon.name,
-    types: pokemon.types,
-    hp: pokemon.hp,
-    maxHp: pokemon.maxHp,
-    sprites: pokemon.sprites,
-    isFainted: pokemon.isFainted,
-    ...(includeMoves && moves.length > 0 && { moves: moves.map(m => ({
-      moveId: m.moveId,
-      name: m.name, // Ya contiene el nombre en español
-      description: m.description || '', // Descripción en español
-      type: m.type,
-      damageClass: m.damageClass,
-      power: m.power,
-      accuracy: m.accuracy,
-      priority: m.priority,
-      pp: m.pp,
-      maxPp: m.maxPp
-    }))})
-  };
+  try {
+    // Validar campos requeridos
+    if (!pokemon) {
+      console.error('[BATTLE] serializePokemon: pokemon es null/undefined');
+      return null;
+    }
+    
+    // Validar que el Pokémon tenga movimientos
+    const moves = pokemon.moves || [];
+    
+    // Validar sprites
+    const sprites = pokemon.sprites || { front_default: null, back_default: null };
+    
+    const serialized = {
+      id: pokemon.id,
+      pokeapiId: pokemon.pokeapiId,
+      name: pokemon.name || 'Unknown',
+      types: pokemon.types || [],
+      hp: pokemon.hp || 0,
+      maxHp: pokemon.maxHp || 100,
+      sprites: sprites,
+      isFainted: pokemon.isFainted || false,
+      ...(includeMoves && moves.length > 0 && { 
+        moves: moves.map(m => ({
+          moveId: m.moveId || 0,
+          name: m.name || 'Unknown Move',
+          description: m.description || '',
+          type: m.type || 'normal',
+          damageClass: m.damageClass || 'physical',
+          power: m.power || 0,
+          accuracy: m.accuracy || 100,
+          priority: m.priority || 0,
+          pp: m.pp || 0,
+          maxPp: m.maxPp || 0
+        }))
+      })
+    };
+    
+    console.log(`[BATTLE] serializePokemon: ${pokemon.name} serializado correctamente`);
+    return serialized;
+  } catch (error) {
+    console.error('[BATTLE] Error serializing pokemon:', error);
+    console.error('[BATTLE] Pokemon object:', pokemon);
+    // Retornar objeto seguro vacío en caso de error
+    return {
+      id: 0,
+      pokeapiId: 0,
+      name: 'Error',
+      types: [],
+      hp: 0,
+      maxHp: 0,
+      sprites: { front_default: null, back_default: null },
+      isFainted: true
+    };
+  }
 }
 
 /**
@@ -234,14 +271,15 @@ export async function handleBattleAction(
   roomCode: string,
   actionData: { type: 'attack' | 'change'; moveId?: number; pokemonId?: number }
 ): Promise<void> {
-  console.log('[BATTLE] handleBattleAction called', { sessionId, roomCode, actionData });
-  
-  const battle = activeBattles.get(roomCode);
-  if (!battle) {
-    console.log('[BATTLE] No battle found for room:', roomCode);
-    sendTo(sessionId, { type: 'error', message: 'No hay batalla activa' });
-    return;
-  }
+  try {
+    console.log('[BATTLE] handleBattleAction called', { sessionId, roomCode, actionData });
+    
+    const battle = activeBattles.get(roomCode);
+    if (!battle) {
+      console.log('[BATTLE] No battle found for room:', roomCode);
+      sendTo(sessionId, { type: 'error', message: 'No hay batalla activa' });
+      return;
+    }
   
   // Determinar qué jugador es
   const isPlayer1 = battle.players.player1.sessionId === sessionId;
@@ -350,10 +388,21 @@ export async function handleBattleAction(
     }
   }
 
-  // Si ambos jugadores han seleccionado, ejecutar el turno
-  if (battle.pendingActions.player1 && battle.pendingActions.player2) {
-    console.log('[BATTLE] Both players ready, executing turn');
-    await executeTurn(roomCode, battle);
+    // Si ambos jugadores han seleccionado, ejecutar el turno
+    if (battle.pendingActions.player1 && battle.pendingActions.player2) {
+      console.log('[BATTLE] Both players ready, executing turn');
+      await executeTurn(roomCode, battle);
+    }
+  } catch (error) {
+    console.error('[BATTLE] Error in handleBattleAction:', error);
+    console.error('[BATTLE] Stack:', (error as Error).stack);
+    sendTo(sessionId, { 
+      type: 'battle:error', 
+      data: { 
+        message: 'Error al procesar la acción',
+        error: (error as Error).message
+      }
+    });
   }
 }
 
@@ -361,16 +410,17 @@ export async function handleBattleAction(
  * Ejecuta un turno completo de la batalla
  */
 async function executeTurn(roomCode: string, battle: BattleState): Promise<void> {
-  console.log(`[BATTLE] Ejecutando turno ${battle.turn} en sala ${roomCode}`);
-  
-  // Fase 2: Determinar orden de ejecución
-  const { order, reason } = determineExecutionOrder(
-    battle.pendingActions.player1,
-    battle.pendingActions.player2
-  );
-  
-  battle.executionOrder = order;
-  battle.phase = 'executing';
+  try {
+    console.log(`[BATTLE] Ejecutando turno ${battle.turn} en sala ${roomCode}`);
+    
+    // Fase 2: Determinar orden de ejecución
+    const { order, reason } = determineExecutionOrder(
+      battle.pendingActions.player1,
+      battle.pendingActions.player2
+    );
+    
+    battle.executionOrder = order;
+    battle.phase = 'executing';
   
   // Notificar inicio del turno
   broadcast(roomCode, {
@@ -399,20 +449,10 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     
     if (!action) continue;
     
-    // Verificar si puede actuar
-    const canAct = canPokemonAct(attackerPokemon);
-    
+    // V1 Simplificado: siempre puede actuar (sin estados)
     let result;
-    if (!canAct.canAct) {
-      // No puede actuar por estado
-      result = {
-        success: false,
-        action,
-        message: canAct.reason,
-        failed: true,
-        failureReason: canAct.reason
-      };
-    } else if (action.type === 'attack' && action.move) {
+    
+    if (action.type === 'attack' && action.move) {
       // Ejecutar movimiento
       result = executeMove(attackerPokemon, defenderPokemon, action.move, attackerId);
     } else if (action.type === 'change' && action.pokemonId !== undefined) {
@@ -467,10 +507,15 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
           message: result.message,
           damage: result.damage,
           targetHp: result.targetHpAfter,
+          isCritical: result.isCritical,
+          effectiveness: result.effectiveness,
           ailmentApplied: result.ailmentApplied,
           isCharging: result.isCharging,
           cannotActNextTurn: result.cannotActNextTurn,
-          flinchedTarget: result.flinchedTarget
+          flinchedTarget: result.flinchedTarget,
+          attackerName: result.attackerName,
+          defenderName: result.defenderName,
+          moveName: result.moveName
         },
         attackerHp: attackerPokemon.hp,
         defenderHp: defenderPokemon.hp
@@ -509,28 +554,11 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     }
   }
   
-  // Fase 4: Efectos finales del turno (daño por estados)
-  const p1Damage = getAilmentDamagePerTurn(p1Active);
-  const p2Damage = getAilmentDamagePerTurn(p2Active);
+  // Fase 4: V1 - Sin efectos de estados (simplificado)
+  // Solo verificar KO por daño de ataques directos
   
-  if (p1Damage > 0) {
-    p1Active.hp = Math.max(0, p1Active.hp - p1Damage);
-  }
-  if (p2Damage > 0) {
-    p2Active.hp = Math.max(0, p2Active.hp - p2Damage);
-  }
-  
-  // Verificar KO por daño de estados
-  if (p1Active.hp <= 0) p1Active.isFainted = true;
-  if (p2Active.hp <= 0) p2Active.isFainted = true;
-  
-  // Decrementar turnos de estados
-  decrementAilmentTurns(p1Active);
-  decrementAilmentTurns(p2Active);
-  
-  // Limpiar flags de fatiga
-  p1Active.cannotActNextTurn = false;
-  p2Active.cannotActNextTurn = false;
+  // Limpiar flags (no hay fatiga en V1 básico)
+  // (Los flags cannotActNextTurn ya no se usan)
   
   // Preparar siguiente turno
   battle.turn++;
@@ -558,7 +586,18 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     }
   });
   
-  console.log(`[BATTLE] Turno ${battle.turn - 1} completado, siguiente: turno ${battle.turn}`);
+    console.log(`[BATTLE] Turno ${battle.turn - 1} completado, siguiente: turno ${battle.turn}`);
+  } catch (error) {
+    console.error('[BATTLE] Error in executeTurn:', error);
+    console.error('[BATTLE] Stack:', (error as Error).stack);
+    broadcast(roomCode, {
+      type: 'battle:error',
+      data: {
+        message: 'Error al ejecutar el turno',
+        error: (error as Error).message
+      }
+    });
+  }
 }
 
 /**
