@@ -109,6 +109,275 @@ export function coinflip(): 'player1' | 'player2' {
 // CÁLCULO DE DAÑO
 // ============================================
 
+// ============================================
+// SISTEMA DE EFECTOS (ESTADOS) - V2
+// ============================================
+
+/**
+ * Obtiene cuántos turnos dura cada tipo de efecto
+ */
+export function getAilmentDuration(ailmentType: string): number {
+  switch (ailmentType) {
+    case 'sleep':
+    case 'confusion':
+      return 3; // Duran 3 turnos
+    case 'paralysis':
+    case 'burn':
+    case 'poison':
+    case 'toxic':
+    case 'leech_seed':
+    case 'curse':
+      return -1; // Duran indefinidamente (-1 = no se decrementa)
+    case 'freeze':
+      return -1; // Permanente hasta descongelar
+    case 'flinch':
+      return 1; // Solo afecta el siguiente turno
+    default:
+      return -1;
+  }
+}
+
+/**
+ * Obtiene el daño de efectos por turno (como % del HP máximo)
+ */
+export function getAilmentDamagePercentage(ailmentType: string, toxicTurn?: number): number {
+  switch (ailmentType) {
+    case 'burn':
+      return 0.125; // 12.5% del HP máximo
+    case 'poison':
+      return 0.125; // 12.5% del HP máximo
+    case 'toxic':
+      // Daño acumulativo: turno 1 = 1/8, turno 2 = 2/8, etc
+      return (toxicTurn || 1) / 8;
+    case 'leech_seed':
+      return 0.125; // 12.5% del HP máximo
+    case 'curse':
+      return 0.25; // 25% del HP máximo
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Obtiene el nombre legible del efecto en español
+ */
+export function getAilmentName(ailmentType: string): string {
+  switch (ailmentType) {
+    case 'burn':
+      return 'Quemado';
+    case 'poison':
+      return 'Envenenado';
+    case 'toxic':
+      return 'Envenenado Gravemente';
+    case 'paralysis':
+      return 'Paralizado';
+    case 'freeze':
+      return 'Congelado';
+    case 'sleep':
+      return 'Dormido';
+    case 'confusion':
+      return 'Confundido';
+    case 'flinch':
+      return 'Retrocedió del miedo';
+    case 'leech_seed':
+      return 'Emboscada Semilla';
+    case 'curse':
+      return 'Maldito';
+    default:
+      return 'Desconocido';
+  }
+}
+
+/**
+ * Aplica un efecto a un Pokémon
+ */
+export function applyAilment(
+  pokemon: PokemonInBattle,
+  ailmentType: string,
+  appliedBy: 'player1' | 'player2'
+): { applied: boolean; message: string } {
+  
+  // No aplicar efectos si el Pokémon ya está debilitado
+  if (pokemon.isFainted) {
+    return { applied: false, message: `${pokemon.name} ya está debilitado.` };
+  }
+  
+  // Verificar si ya tiene este efecto
+  const existingAilment = pokemon.ailments.find(a => a.type === ailmentType);
+  if (existingAilment) {
+    return { applied: false, message: `${pokemon.name} ya está ${getAilmentName(ailmentType).toLowerCase()}.` };
+  }
+  
+  // Crear nuevo efecto
+  const newAilment = {
+    type: ailmentType,
+    turnsRemaining: getAilmentDuration(ailmentType),
+    appliedBy,
+    toxicTurn: ailmentType === 'toxic' ? 1 : undefined
+  };
+  
+  pokemon.ailments.push(newAilment as any);
+  
+  return {
+    applied: true,
+    message: `¡${pokemon.name} está ${getAilmentName(ailmentType).toLowerCase()}!`
+  };
+}
+
+/**
+ * Verifica si un Pokémon puede actuar en este turno (considerando estados)
+ * Retorna si puede actuar y la razón si no puede
+ */
+export function canActWithAilments(pokemon: PokemonInBattle): {
+  canAct: boolean;
+  reason: string;
+  willAttackItself?: boolean;
+} {
+  
+  // Verificar si está debilitado
+  if (pokemon.isFainted || pokemon.hp <= 0) {
+    return { canAct: false, reason: 'Pokémon desfallecido' };
+  }
+  
+  // Verificar banderas especiales
+  if (pokemon.cannotActNextTurn) {
+    return { canAct: false, reason: 'Agotado (necesita descansar)' };
+  }
+  
+  if (pokemon.hasFlinched) {
+    return { canAct: false, reason: 'Retrocedió del miedo' };
+  }
+  
+  // Verificar efectos de estado
+  for (const ailment of pokemon.ailments) {
+    switch (ailment.type) {
+      case 'paralysis':
+        // 25% de no actuar
+        if (Math.random() < 0.25) {
+          return { canAct: false, reason: 'Paralizado (no puede moverse)' };
+        }
+        break;
+        
+      case 'freeze':
+        // 20% de descongelar (80% permanece congelado)
+        if (Math.random() < 0.8) {
+          return { canAct: false, reason: 'Congelado (no puede moverse)' };
+        }
+        break;
+        
+      case 'sleep':
+        if (ailment.turnsRemaining > 0) {
+          return { canAct: false, reason: 'Dormido (no puede moverse)' };
+        }
+        break;
+        
+      case 'confusion':
+        // 33% de atacarse a sí mismo
+        if (Math.random() < 0.33) {
+          return { canAct: true, reason: 'Confundido', willAttackItself: true };
+        }
+        break;
+    }
+  }
+  
+  return { canAct: true, reason: '' };
+}
+
+/**
+ * Aplica daño por efectos al final del turno (burn, poison, etc)
+ */
+export function applyEndOfTurnAilmentDamage(pokemon: PokemonInBattle): {
+  totalDamage: number;
+  messages: string[];
+} {
+  
+  const messages: string[] = [];
+  let totalDamage = 0;
+  
+  for (const ailment of pokemon.ailments) {
+    const damagePercent = getAilmentDamagePercentage(ailment.type, ailment.toxicTurn);
+    
+    if (damagePercent > 0) {
+      const damage = Math.ceil(pokemon.maxHp * damagePercent);
+      pokemon.hp = Math.max(0, pokemon.hp - damage);
+      totalDamage += damage;
+      
+      // Mensaje de daño
+      let damageMessage = `${pokemon.name}`;
+      switch (ailment.type) {
+        case 'burn':
+          damageMessage += ` está quemado y recibió ${damage} de daño.`;
+          break;
+        case 'poison':
+          damageMessage += ` está envenenado y recibió ${damage} de daño.`;
+          break;
+        case 'toxic':
+          damageMessage += ` está envenenado gravemente y recibió ${damage} de daño.`;
+          break;
+        case 'leech_seed':
+          damageMessage += ` está siendo absorbido por Emboscada Semilla y recibió ${damage} de daño.`;
+          break;
+        case 'curse':
+          damageMessage += ` está maldito y recibió ${damage} de daño.`;
+          break;
+      }
+      
+      messages.push(damageMessage);
+      
+      // Incrementar turno de toxic
+      if (ailment.type === 'toxic' && ailment.toxicTurn) {
+        ailment.toxicTurn++;
+      }
+    }
+  }
+  
+  return { totalDamage, messages };
+}
+
+/**
+ * Decrementa los turnos de los efectos y elimina los que vencieron
+ */
+export function decrementAilmentTurns(pokemon: PokemonInBattle): {
+  expiredAilments: string[];
+  messages: string[];
+} {
+  
+  const expiredAilments: string[] = [];
+  const messages: string[] = [];
+  
+  for (let i = pokemon.ailments.length - 1; i >= 0; i--) {
+    const ailment = pokemon.ailments[i];
+    
+    // No decrementar si ya es indefinido (-1)
+    if (ailment.turnsRemaining > 0) {
+      ailment.turnsRemaining--;
+      
+      // Si llegó a 0, eliminar
+      if (ailment.turnsRemaining <= 0) {
+        expiredAilments.push(ailment.type);
+        pokemon.ailments.splice(i, 1);
+        
+        let message = `${pokemon.name} `;
+        switch (ailment.type) {
+          case 'sleep':
+            message += '¡se despertó!';
+            break;
+          case 'confusion':
+            message += '¡dejó de estar confundido!';
+            break;
+        }
+        messages.push(message);
+      }
+    }
+  }
+  
+  return { expiredAilments, messages };
+}
+
+// ============================================
+// CÁLCULO DE DAÑO
+// ============================================
+
 /**
  * Calcula el daño básico de un movimiento (V1 simplificado)
  * 
@@ -170,8 +439,7 @@ export function calculateDamage(
 // ============================================
 
 /**
- * Ejecuta un movimiento de ataque (V1 simplificado - solo daño básico)
- * Sin estados, sin flinch, sin cambios de stats, sin movimientos de carga
+ * Ejecuta un movimiento de ataque (V2 - ahora con efectos de estado)
  */
 export function executeMove(
   attacker: PokemonInBattle,
@@ -231,6 +499,23 @@ export function executeMove(
     message += `\n¡${defender.name} se debilitó!`;
   }
   
+  // V2: Aplicar efectos de estado si el movimiento los tiene
+  let ailmentApplied: string | undefined = undefined;
+  let ailmentSuccess = false;
+  
+  if (move.meta?.ailment && move.meta.ailmentChance > 0 && damage > 0 && !fainted) {
+    // Solo aplicar efecto si el movimiento hizo daño
+    if (Math.random() * 100 < move.meta.ailmentChance) {
+      const ailmentResult = applyAilment(defender, move.meta.ailment, attackerPlayerId);
+      
+      if (ailmentResult.applied) {
+        ailmentApplied = move.meta.ailment;
+        ailmentSuccess = true;
+        message += `\n${ailmentResult.message}`;
+      }
+    }
+  }
+  
   return {
     success: true,
     action: { playerId: attackerPlayerId, type: 'attack', move, moveId: move.moveId },
@@ -240,6 +525,8 @@ export function executeMove(
     targetHpAfter: hpAfter,
     effectiveness,
     failed: fainted,
+    ailmentApplied,
+    ailmentSuccess,
     // Información adicional para el frontend
     attackerName: attacker.name,
     defenderName: defender.name,

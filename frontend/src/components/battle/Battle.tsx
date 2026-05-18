@@ -20,6 +20,12 @@ import './Battle.css';
 // INTERFACES
 // ============================================
 
+interface Ailment {
+  type: 'burn' | 'poison' | 'toxic' | 'paralysis' | 'freeze' | 'sleep' | 'confusion' | 'flinch' | 'leech_seed' | 'curse';
+  turnsRemaining?: number;
+  appliedBy?: 'player1' | 'player2';
+}
+
 interface BattleMove {
   moveId: number;
   name: string;
@@ -46,6 +52,7 @@ interface BattlePokemon {
     front_shiny: string | null;
   };
   isFainted: boolean;
+  ailments?: Ailment[];
   moves?: BattleMove[];
 }
 
@@ -74,9 +81,51 @@ interface BattleMessage {
 // COMPONENTES
 // ============================================
 
+// ============================================
+// COMPONENTES
+// ============================================
+
+/**
+ * Obtiene el nombre legible del efecto en español
+ */
+function getAilmentName(ailmentType: string): string {
+  const ailmentNames: { [key: string]: string } = {
+    'burn': 'Quemado',
+    'poison': 'Envenenado',
+    'toxic': 'Envenenado Gravemente',
+    'paralysis': 'Paralizado',
+    'freeze': 'Congelado',
+    'sleep': 'Dormido',
+    'confusion': 'Confundido',
+    'flinch': 'Retrocedió',
+    'leech_seed': 'Emboscada Semilla',
+    'curse': 'Maldito'
+  };
+  return ailmentNames[ailmentType] || 'Desconocido';
+}
+
+/**
+ * Obtiene el color del efecto
+ */
+function getAilmentColor(ailmentType: string): string {
+  const colors: { [key: string]: string } = {
+    'burn': '#FF5722',
+    'poison': '#AB47BC',
+    'toxic': '#6A1B9A',
+    'paralysis': '#FFD700',
+    'freeze': '#00BCD4',
+    'sleep': '#9C27B0',
+    'confusion': '#E91E63',
+    'flinch': '#FF6F00',
+    'leech_seed': '#8BC34A',
+    'curse': '#424242'
+  };
+  return colors[ailmentType] || '#999';
+}
+
 /**
  * Panel de Información del Pokémon (HUD estilo Pokémon)
- * Con animación de HP cuando recibe daño
+ * Con animación de HP cuando recibe daño y indicador de efectos
  */
 function PokemonInfoPanel({
   pokemon,
@@ -111,12 +160,28 @@ function PokemonInfoPanel({
     hpColor = '#FF9800'; // Naranja - entre 10% y 35%
   }
 
+  // Obtener el efecto principal (si hay)
+  const mainAilment = pokemon.ailments && pokemon.ailments.length > 0 
+    ? pokemon.ailments[0] 
+    : null;
+
   return (
     <div className={`pokemon-info-panel ${isPlayer ? 'player' : 'enemy'}`}>
       <div className="pokemon-name-level">
         <span className="pokemon-name">{pokemon.name}</span>
         <span className="pokemon-level">Lv50</span>
       </div>
+
+      {/* Indicador de efecto */}
+      {mainAilment && (
+        <div 
+          className="ailment-indicator"
+          style={{ backgroundColor: getAilmentColor(mainAilment.type) }}
+          title={getAilmentName(mainAilment.type)}
+        >
+          <span className="ailment-text">{getAilmentName(mainAilment.type).substring(0, 3).toUpperCase()}</span>
+        </div>
+      )}
 
       <div className="hp-bar-container">
         <div className="hp-label">HP</div>

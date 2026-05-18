@@ -5,7 +5,7 @@
  */
 
 import { broadcast, sendTo, getConnection, getRoomPlayers } from './roomManager.js';
-import { createBattleState, createPlayerBattleState, determineExecutionOrder, executeMove, executeSwitch, checkBattleEnd } from '../services/battleService.js';
+import { createBattleState, createPlayerBattleState, determineExecutionOrder, executeMove, executeSwitch, checkBattleEnd, canActWithAilments, applyEndOfTurnAilmentDamage, decrementAilmentTurns } from '../services/battleService.js';
 import { getMovesByIds, getPokemonById } from '../db/mongodb.js';
 import type { BattleState, PokemonInBattle, BattleMove, PlayerAction, PlayerBattleState } from '../types/battle.js';
 import type { Room } from '../db/rooms.js';
@@ -224,6 +224,13 @@ function serializePokemon(pokemon: PokemonInBattle, includeMoves: boolean = true
     // Validar sprites
     const sprites = pokemon.sprites || { front_default: null, back_default: null };
     
+    // Serializar efectos (ailments)
+    const ailments = (pokemon.ailments || []).map(a => ({
+      type: a.type,
+      turnsRemaining: a.turnsRemaining,
+      appliedBy: a.appliedBy
+    }));
+    
     const serialized = {
       id: pokemon.id,
       pokeapiId: pokemon.pokeapiId,
@@ -233,6 +240,7 @@ function serializePokemon(pokemon: PokemonInBattle, includeMoves: boolean = true
       maxHp: pokemon.maxHp || 100,
       sprites: sprites,
       isFainted: pokemon.isFainted || false,
+      ailments: ailments,
       ...(includeMoves && moves.length > 0 && { 
         moves: moves.map(m => ({
           moveId: m.moveId || 0,
@@ -263,7 +271,8 @@ function serializePokemon(pokemon: PokemonInBattle, includeMoves: boolean = true
       hp: 0,
       maxHp: 0,
       sprites: { front_default: null, back_default: null },
-      isFainted: true
+      isFainted: true,
+      ailments: []
     };
   }
 }
@@ -502,7 +511,88 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
       break;
     }
     
-    // V1 Simplificado: siempre puede actuar (sin estados)
+    // V2: Verificar si puede actuar antes de ejecutar (con estados)
+    // Verificar si el Pokémon puede actuar según sus efectos
+    const canActResult = canActWithAilments(attackerPokemon);
+    
+    if (!canActResult.canAct) {
+      // El Pokémon no puede actuar - enviar mensaje explicativo
+      let blockMessage = `¡${attackerPokemon.name} ${canActResult.reason}!`;
+      
+      // Si está confundido y se atacó a sí mismo
+      if (canActResult.willAttackItself) {
+        // Calcular autolesión
+        const selfDamage = Math.ceil(attackerPokemon.maxHp * 0.25);
+        attackerPokemon.hp = Math.max(0, attackerPokemon.hp - selfDamage);
+        blockMessage = `¡${attackerPokemon.name} está confundido!\n¡Se atacó a sí mismo y recibió ${selfDamage} de daño!`;
+      }
+      
+      broadcast(roomCode, {
+        type: 'battle:action-result',
+        data: {
+          playerId: attackerId,
+          action: {
+            type: action.type,
+            moveId: action.moveId,
+            pokemonId: action.pokemonId
+          },
+          result: {
+            success: true,
+            message: blockMessage,
+            damage: 0,
+            targetHp: defenderPokemon.hp,
+            ailmentApplied: undefined,
+            attackerName: attackerPokemon.name,
+            defenderName: defenderPokemon.name
+          },
+          attackerHp: attackerPokemon.hp,
+          defenderHp: defenderPokemon.hp
+        }
+      });
+      
+      battle.actionResults.push({
+        success: true,
+        action,
+        message: blockMessage
+      });
+      
+      // Esperar antes de continuar
+      await sleep(2000);
+      
+      // Verificar KO
+      if (canActResult.willAttackItself && attackerPokemon.hp <= 0) {
+        attackerPokemon.isFainted = true;
+        const endCheck = checkBattleEnd(player1, player2);
+        if (endCheck.ended) {
+          battle.phase = 'ended';
+          battle.winner = endCheck.winner;
+          
+          broadcast(roomCode, {
+            type: 'battle:end',
+            data: {
+              winner: endCheck.winner,
+              message: endCheck.message,
+              finalState: {
+                player1: {
+                  activePokemon: serializePokemon(p1Active),
+                  remainingPokemon: player1.team.filter(p => !p.isFainted).length
+                },
+                player2: {
+                  activePokemon: serializePokemon(p2Active),
+                  remainingPokemon: player2.team.filter(p => !p.isFainted).length
+                }
+              }
+            }
+          });
+          
+          activeBattles.delete(roomCode);
+          return;
+        }
+      }
+      
+      continue; // Pasar al siguiente atacante (o fin del turno)
+    }
+    
     let result;
     
     if (action.type === 'attack' && action.move) {
@@ -611,11 +701,80 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     }
   }
   
-  // Fase 4: V1 - Sin efectos de estados (simplificado)
-  // Solo verificar KO por daño de ataques directos
+  // Fase 4: V2 - Aplicar efectos al final del turno y decrementar duraciones
+  const endTurnMessages: string[] = [];
   
-  // Limpiar flags (no hay fatiga en V1 básico)
-  // (Los flags cannotActNextTurn ya no se usan)
+  // Aplicar daño por efectos al final del turno (burn, poison, toxic, etc)
+  const p1AilmentDamage = applyEndOfTurnAilmentDamage(p1Active);
+  const p2AilmentDamage = applyEndOfTurnAilmentDamage(p2Active);
+  
+  // Agregar mensajes de daño
+  endTurnMessages.push(...p1AilmentDamage.messages);
+  endTurnMessages.push(...p2AilmentDamage.messages);
+  
+  // Decrementar turnos de efectos
+  const p1AilmentDecrement = decrementAilmentTurns(p1Active);
+  const p2AilmentDecrement = decrementAilmentTurns(p2Active);
+  
+  // Agregar mensajes de efectos que expiraron
+  endTurnMessages.push(...p1AilmentDecrement.messages);
+  endTurnMessages.push(...p2AilmentDecrement.messages);
+  
+  // Enviar mensajes de fin de turno (efectos)
+  if (endTurnMessages.length > 0) {
+    broadcast(roomCode, {
+      type: 'battle:end-of-turn-effects',
+      data: {
+        messages: endTurnMessages,
+        player1: {
+          activePokemon: serializePokemon(p1Active),
+          hp: p1Active.hp,
+          maxHp: p1Active.maxHp,
+          ailments: p1Active.ailments.map(a => ({ type: a.type, turnsRemaining: a.turnsRemaining }))
+        },
+        player2: {
+          activePokemon: serializePokemon(p2Active),
+          hp: p2Active.hp,
+          maxHp: p2Active.maxHp,
+          ailments: p2Active.ailments.map(a => ({ type: a.type, turnsRemaining: a.turnsRemaining }))
+        }
+      }
+    });
+    
+    await sleep(2000);
+  }
+  
+  // Verificar si la batalla terminó por daño de efectos
+  const endCheck2 = checkBattleEnd(player1, player2);
+  if (endCheck2.ended) {
+    battle.phase = 'ended';
+    battle.winner = endCheck2.winner;
+    
+    broadcast(roomCode, {
+      type: 'battle:end',
+      data: {
+        winner: endCheck2.winner,
+        message: endCheck2.message,
+        finalState: {
+          player1: {
+            activePokemon: serializePokemon(p1Active),
+            remainingPokemon: player1.team.filter(p => !p.isFainted).length
+          },
+          player2: {
+            activePokemon: serializePokemon(p2Active),
+            remainingPokemon: player2.team.filter(p => !p.isFainted).length
+          }
+        }
+      }
+    });
+    
+    activeBattles.delete(roomCode);
+    return;
+  }
+  
+  // Limpiar flags especiales (flinch solo dura un turno)
+  p1Active.hasFlinched = false;
+  p2Active.hasFlinched = false;
   
   // Preparar siguiente turno
   battle.turn++;
