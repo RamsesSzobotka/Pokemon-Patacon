@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { joinRoom } from '../../websocket';
+import { CoinFlipAnimation } from './CoinFlipAnimation';
 import './Battle.css';
 
 // ============================================
@@ -708,9 +709,17 @@ function BattleMessage({
   message: string; 
   onContinue?: () => void;
 }) {
+  // Renderizar saltos de línea como <br>
+  const messageLines = message.split('\n').map((line, index) => (
+    <span key={index}>
+      {line}
+      {index < message.split('\n').length - 1 && <br />}
+    </span>
+  ));
+
   return (
     <div className="battle-message-box">
-      <p>{message}</p>
+      <p>{messageLines}</p>
       {onContinue && (
         <button className="continue-btn" onClick={onContinue}>
           CONTINUAR
@@ -776,6 +785,10 @@ export default function Battle() {
   const hasSelectedActionRef = useRef(false);
   hasSelectedActionRef.current = hasSelectedAction;
 
+  // Estado para animación de coinflip
+  const [showCoinFlip, setShowCoinFlip] = useState(false);
+  const [coinFlipWinner, setCoinFlipWinner] = useState<'player1' | 'player2' | null>(null);
+
   // Ref para evitar loops infinitos en useEffect
   const playerNumberRef = useRef(playerNumber);
   playerNumberRef.current = playerNumber;
@@ -832,7 +845,7 @@ export default function Battle() {
       const myPokemon = isPlayer1 ? battleState.player1.activePokemon : battleState.player2.activePokemon;
       if (myPokemon && (myPokemon.hp <= 0 || myPokemon.isFainted) && !showPokemonSelector) {
         setShowPokemonSelector(true);
-        setLastBattleMessage(`¡${myPokemon.name} faintó! Selecciona un Pokémon.`);
+        setLastBattleMessage(`¡${myPokemon.name} se debilitó! Selecciona un Pokémon.`);
         setIsMyTurn(false);
       }
     }
@@ -860,11 +873,19 @@ export default function Battle() {
         }
         // Durante la ejecución de acciones, deshabilitamos la selección
         setIsMyTurn(false);
-        // Mensaje de inicio de turno - mostrar inmediatamente
-        const orderMessage = message.data.reason.includes('coinflip')
-          ? `${message.data.executionOrder[0] === (isPlayer1 ? 'player1' : 'player2') ? 'Tú' : message.data.executionOrder[0]} atacas primero`
-          : message.data.reason;
-        setLastBattleMessage(`Turno ${message.data.turn} - ${orderMessage}`);
+        
+        // Si se usó coinflip, mostrar animación
+        if (message.data.usedCoinflip) {
+          setCoinFlipWinner(message.data.firstPlayerId);
+          setShowCoinFlip(true);
+          // La animación durará 4 segundos (2 de flip + 2 de resultado)
+          // No establecer lastBattleMessage aquí, dejar que la animación lo maneje
+        } else {
+          // Si no es coinflip, mostrar mensaje normal de orden
+          const orderMessage = message.data.reason;
+          setLastBattleMessage(`Turno ${message.data.turn} - ${orderMessage}`);
+        }
+        break;
         break;
         
       case 'battle:action-result':
@@ -935,6 +956,24 @@ export default function Battle() {
           setLastBattleMessage(message.data.result.message || '¡Pokémon cambiado!');
         }
         break;
+
+      case 'battle:pokemon-fainted':
+        // El Pokémon fue debilitado durante el turno y se requiere cambio
+        setLastBattleMessage(message.data.message);
+        
+        // Si es mi Pokémon el que fue debilitado, mostrar selector
+        if (message.data.playerId === (playerNumber === 1 || playerNumber === 0 ? 'player1' : 'player2')) {
+          setShowPokemonSelector(true);
+          setIsMyTurn(true); // Permitir seleccionar mientras se pausa el turno
+        }
+        
+        // Ocultar sprite del Pokémon debilitado
+        if (message.data.playerId === 'player1') {
+          setShowPlayer1Sprite(false);
+        } else {
+          setShowPlayer2Sprite(false);
+        }
+        break;
         
       case 'battle:turn-end': {
         // Manejar fin de turno
@@ -942,7 +981,7 @@ export default function Battle() {
         const myActivePokemon = amIPlayer1 ? message.data.player1.activePokemon : message.data.player2.activePokemon;
 
         if (myActivePokemon?.isFainted || myActivePokemon?.hp <= 0) {
-          setLastBattleMessage(`¡${myActivePokemon.name} faintó! Selecciona un Pokémon.`);
+          setLastBattleMessage(`¡${myActivePokemon.name} se debilitó! Selecciona un Pokémon.`);
           setShowPokemonSelector(true);
           setIsMyTurn(false);
           setHasSelectedAction(false);
@@ -1201,6 +1240,19 @@ export default function Battle() {
           disabled={!isMyTurn || battleState.phase === 'ended' || hasSelectedAction}
         />
       </div>
+      
+      {/* Animación de coinflip */}
+      {showCoinFlip && coinFlipWinner && (
+        <CoinFlipAnimation
+          firstPlayerId={coinFlipWinner}
+          player1Name={battleState?.player1.name || 'Jugador 1'}
+          player2Name={battleState?.player2.name || 'Jugador 2'}
+          onAnimationComplete={() => {
+            setShowCoinFlip(false);
+            setCoinFlipWinner(null);
+          }}
+        />
+      )}
       
       {/* Selector de Pokémon */}
       {showPokemonSelector && (

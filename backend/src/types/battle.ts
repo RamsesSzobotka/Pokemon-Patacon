@@ -258,6 +258,9 @@ export interface BattleState {
   // Mensaje actual para UI
   currentMessage: string;
   
+  // Jugador que necesita cambio obligatorio (por Pokémon debilitado)
+  requiresSwitchFor: 'player1' | 'player2' | null;
+  
   //Ganador (cuando termina)
   winner: 'player1' | 'player2' | null;
 }

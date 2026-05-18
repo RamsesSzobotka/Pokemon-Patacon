@@ -11,6 +11,18 @@ import type { BattleState, PokemonInBattle, BattleMove, PlayerAction, PlayerBatt
 import type { Room } from '../db/rooms.js';
 
 // ============================================
+// UTILIDADES
+// ============================================
+
+/**
+ * Crea un delay (promesa que se resuelve después de ms milisegundos)
+ * Usado para separar visualmente las acciones en la batalla
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ============================================
 // GESTIÓN DE BATALLAS EN MEMORIA
 // ============================================
 
@@ -374,6 +386,17 @@ export async function handleBattleAction(
         battle.pendingActions.player2 = null;
       }
 
+      // ¿Fue un cambio solicitado durante el turno (requiresSwitchFor)?
+      if (battle.requiresSwitchFor === playerId) {
+        // Limpiar el flag de cambio obligatorio
+        battle.requiresSwitchFor = null;
+        
+        // El turno ya fue pausado, así que simplemente terminamos aquí
+        // El siguiente turno comenzará normalmente
+        console.log('[BATTLE] Mandatory switch during turn completed, waiting for next turn');
+        return;
+      }
+
       // Ahora verificar si el oponente también necesita seleccionar
       // Si el oponente ya tenía acción, ejecutamos el turno normal
       const opponentPending = isPlayer1 ? battle.pendingActions.player2 : battle.pendingActions.player1;
@@ -414,7 +437,7 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     console.log(`[BATTLE] Ejecutando turno ${battle.turn} en sala ${roomCode}`);
     
     // Fase 2: Determinar orden de ejecución
-    const { order, reason } = determineExecutionOrder(
+    const { order, reason, usedCoinflip } = determineExecutionOrder(
       battle.pendingActions.player1,
       battle.pendingActions.player2
     );
@@ -428,9 +451,17 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     data: {
       turn: battle.turn,
       executionOrder: order,
-      reason
+      reason,
+      usedCoinflip,
+      firstPlayerId: order[0]
     }
   });
+  
+  // Esperar a que el cliente procese la animación
+  // Si se usó coinflip, la animación dura 4 segundos (2s flip + 2s resultado)
+  // Si no, solo esperar 1.5 segundos
+  const waitTime = reason.includes('coinflip') ? 4500 : 1500;
+  await sleep(waitTime);
   
   const player1 = battle.players.player1;
   const player2 = battle.players.player2;
@@ -448,6 +479,28 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     const action = attackerId === 'player1' ? battle.pendingActions.player1 : battle.pendingActions.player2;
     
     if (!action) continue;
+    
+    // ¡IMPORTANTE! Verificar si el Pokémon attacker puede actuar (debe estar vivo)
+    // Si el Pokémon fue debilitado en la acción anterior, solicitar cambio al jugador
+    if (attackerPokemon.hp <= 0 || attackerPokemon.isFainted) {
+      // Marcar que este jugador necesita cambio obligatorio
+      battle.requiresSwitchFor = attackerId;
+      
+      // Notificar al cliente que debe seleccionar un Pokémon
+      broadcast(roomCode, {
+        type: 'battle:pokemon-fainted',
+        data: {
+          playerId: attackerId,
+          pokemonName: attackerPokemon.name,
+          message: `¡${attackerPokemon.name} se debilitó! Selecciona tu siguiente Pokémon.`
+        }
+      });
+      
+      // Esperar a que el jugador seleccione y ejecute el cambio
+      // El turno continúa normalmente en el siguiente
+      // NO ejecutar más acciones en este turno
+      break;
+    }
     
     // V1 Simplificado: siempre puede actuar (sin estados)
     let result;
@@ -523,6 +576,10 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     });
     
     battle.actionResults.push(result);
+    
+    // Esperar antes de verificar el final de batalla o ejecutar la siguiente acción
+    // (permite que el cliente procese la animación)
+    await sleep(2000);
     
     // Verificar si la batalla terminó
     const endCheck = checkBattleEnd(player1, player2);

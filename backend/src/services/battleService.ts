@@ -57,7 +57,7 @@ export function getActionPriority(action: PlayerAction | null): number {
 export function determineExecutionOrder(
   action1: PlayerAction | null,
   action2: PlayerAction | null
-): { order: ['player1' | 'player2', 'player1' | 'player2']; reason: string } {
+): { order: ['player1' | 'player2', 'player1' | 'player2']; reason: string; usedCoinflip: boolean } {
   
   const priority1 = getActionPriority(action1);
   const priority2 = getActionPriority(action2);
@@ -67,12 +67,14 @@ export function determineExecutionOrder(
     if (priority1 > priority2) {
       return {
         order: ['player1', 'player2'],
-        reason: `player1 tiene mayor prioridad (${priority1} vs ${priority2})`
+        reason: `player1 tiene mayor prioridad (${priority1} vs ${priority2})`,
+        usedCoinflip: false
       };
     } else {
       return {
         order: ['player2', 'player1'],
-        reason: `player2 tiene mayor prioridad (${priority2} vs ${priority1})`
+        reason: `player2 tiene mayor prioridad (${priority2} vs ${priority1})`,
+        usedCoinflip: false
       };
     }
   }
@@ -83,12 +85,14 @@ export function determineExecutionOrder(
   if (coinResult === 'player1') {
     return {
       order: ['player1', 'player2'],
-      reason: `coinflip (misma prioridad ${priority1})`
+      reason: `coinflip (misma prioridad ${priority1})`,
+      usedCoinflip: true
     };
   } else {
     return {
       order: ['player2', 'player1'],
-      reason: `coinflip (misma prioridad ${priority1})`
+      reason: `coinflip (misma prioridad ${priority1})`,
+      usedCoinflip: true
     };
   }
 }
@@ -181,7 +185,7 @@ export function executeMove(
     return {
       success: false,
       action: { playerId: attackerPlayerId, type: 'attack', move, moveId: move.moveId },
-      message: `${attacker.name} usó ${move.name} pero falló!`,
+      message: `¡${attacker.name} intentó usar ${move.name}, pero falló!`,
       failed: true,
       failureReason: 'miss'
     };
@@ -192,7 +196,7 @@ export function executeMove(
     return {
       success: true,
       action: { playerId: attackerPlayerId, type: 'attack', move, moveId: move.moveId },
-      message: `${attacker.name} usó ${move.name}! No hace efecto...`,
+      message: `¡${attacker.name} usó ${move.name}! Pero... ¡No tuvo efecto!`,
       failed: false
     };
   }
@@ -205,18 +209,26 @@ export function executeMove(
   defender.hp = Math.max(0, defender.hp - damage);
   const hpAfter = defender.hp;
   
-  // Construir mensaje simple
-  let message = `${attacker.name} usó ${move.name}!`;
+  // Construir mensaje narrativo
+  let message = `¡${attacker.name} usó ${move.name}!`;
   
-  if (effectiveness > 1) message += ' ¡Es muy efectivo!';
-  if (effectiveness < 1 && effectiveness > 0) message += ' No es muy efectivo...';
-  if (effectiveness === 0) message += ' ¡No tiene efecto!';
+  // Agregar efectividad del ataque
+  if (effectiveness > 1) {
+    message += '\n¡Es muy efectivo!';
+  } else if (effectiveness < 1 && effectiveness > 0) {
+    message += '\nNo es muy efectivo...';
+  } else if (effectiveness === 0) {
+    message += '\n¡No tiene efecto!';
+  }
   
-  // Verificar si faintó
+  // Mostrar daño
+  message += `\n¡${defender.name} recibió ${damage} de daño!`;
+  
+  // Verificar si se debilitó
   const fainted = hpAfter <= 0;
   if (fainted) {
     defender.isFainted = true;
-    message += ` ¡${defender.name} faintó!`;
+    message += `\n¡${defender.name} se debilitó!`;
   }
   
   return {
@@ -245,18 +257,18 @@ export function executeSwitch(
 ): { success: boolean; message: string; pokemon?: PokemonInBattle } {
   
   const newPokemon = player.team[newPokemonIndex];
+  const previousPokemon = player.team[previousPokemonIndex];
   
   // Verificar que el Pokémon tenga HP
   if (newPokemon.isFainted || newPokemon.hp <= 0) {
     return { 
       success: false, 
-      message: `${newPokemon.name} no puede luchar (HP: 0)` 
+      message: `¡${newPokemon.name} no puede luchar, está sin fuerzas!` 
     };
   }
   
   // Guardar HP del Pokémon actual antes de salir
-  const currentPokemon = player.team[previousPokemonIndex];
-  currentPokemon.savedHp = currentPokemon.hp;
+  previousPokemon.savedHp = previousPokemon.hp;
   
   // Cambiar al nuevo Pokémon
   player.activePokemonIndex = newPokemonIndex;
@@ -267,7 +279,7 @@ export function executeSwitch(
   
   return {
     success: true,
-    message: `¡${player.name} cambió a ${newPokemon.name}!`,
+    message: `¡${player.name} cambió a ${newPokemon.name}!\n¡Adelante, ${newPokemon.name}!`,
     pokemon: newPokemon
   };
 }
@@ -302,15 +314,15 @@ export function checkBattleEnd(
   const p2HasPokemon = hasAvailablePokemon(player2);
   
   if (!p1HasPokemon && !p2HasPokemon) {
-    return { ended: true, winner: null, message: '¡Empate! Ambos equipos desfallecieron.' };
+    return { ended: true, winner: null, message: '¡Empate! Ambos entrenadores se quedan sin Pokémon.' };
   }
   
   if (!p1HasPokemon) {
-    return { ended: true, winner: 'player2', message: `¡${player2.name} ganó la batalla!` };
+    return { ended: true, winner: 'player2', message: `¡${player2.name} ha ganado la batalla!\n¡Todos los Pokémon de ${player1.name} se debilitaron!` };
   }
   
   if (!p2HasPokemon) {
-    return { ended: true, winner: 'player1', message: `¡${player1.name} ganó la batalla!` };
+    return { ended: true, winner: 'player1', message: `¡${player1.name} ha ganado la batalla!\n¡Todos los Pokémon de ${player2.name} se debilitaron!` };
   }
   
   return { ended: false, winner: null, message: '' };
@@ -349,6 +361,7 @@ export function createBattleState(
       player2: []
     },
     currentMessage: '¡La batalla comienza!',
+    requiresSwitchFor: null,
     winner: null
   };
 }
