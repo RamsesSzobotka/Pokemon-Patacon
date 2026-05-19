@@ -22,6 +22,55 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Normaliza aliases comunes de efectos a las keys canónicas usadas internamente
+ */
+function normalizeAilmentType(ailment?: string | null): string | null {
+  if (!ailment) return null;
+  const a = String(ailment).trim().toLowerCase();
+  switch (a) {
+    case 'quemado':
+    case 'quemar':
+    case 'burn':
+      return 'burn';
+    case 'venenado':
+    case 'veneno':
+    case 'poison':
+      return 'poison';
+    case 'toxic':
+    case 'venenado gravemente':
+      return 'toxic';
+    case 'paralisis':
+    case 'parálisis':
+    case 'paralizado':
+    case 'paralysis':
+      return 'paralysis';
+    case 'congelado':
+    case 'freeze':
+      return 'freeze';
+    case 'dormido':
+    case 'sleep':
+      return 'sleep';
+    case 'confundido':
+    case 'confusion':
+      return 'confusion';
+    case 'retrocedio':
+    case 'retrocedió':
+    case 'flinch':
+      return 'flinch';
+    case 'emboscada_semilla':
+    case 'emboscada semilla':
+    case 'leech_seed':
+    case 'leech seed':
+      return 'leech_seed';
+    case 'maldito':
+    case 'curse':
+      return 'curse';
+    default:
+      return a;
+  }
+}
+
 // ============================================
 // GESTIÓN DE BATALLAS EN MEMORIA
 // ============================================
@@ -160,6 +209,7 @@ async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
         priority: m.priority,
         pp: m.pp,
         maxPp: m.pp,
+        target: m.target,
         meta: {
           ailment: m.meta?.ailment,
           ailmentChance: m.meta?.ailment_chance || 0,
@@ -234,7 +284,7 @@ function serializePokemon(pokemon: PokemonInBattle, includeMoves: boolean = true
     
     // Serializar efectos (ailments)
     const ailments = (pokemon.ailments || []).map(a => ({
-      type: a.type,
+      type: normalizeAilmentType(a.type) || a.type,
       turnsRemaining: a.turnsRemaining,
       appliedBy: a.appliedBy
     }));
@@ -554,7 +604,7 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     // Verificar si el Pokémon puede actuar según sus efectos
     const canActResult = canActWithAilments(attackerPokemon);
     
-    if (!canActResult.canAct) {
+    if (!canActResult.canAct || canActResult.willAttackItself) {
       // El Pokémon no puede actuar - enviar mensaje explicativo
       let blockMessage = `¡${attackerPokemon.name} ${canActResult.reason}!`;
       

@@ -464,19 +464,39 @@ export class PokemonService {
     return match ? parseInt(match[1]) : 1;
   }
 
+  private shouldSaveMove(move: any): boolean {
+    const moveName = move.name.toLowerCase().replace(/-/g, ' ');
+    const SPECIAL_MOVES = ['transform', 'metronome'];
+    const EXCLUDED_STATS = ['evasion', 'accuracy'];
+    
+    if (SPECIAL_MOVES.includes(moveName)) {
+      return true;
+    }
+    
+    const hasDamage = move.power && move.power > 0;
+    
+    const hasAilment = move.meta?.ailment && 
+                       move.meta.ailment.name !== 'none' && 
+                       move.meta.ailment_chance > 0;
+    
+    const hasStatChanges = move.stat_changes && move.stat_changes.length > 0;
+    const hasValidStatChanges = hasStatChanges && move.stat_changes.some((sc: any) => 
+      !EXCLUDED_STATS.includes(sc.stat.name)
+    );
+    
+    return hasDamage || hasAilment || hasValidStatChanges;
+  }
+
   /**
-   * Obtiene TODOS los movimientos de un Pokémon (sin filtro)
-   * 1. Obtiene datos completos del movimiento desde PokeAPI
-   * 2. Obtiene nombres en español e inglés
-   * 3. Guarda el movimiento en la colección moves (normalizado)
-   * 4. Retorna los move_ids para el Pokémon
+   * Obtiene los movimientos útiles de un Pokémon (con filtro)
+   * Filtra: daño, ailment, o cambios de stat válidos
+   * Excepciones: transform y metronome siempre se guardan
    */
   private async getValidMoves(moves: any[]): Promise<number[]> {
     const validMoveIds: number[] = [];
     const seenMoveIds = new Set<number>();
     const movesToInsert: any[] = [];
 
-    // Procesar TODOS los movimientos disponibles (SIN FILTRO)
     for (const moveData of moves) {
       try {
         const moveResponse = await axios.get(moveData.move.url, {
@@ -486,21 +506,30 @@ export class PokemonService {
         const move = moveResponse.data;
         const moveId = move.id;
 
-        // Evitar duplicados
         if (seenMoveIds.has(moveId)) continue;
         seenMoveIds.add(moveId);
 
-        // Obtener nombres en español e inglés
+        if (!this.shouldSaveMove(move)) {
+          continue;
+        }
+
         const names = this.extractMoveNames(move.names || []);
-        
-        // Obtener descripción en español (o inglés como fallback)
         const description = this.extractMoveDescription(move.flavor_text_entries || []);
 
-        // Crear objeto de movimiento normalizado (TODOS los moves)
+        const critRate = move.meta?.crit_rate || 0;
+        const drain = move.meta?.drain || 0;
+        const healing = move.meta?.heal || 0;
+        const statChance = move.meta?.stat_chance || 0;
+        const flinchChance = move.meta?.flinch_chance || 0;
+        const maxHits = move.meta?.max_hits || null;
+        const minHits = move.meta?.min_hits || null;
+        const maxTurns = move.meta?.max_turns || null;
+        const minTurns = move.meta?.min_turns || null;
+
         const normalizedMove = {
           move_id: moveId,
           name: move.name.replace(/-/g, ' ').toLowerCase(),
-          names: names,  // { es, en, ja }
+          names: names,
           type: move.type.name.toLowerCase(),
           damage_class: move.damage_class?.name || 'status',
           power: move.power || null,
@@ -508,7 +537,7 @@ export class PokemonService {
           pp: move.pp || 5,
           priority: move.priority || 0,
           target: move.target?.name || 'selected-pokemon',
-          description: description,  // Descripción en español/inglés
+          description: description,
           meta: {
             ailment: move.meta?.ailment?.name || null,
             ailment_chance: move.meta?.ailment_chance || 0,
@@ -516,8 +545,16 @@ export class PokemonService {
               stat: sc.stat.name,
               change: sc.change
             })),
-            flinch_chance: move.meta?.flinch_chance || 0,
-            heal: move.meta?.heal || 0
+            crit_rate: critRate,
+            drain: drain,
+            flinch_chance: flinchChance,
+            healing: healing,
+            max_hits: maxHits,
+            min_hits: minHits,
+            max_turns: maxTurns,
+            min_turns: minTurns,
+            stat_chance: statChance,
+            heal: healing
           },
           flags: {
             contact: move.flags?.contact || false,
@@ -532,19 +569,15 @@ export class PokemonService {
 
         validMoveIds.push(moveId);
         movesToInsert.push(normalizedMove);
-        console.log(`  ✅ Move guardado: ${names.es} (ID: ${moveId})`);
       } catch (error) {
         console.warn(`⚠️ Error fetching move: ${moveData.move.name}`);
       }
     }
 
-    // Insertar TODOS los movimientos en la colección moves (batch para eficiencia)
     if (movesToInsert.length > 0) {
       try {
         await insertMovesBatch(movesToInsert);
-        console.log(`💾 ${movesToInsert.length} movimientos guardados en colección moves`);
         
-        // Agregar al cache en memoria
         for (const move of movesToInsert) {
           movesCache.set(move.move_id, move);
         }
@@ -553,10 +586,7 @@ export class PokemonService {
       }
     }
 
-    // Ordenar IDs para mejor visualización
     validMoveIds.sort((a, b) => a - b);
-
-    console.log(`✅ ${validMoveIds.length} movimientos guardados para este Pokémon`);
     return validMoveIds;
   }
 

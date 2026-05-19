@@ -11,8 +11,16 @@ interface RoomData {
   isHost: boolean;
 }
 
+const BACKGROUND_FILES = ['back1.gif', 'back2.gif', 'back3.gif', 'back4.gif'];
+
+const getRandomBackground = () => {
+  const randomIndex = Math.floor(Math.random() * BACKGROUND_FILES.length);
+  return `/assets/background/${BACKGROUND_FILES[randomIndex]}`;
+};
+
 const MainMenu: React.FC = () => {
   const router = useRouter();
+  const [backgroundImage] = useState<string>(() => getRandomBackground());
   const [screen, setScreen] = useState<'menu' | 'create' | 'join'>('menu');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
@@ -464,6 +472,14 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
   return (
     <div className="main-menu-container">
+      {/* Animated Background */}
+      <div className="menu-background">
+        <img 
+          src={backgroundImage} 
+          alt="Background" 
+          className="background-image"
+        />
+      </div>
       {/* Background Music */}
       <audio
         ref={audioRef}
@@ -491,7 +507,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
             <div className="divider"></div>
             <div className="button-group">
               <button
-                className="btn btn-primary"
+                className="btn btn-primary btn-float"
                 onClick={() => {
                   setPlayerName('');
                   setScreen('create');
@@ -501,7 +517,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
                 <span className="btn-hint">Genera un código único</span>
               </button>
               <button
-                className="btn btn-secondary"
+                className="btn btn-secondary btn-float"
                 onClick={() => {
                   setPlayerName('');
                   setRoomCode('');
@@ -511,7 +527,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
                 ⚪ UNIRSE A SALA
                 <span className="btn-hint">Ingresa un código</span>
               </button>
-              <button className="btn btn-tertiary" onClick={() => router.navigate('/pokedex')}>
+              <button className="btn btn-tertiary btn-float" onClick={() => router.navigate({ to: '/pokedex' })}>
                 📖 VER POKÉDEX
                 <span className="btn-hint">649 Pokémon disponibles</span>
               </button>
@@ -617,7 +633,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
                 <div className="lobby-actions">
                   {isHost ? (
                     <button
-                      className={`btn btn-danger ${!opponentConnected ? 'disabled' : ''}`}
+                      className={`btn btn-danger btn-float ${!opponentConnected ? 'disabled' : ''}`}
                       disabled={!opponentConnected || loading}
                       onClick={handleStartDraft}
                     >
@@ -648,7 +664,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
                   className="bw-input"
                 />
                 <button
-                  className={`btn btn-primary ${loading ? 'loading' : ''}`}
+                  className={`btn btn-primary btn-float ${loading ? 'loading' : ''}`}
                   onClick={handleCreateRoom}
                   disabled={loading || !playerName.trim()}
                 >
@@ -708,7 +724,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
               </p>
 
               <button
-                className={`btn btn-primary ${
+                className={`btn btn-primary btn-float ${
                   roomCode.length !== 6 ? 'disabled' : ''
                 } ${loading ? 'loading' : ''}`}
                 onClick={handleJoinRoom}

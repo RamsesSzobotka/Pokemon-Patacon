@@ -56,6 +56,7 @@ interface BattlePokemon {
   // V3: 2-Turn Moves and Fatigue
   isChargingTwoTurn?: boolean;
   chargePhase?: 'charge' | 'execute' | null;
+  currentTwoTurnMove?: BattleMove | null;
   isFatigued?: boolean;
   fatigueSource?: 'recharge' | 'exhaustion' | null;
   isEvasivelyCharging?: boolean;
@@ -94,7 +95,9 @@ interface BattleMessage {
  * Obtiene el nombre legible del efecto en español
  */
 function getAilmentName(ailmentType: string): string {
+  const a = String(ailmentType || '').trim().toLowerCase();
   const ailmentNames: { [key: string]: string } = {
+    // English canonical keys
     'burn': 'Quemado',
     'poison': 'Envenenado',
     'toxic': 'Envenenado Gravemente',
@@ -104,9 +107,21 @@ function getAilmentName(ailmentType: string): string {
     'confusion': 'Confundido',
     'flinch': 'Retrocedió',
     'leech_seed': 'Emboscada Semilla',
-    'curse': 'Maldito'
+    'curse': 'Maldito',
+    // Spanish aliases
+    'quemado': 'Quemado',
+    'venenado': 'Envenenado',
+    'veneno': 'Envenenado',
+    'paralizado': 'Paralizado',
+    'parálisis': 'Paralizado',
+    'congelado': 'Congelado',
+    'dormido': 'Dormido',
+    'confundido': 'Confundido',
+    'emboscada_semilla': 'Emboscada Semilla',
+    'emboscada semilla': 'Emboscada Semilla',
+    'maldito': 'Maldito'
   };
-  return ailmentNames[ailmentType] || 'Desconocido';
+  return ailmentNames[a] || 'Desconocido';
 }
 
 /**
@@ -255,9 +270,9 @@ function PokemonInfoPanel({
       )}
 
       {/* V3: Indicador de carga (2-Turn Moves) */}
-      {pokemon.isChargingTwoTurn && pokemon.chargePhase === 'execute' && (
+      {pokemon.isChargingTwoTurn && pokemon.currentTwoTurnMove && (
         <div className="v3-status-indicator charging" title="Cargando movimiento">
-          <span>⚡ Cargando...</span>
+          <span>⚡ {pokemon.chargePhase === 'charge' ? 'Preparando...' : 'Listo'}</span>
         </div>
       )}
 
@@ -451,28 +466,18 @@ function CommandPanel({
   const canActNormally = !isFatigueBlocking;
 
   // V3: Si está en ejecución de movimiento de 2 turnos, mostrar botón "Ejecutar"
-  if (isChargingTwoTurn && chargePhase === 'execute' && currentTwoTurnMove) {
+  if (isChargingTwoTurn && chargePhase === 'charge' && currentTwoTurnMove) {
     return (
       <div className="command-panel v3-charging-mode">
         <div className="charging-notice">
-          <p>⚡ Ejecutando {formatMoveName(currentTwoTurnMove.name)}</p>
+          <p>⚡ {formatMoveName(currentTwoTurnMove.name)} está listo para ejecutarse</p>
         </div>
         <div className="commands-grid">
-          <button
-            className="command-btn execute-charging"
-            disabled={disabled}
-            onClick={() => {
-              onAttack(currentTwoTurnMove.moveId);
-            }}
-          >
-            EJECUTAR
+          <button className="command-btn execute-charging" disabled>
+            EJECUTANDO
           </button>
-          <button
-            className="command-btn change-forced"
-            onClick={onChange}
-            disabled={disabled}
-          >
-            CAMBIAR*
+          <button className="command-btn change-forced" disabled>
+            ESPERA
           </button>
         </div>
       </div>
@@ -1075,6 +1080,7 @@ export default function Battle({ roomCode }: BattleProps) {
   // Estado para animación de coinflip
   const [showCoinFlip, setShowCoinFlip] = useState(false);
   const [coinFlipWinner, setCoinFlipWinner] = useState<'player1' | 'player2' | null>(null);
+  const lastAutoExecuteKeyRef = useRef<string | null>(null);
 
   // Ref para evitar loops infinitos en useEffect
   const playerNumberRef = useRef(playerNumber);
@@ -1288,17 +1294,22 @@ export default function Battle({ roomCode }: BattleProps) {
           
           console.log('[Battle] Narration sequence:', narrationSequence);
           
+          // Construir mensajes de cambios de estadística provistos por el servidor
+          const statMessages = formatStatChangeMessages(result?.statChanges, attackerPlayerId, defenderPlayerId, battleState);
+
+          // Combinar narración principal con mensajes de stat changes
+          const combinedSequence = narrationSequence.concat(statMessages);
+
           // Mostrar el primer mensaje inmediatamente
-          if (narrationSequence.length > 0) {
-            setLastBattleMessage(narrationSequence[0]);
-            
+          if (combinedSequence.length > 0) {
+            setLastBattleMessage(combinedSequence[0]);
+
             // Si hay más mensajes, mostrar en secuencia
-            if (narrationSequence.length > 1) {
-              // Usar un timeout para crear la secuencia
+            if (combinedSequence.length > 1) {
               let delay = 1000;
-              for (let i = 1; i < narrationSequence.length; i++) {
+              for (let i = 1; i < combinedSequence.length; i++) {
                 setTimeout(() => {
-                  setLastBattleMessage(narrationSequence[i]);
+                  setLastBattleMessage(combinedSequence[i]);
                 }, delay);
                 delay += 1000;
               }
@@ -1360,6 +1371,7 @@ export default function Battle({ roomCode }: BattleProps) {
             };
           });
         }
+
         break;
       }
 
@@ -1513,6 +1525,29 @@ export default function Battle({ roomCode }: BattleProps) {
   
   // Obtener movimientos del Pokémon activo
   const moves = myPokemon?.moves || [];
+
+  useEffect(() => {
+    if (!battleState || !myPokemon) return;
+
+    const currentTwoTurnMove = myPokemon.currentTwoTurnMove;
+    if (
+      !isMyTurn ||
+      hasSelectedActionRef.current ||
+      !myPokemon.isChargingTwoTurn ||
+      myPokemon.chargePhase !== 'charge' ||
+      !currentTwoTurnMove
+    ) {
+      return;
+    }
+
+    const autoExecuteKey = `${battleState.turn}-${myPokemon.id}-${currentTwoTurnMove.moveId}`;
+    if (lastAutoExecuteKeyRef.current === autoExecuteKey) {
+      return;
+    }
+
+    lastAutoExecuteKeyRef.current = autoExecuteKey;
+    handleAttack(currentTwoTurnMove.moveId);
+  }, [battleState?.turn, myPokemon?.id, myPokemon?.isChargingTwoTurn, myPokemon?.chargePhase, myPokemon?.currentTwoTurnMove, isMyTurn, handleAttack]);
   
   if (!battleState) {
     return (
@@ -1546,11 +1581,11 @@ export default function Battle({ roomCode }: BattleProps) {
             {/* Player 1: oponente arriba (de frente), jugador abajo (de espalda) */}
             <div className="enemy-position">
               <PokemonInfoPanel
-                pokemon={opponentPokemon}
+                pokemon={opponentPokemon || null}
                 isPlayer={false}
               />
               <PokemonSprite
-                pokemon={opponentPokemon}
+                pokemon={opponentPokemon || null}
                 isPlayer={false}
                 isFainting={playerFainting === 'player2'}
                 showSprite={showPlayer2Sprite}
@@ -1561,7 +1596,7 @@ export default function Battle({ roomCode }: BattleProps) {
 
             <div className="player-position">
               <PokemonSprite
-                pokemon={myPokemon}
+                pokemon={myPokemon || null}
                 isPlayer={true}
                 isFainting={playerFainting === 'player1'}
                 showSprite={showPlayer1Sprite}
@@ -1569,7 +1604,7 @@ export default function Battle({ roomCode }: BattleProps) {
                 isHit={hitPlayer === 'player1'}
               />
               <PokemonInfoPanel
-                pokemon={myPokemon}
+                pokemon={myPokemon || null}
                 isPlayer={true}
               />
             </div>
@@ -1579,11 +1614,11 @@ export default function Battle({ roomCode }: BattleProps) {
             {/* Player 2: oponente arriba (de frente), jugador abajo (de espalda) - INVERTIDO */}
             <div className="enemy-position">
               <PokemonInfoPanel
-                pokemon={opponentPokemon}
+                pokemon={opponentPokemon || null}
                 isPlayer={false}
               />
               <PokemonSprite
-                pokemon={opponentPokemon}
+                pokemon={opponentPokemon || null}
                 isPlayer={false}
                 isFainting={playerFainting === 'player1'}
                 showSprite={showPlayer1Sprite}
@@ -1594,7 +1629,7 @@ export default function Battle({ roomCode }: BattleProps) {
 
             <div className="player-position">
               <PokemonSprite
-                pokemon={myPokemon}
+                pokemon={myPokemon || null}
                 isPlayer={true}
                 isFainting={playerFainting === 'player2'}
                 showSprite={showPlayer2Sprite}
@@ -1602,7 +1637,7 @@ export default function Battle({ roomCode }: BattleProps) {
                 isHit={hitPlayer === 'player2'}
               />
               <PokemonInfoPanel
-                pokemon={myPokemon}
+                pokemon={myPokemon || null}
                 isPlayer={true}
               />
             </div>
@@ -1624,7 +1659,7 @@ export default function Battle({ roomCode }: BattleProps) {
           // V3: Pasar información sobre carga y fatiga
           isChargingTwoTurn={myPokemon?.isChargingTwoTurn}
           chargePhase={myPokemon?.chargePhase}
-          currentTwoTurnMove={myPokemon?.isChargingTwoTurn ? moves?.[0] : undefined}
+          currentTwoTurnMove={myPokemon?.currentTwoTurnMove || undefined}
           isFatigued={myPokemon?.isFatigued}
           fatigueSource={myPokemon?.fatigueSource}
         />
@@ -1654,4 +1689,47 @@ export default function Battle({ roomCode }: BattleProps) {
       )}
     </div>
   );
+}
+
+/**
+ * Formatea mensajes legibles para cambios de estadística enviados por el servidor
+ * statChanges: [{ stat, change, target }]
+ */
+function formatStatChangeMessages(statChanges: any[] | undefined, attackerPlayerId: string, defenderPlayerId: string, battleState: BattleState | null): string[] {
+  if (!statChanges || !Array.isArray(statChanges) || statChanges.length === 0) return [];
+
+  const STAT_LABELS: { [key: string]: string } = {
+    attack: 'Ataque',
+    defense: 'Defensa',
+    spAttack: 'Ataque Especial',
+    spDefense: 'Defensa Especial'
+  };
+
+  const messages: string[] = [];
+  const HUGE_THRESHOLD = 3; // Umbral por defecto: cambio absoluto >= 3 => "muchísimo"
+
+  for (const ch of statChanges) {
+    if (!ch || typeof ch.change !== 'number' || !ch.stat) continue;
+
+    const label = STAT_LABELS[ch.stat] || ch.stat;
+    const targetPlayerId = ch.target === 'attacker' ? attackerPlayerId : defenderPlayerId;
+    const pokemonName = battleState?.[targetPlayerId as keyof BattleState]?.activePokemon?.name || 'El Pokémon';
+    const magnitude = Math.abs(ch.change);
+
+    if (ch.change < 0) {
+      if (magnitude >= HUGE_THRESHOLD) {
+        messages.push(`${label} de ${pokemonName} ha bajado muchísimo.`);
+      } else {
+        messages.push(`${label} de ${pokemonName} ha disminuido.`);
+      }
+    } else if (ch.change > 0) {
+      if (magnitude >= HUGE_THRESHOLD) {
+        messages.push(`${label} de ${pokemonName} ha aumentado muchísimo.`);
+      } else {
+        messages.push(`${label} de ${pokemonName} ha aumentado.`);
+      }
+    }
+  }
+
+  return messages;
 }

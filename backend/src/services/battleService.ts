@@ -20,6 +20,7 @@ import type {
   TurnResult,
   BattleMove,
   BattlePhase,
+  AilmentType,
   V3MoveMetadata,
   EvasiveMoveMetadata,
   FatigueMoveMetadata
@@ -197,9 +198,58 @@ export function getAilmentName(ailmentType: string): string {
     case 'curse':
       return 'Maldito';
     default:
-      return 'Desconocido';
+        return 'Desconocido';
   }
 }
+
+  /**
+   * Normaliza aliases comunes de efectos a las keys canónicas usadas internamente
+   */
+  export function normalizeAilmentType(ailment?: string | null): string | null {
+    if (!ailment) return null;
+    const a = String(ailment).trim().toLowerCase();
+    switch (a) {
+      case 'quemado':
+      case 'quemar':
+      case 'burn':
+        return 'burn';
+      case 'venenado':
+      case 'veneno':
+      case 'poison':
+        return 'poison';
+      case 'toxic':
+      case 'venenado gravemente':
+        return 'toxic';
+      case 'paralisis':
+      case 'parálisis':
+      case 'paralizado':
+      case 'paralysis':
+        return 'paralysis';
+      case 'congelado':
+      case 'freeze':
+        return 'freeze';
+      case 'dormido':
+      case 'sleep':
+        return 'sleep';
+      case 'confundido':
+      case 'confusion':
+        return 'confusion';
+      case 'retrocedio':
+      case 'retrocedió':
+      case 'flinch':
+        return 'flinch';
+      case 'emboscada_semilla':
+      case 'emboscada semilla':
+      case 'leech_seed':
+      case 'leech seed':
+        return 'leech_seed';
+      case 'maldito':
+      case 'curse':
+        return 'curse';
+      default:
+        return a; // devolver el valor canónico si ya lo es o el original en minúsculas
+    }
+  }
 
 /**
  * Aplica un efecto a un Pokémon
@@ -215,25 +265,31 @@ export function applyAilment(
     return { applied: false, message: `${pokemon.name} ya está debilitado.` };
   }
   
+  // Normalizar tipo de efecto
+  const normalized = normalizeAilmentType(ailmentType);
+  if (!normalized) {
+    return { applied: false, message: '' };
+  }
+
   // Verificar si ya tiene este efecto
-  const existingAilment = pokemon.ailments.find(a => a.type === ailmentType);
+  const existingAilment = pokemon.ailments.find(a => a.type === normalized);
   if (existingAilment) {
-    return { applied: false, message: `${pokemon.name} ya está ${getAilmentName(ailmentType).toLowerCase()}.` };
+    return { applied: false, message: `${pokemon.name} ya está ${getAilmentName(normalized).toLowerCase()}.` };
   }
   
   // Crear nuevo efecto
   const newAilment = {
-    type: ailmentType,
-    turnsRemaining: getAilmentDuration(ailmentType),
+    type: normalized,
+    turnsRemaining: getAilmentDuration(normalized),
     appliedBy,
-    toxicTurn: ailmentType === 'toxic' ? 1 : undefined
+    toxicTurn: normalized === 'toxic' ? 1 : undefined
   };
   
   pokemon.ailments.push(newAilment as any);
   
   return {
     applied: true,
-    message: `¡${pokemon.name} está ${getAilmentName(ailmentType).toLowerCase()}!`
+    message: `¡${pokemon.name} está ${getAilmentName(normalized).toLowerCase()}!`
   };
 }
 
@@ -276,6 +332,12 @@ export function canActWithAilments(pokemon: PokemonInBattle): {
   // Verificar efectos de estado
   for (const ailment of pokemon.ailments) {
     switch (ailment.type) {
+      case 'flinch':
+        if (ailment.turnsRemaining > 0) {
+          return { canAct: false, reason: 'Retrocedió del miedo' };
+        }
+        break;
+
       case 'paralysis':
         // 25% de no actuar
         if (Math.random() < 0.25) {
@@ -795,6 +857,106 @@ export function calculateDamage(
   };
 }
 
+type StatChangeTarget = 'attacker' | 'defender';
+type BattleStatKey = 'attack' | 'defense' | 'spAttack' | 'spDefense';
+
+const STAT_NAME_MAP: Record<string, BattleStatKey | null> = {
+  attack: 'attack',
+  defense: 'defense',
+  'special-attack': 'spAttack',
+  'special-defense': 'spDefense',
+  'sp-attack': 'spAttack',
+  'sp-defense': 'spDefense',
+  spattack: 'spAttack',
+  spdefense: 'spDefense',
+  speed: null,
+  evasion: null,
+  accuracy: null
+};
+
+const SELF_TARGETS = new Set(['self', 'user', 'users-field']);
+
+function normalizeStatName(stat: string): BattleStatKey | null {
+  const normalized = stat.trim().toLowerCase().replace(/\s+/g, '-').replace(/_/g, '-');
+  return STAT_NAME_MAP[normalized] ?? null;
+}
+
+function resolveStatChangeTarget(move: BattleMove, changeValue: number): StatChangeTarget {
+  const target = move.target?.toLowerCase();
+
+  if (target && SELF_TARGETS.has(target)) {
+    return 'attacker';
+  }
+
+  if (target && target !== 'selected-pokemon') {
+    return 'defender';
+  }
+
+  return changeValue >= 0 ? 'attacker' : 'defender';
+}
+
+function getStatLabel(stat: BattleStatKey): string {
+  switch (stat) {
+    case 'attack':
+      return 'Ataque';
+    case 'defense':
+      return 'Defensa';
+    case 'spAttack':
+      return 'Ataque Especial';
+    case 'spDefense':
+      return 'Defensa Especial';
+  }
+}
+
+function applyStatChange(pokemon: PokemonInBattle, stat: BattleStatKey, change: number): number {
+  const currentValue = pokemon[stat];
+  const nextValue = Math.max(1, currentValue + change);
+  pokemon[stat] = nextValue;
+  return nextValue - currentValue;
+}
+
+function applyMoveStatChanges(
+  move: BattleMove,
+  attacker: PokemonInBattle,
+  defender: PokemonInBattle,
+  defenderFainted: boolean
+): Array<{ stat: BattleStatKey; change: number; target: StatChangeTarget }> {
+  const results: Array<{ stat: BattleStatKey; change: number; target: StatChangeTarget }> = [];
+  const statChanges = move.meta?.statChanges || [];
+
+  for (const change of statChanges) {
+    const mappedStat = normalizeStatName(change.stat);
+    if (!mappedStat) {
+      continue;
+    }
+
+    const target = resolveStatChangeTarget(move, change.change);
+    if (target === 'defender' && defenderFainted) {
+      continue;
+    }
+
+    const targetPokemon = target === 'attacker' ? attacker : defender;
+    const appliedChange = applyStatChange(targetPokemon, mappedStat, change.change);
+
+    if (appliedChange === 0) {
+      continue;
+    }
+
+    results.push({
+      stat: mappedStat,
+      change: appliedChange,
+      target
+    });
+  }
+
+  return results;
+}
+
+function buildStatChangeMessage(pokemon: PokemonInBattle, stat: BattleStatKey, change: number): string {
+  const direction = change > 0 ? 'subió' : 'bajó';
+  return `¡El ${getStatLabel(stat)} de ${pokemon.name} ${direction}!`;
+}
+
 // ============================================
 // EJECUCIÓN DE MOVIMIENTOS
 // ============================================
@@ -829,8 +991,10 @@ export function executeMove(
   // ===== V3: MANEJO DE HYPER BEAM (Recharge Move) =====
   // Hyper Beam se ejecuta inmediatamente + aplica fatiga
   if (move.flags.recharge === true) {
+    const hasApplicableStatChanges = (move.meta?.statChanges || []).some(change => normalizeStatName(change.stat) !== null);
+
     // Ignorar si el movimiento no causa daño
-    if (!move.power || move.power === 0 || move.damageClass === 'status') {
+    if ((!move.power || move.power === 0 || move.damageClass === 'status') && !hasApplicableStatChanges) {
       return {
         success: true,
         action: { playerId: attackerPlayerId, type: 'attack', move, moveId: move.moveId },
@@ -846,6 +1010,7 @@ export function executeMove(
     const hpBefore = defender.hp;
     defender.hp = Math.max(0, defender.hp - damage);
     const hpAfter = defender.hp;
+    const defenderFainted = hpAfter <= 0;
     
 // Construir mensaje narrativo estilo Pokémon BW
   let message = `${attacker.name} usado ${move.name}.`;
@@ -860,11 +1025,14 @@ export function executeMove(
   }
   
   // Verificar si se debilitó
-  const fainted = hpAfter <= 0;
-  if (fainted) {
+  if (defenderFainted) {
     defender.isFainted = true;
     message += `\n${defender.name} se debilito.`;
   }
+
+  const statChangeResults = applyMoveStatChanges(move, attacker, defender, defenderFainted);
+  // NOTA: los cambios de estadística se aplican pero no generan líneas narrativas.
+  // Se incluyen en el campo `statChanges` del ActionResult para el frontend si es necesario.
     
     // Aplicar fatiga inmediatamente (Recharge)
     applyFatigue(attacker, 'recharge');
@@ -878,7 +1046,12 @@ export function executeMove(
       targetHpBefore: hpBefore,
       targetHpAfter: hpAfter,
       effectiveness,
-      failed: fainted,
+      failed: defenderFainted,
+      statChanges: statChangeResults.map(change => ({
+        stat: change.stat,
+        change: change.change,
+        target: change.target
+      })),
       attackerName: attacker.name,
       defenderName: defender.name,
       moveName: move.name
@@ -899,8 +1072,8 @@ export function executeMove(
   
   // ===== MOVIMIENTOS NORMALES (Sin carga, sin recharge) =====
   
-  // Ignorar movimientos que no causan daño
-  if (!move.power || move.power === 0 || move.damageClass === 'status') {
+  // Ignorar solo movimientos sin daño que tampoco aplican estados
+  if ((!move.power || move.power === 0) && move.damageClass !== 'status') {
     return {
       success: true,
       action: { playerId: attackerPlayerId, type: 'attack', move, moveId: move.moveId },
@@ -916,6 +1089,7 @@ export function executeMove(
   const hpBefore = defender.hp;
   defender.hp = Math.max(0, defender.hp - damage);
   const hpAfter = defender.hp;
+  const defenderFainted = hpAfter <= 0;
   
   // Construir mensaje narrativo estilo Pokémon BW
   let message = `${attacker.name} usado ${move.name}.`;
@@ -930,27 +1104,49 @@ export function executeMove(
   }
   
   // Verificar si se debilitó
-  const fainted = hpAfter <= 0;
-  if (fainted) {
+  if (defenderFainted) {
     defender.isFainted = true;
     message += `\n${defender.name} se debilito.`;
   }
+
+  const statChangeResults = applyMoveStatChanges(move, attacker, defender, defenderFainted);
+  // NOTA: los cambios de estadística se aplican pero no generan líneas narrativas.
+  // Se incluyen en el campo `statChanges` del ActionResult para el frontend si es necesario.
   
   // V2: Aplicar efectos de estado si el movimiento los tiene
-  let ailmentApplied: string | undefined = undefined;
+  let ailmentApplied: AilmentType | undefined = undefined;
   let ailmentSuccess = false;
-  
-  if (move.meta?.ailment && move.meta.ailmentChance > 0 && damage > 0 && !fainted) {
-    // Solo aplicar efecto si el movimiento hizo daño
-    if (Math.random() * 100 < move.meta.ailmentChance) {
-      const ailmentResult = applyAilment(defender, move.meta.ailment, attackerPlayerId);
-      
-      if (ailmentResult.applied) {
-        ailmentApplied = move.meta.ailment;
-        ailmentSuccess = true;
-        message += `\n${ailmentResult.message}`;
+  const moveAilment = move.meta?.ailment;
+  const hasAilment = Boolean(moveAilment);
+  const ailmentChance = move.meta?.ailmentChance ?? 0;
+
+  if (hasAilment && !defenderFainted && (damage > 0 || move.damageClass === 'status')) {
+    const guaranteedStatusMove = move.damageClass === 'status' && ailmentChance === 0;
+    const shouldAttemptAilment = guaranteedStatusMove || ailmentChance > 0;
+
+    if (shouldAttemptAilment) {
+      const rollSucceeded = guaranteedStatusMove || Math.random() * 100 < ailmentChance;
+
+      if (rollSucceeded) {
+        const ailmentResult = applyAilment(defender, moveAilment, attackerPlayerId);
+
+        if (ailmentResult.applied) {
+          ailmentApplied = moveAilment;
+          ailmentSuccess = true;
+          message += `\n${ailmentResult.message}`;
+        }
       }
     }
+  }
+
+  if (move.meta?.flinchChance && move.meta.flinchChance > 0 && !defenderFainted) {
+    if (Math.random() * 100 < move.meta.flinchChance) {
+      defender.hasFlinched = true;
+    }
+  }
+
+  if ((move.power === null || move.power === undefined || move.power === 0 || move.damageClass === 'status') && !ailmentSuccess && statChangeResults.length === 0) {
+    message += `\nEl ataque no tuvo efecto!`;
   }
   
   return {
@@ -961,9 +1157,14 @@ export function executeMove(
     targetHpBefore: hpBefore,
     targetHpAfter: hpAfter,
     effectiveness,
-    failed: fainted,
+    failed: defenderFainted,
     ailmentApplied,
     ailmentSuccess,
+    statChanges: statChangeResults.map(change => ({
+      stat: change.stat,
+      change: change.change,
+      target: change.target
+    })),
     // Información adicional para el frontend
     attackerName: attacker.name,
     defenderName: defender.name,

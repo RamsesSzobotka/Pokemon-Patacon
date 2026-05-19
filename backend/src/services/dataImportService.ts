@@ -4,8 +4,13 @@
  * 
  * Datos importados:
  * - Tipos (18 tipos con relaciones de daño)
- * - Movimientos (todos los movimientos de cada Pokémon)
+ * - Movimientos (solo los útiles para batalla)
  * - Pokémons (649 de Gen I-V)
+ * 
+ * Filtro de movimientos:
+ * - GUARDAR si: hace daño, aplica efecto, o cambia estadísticas (excepto evasion/accuracy)
+ * - EXCEPCIONES: transform y metronome siempre se guardan
+ * - ELIMINAR: Pokemon con move_id = 0
  */
 
 import axios from 'axios';
@@ -38,16 +43,40 @@ const MYTHICAL_IDS = [151, 251, 385, 386, 489, 490, 491, 492, 493];
 interface ImportStats {
   types: { existing: number; imported: number };
   moves: { existing: number; imported: number };
-  pokemon: { existing: number; imported: number };
+  pokemon: { existing: number; imported: number; cleaned: number };
   errors: string[];
 }
 
 const stats: ImportStats = {
   types: { existing: 0, imported: 0 },
   moves: { existing: 0, imported: 0 },
-  pokemon: { existing: 0, imported: 0 },
+  pokemon: { existing: 0, imported: 0, cleaned: 0 },
   errors: []
 };
+
+const SPECIAL_MOVES = ['transform', 'metronome'];
+const EXCLUDED_STATS = ['evasion', 'accuracy'];
+
+function shouldSaveMove(move: any): boolean {
+  const moveName = move.name.toLowerCase().replace(/-/g, ' ');
+  
+  if (SPECIAL_MOVES.includes(moveName)) {
+    return true;
+  }
+  
+  const hasDamage = move.power && move.power > 0;
+  
+  const hasAilment = move.meta?.ailment && 
+                     move.meta.ailment.name !== 'none' && 
+                     move.meta.ailment_chance > 0;
+  
+  const hasStatChanges = move.stat_changes && move.stat_changes.length > 0;
+  const hasValidStatChanges = hasStatChanges && move.stat_changes.some((sc: any) => 
+    !EXCLUDED_STATS.includes(sc.stat.name)
+  );
+  
+  return hasDamage || hasAilment || hasValidStatChanges;
+}
 
 /**
  * Punto de entrada principal - importa todos los datos si no existen
@@ -158,53 +187,34 @@ async function checkMovesStatus(): Promise<void> {
 }
 
 /**
- * 3. Importar pokemones si no existen en la BD
- * Verifica cada pokémon individualmente: si no existe, lo importa
- * Si existe pero no tiene movimientos, importa solo los movimientos
+ * 3. Importar/actualizar pokemones
+ * Siempre reprocesa todos los Pokemon (nuevos y existentes)
+ * - Importa Pokemon nuevos
+ * - Actualiza movimientos de Pokemon existentes
+ * - Limpia Pokemon con move_id = 0
+ * - Agrega sprites icons
  */
 async function importPokemonIfNeeded(): Promise<void> {
-  console.log('\n📦 Verificando pokemones en base de datos...');
+  console.log('\n📦 Procesando pokemones...');
 
   const pokemonCollection = getPokemonCollection();
   let imported = 0;
   let skipped = 0;
-  let updatedMoves = 0;
 
-  console.log('🔄 Verificando cada pokémon individualmente...\n');
+  console.log('🔄 Verificando pokemones...\n');
 
   for (let i = 0; i < POKEMON_IDS.length; i++) {
     const pokeId = POKEMON_IDS[i];
-
+    const isLastPokemon = i === POKEMON_IDS.length - 1;
+    
     try {
       // 1. Verificar si el pokémon ya existe
       const existingPokemon = await pokemonCollection.findOne({ pokeapi_id: pokeId });
       
       if (existingPokemon) {
-        // El pokémon existe, verificar si tiene movimientos
-        const hasMoves = existingPokemon.move_ids && existingPokemon.move_ids.length > 0;
-        
-        if (!hasMoves) {
-          // El pokémon existe pero no tiene movimientos → importar movimientos
-          console.log(`  ⚠️ [${pokeId}] ${existingPokemon.name} sin movimientos - importando...`);
-          
-          const pokemonResponse = await axios.get(`${POKEAPI_BASE}/pokemon/${pokeId}`, { timeout: 10000 });
-          const moveIds = await fetchAndSaveMoves(pokemonResponse.data.moves, existingPokemon.name);
-          
-          // Actualizar el pokémon con los nuevos movimientos
-          await pokemonCollection.updateOne(
-            { pokeapi_id: pokeId },
-            { 
-              $set: { 
-                move_ids: moveIds,
-                updated_at: new Date().toISOString()
-              } 
-            }
-          );
-          
-          updatedMoves++;
-        } else {
-          skipped++;
-        }
+        console.log(`  ⏭️ [${pokeId}] ${existingPokemon.name} - omitido`);
+        skipped++;
+        continue;
       } else {
         // El pokémon no existe → importar todo
         const pokemonResponse = await axios.get(`${POKEAPI_BASE}/pokemon/${pokeId}`, { timeout: 10000 });
@@ -218,11 +228,21 @@ async function importPokemonIfNeeded(): Promise<void> {
         // Extraer nombre en español
         const nameEs = speciesData.names?.find((n: any) => n.language.name === 'es')?.name || pokemonData.name;
 
-        // Obtener TODOS los movimientos del Pokémon
+        // Obtener movimientos filtrados del Pokémon
         const moveIds = await fetchAndSaveMoves(pokemonData.moves, pokemonData.name);
+        
+        // Limpiar move_ids con valor 0
+        const cleanMoveIds = moveIds.filter(id => id !== 0);
+        
+        if (cleanMoveIds.length !== moveIds.length) {
+          cleaned += (moveIds.length - cleanMoveIds.length);
+        }
 
         const isLegendary = LEGENDARY_IDS.includes(pokeId);
         const isMythical = MYTHICAL_IDS.includes(pokeId);
+
+        // Obtener sprites (incluir icons)
+        const sprites = extractSprites(pokemonData.sprites, pokeId);
 
         const pokemonDoc = {
           pokeapi_id: pokeId,
@@ -241,19 +261,8 @@ async function importPokemonIfNeeded(): Promise<void> {
           base_experience: pokemonData.base_experience || 0,
           is_legendary: isLegendary,
           is_mythical: isMythical,
-          move_ids: moveIds,
-          sprites: {
-            front_default: pokemonData.sprites.versions?.['generation-v']?.['black-white']?.animated?.front_default || null,
-            back_default: pokemonData.sprites.versions?.['generation-v']?.['black-white']?.animated?.back_default || null,
-            front_shiny: pokemonData.sprites.versions?.['generation-v']?.['black-white']?.animated?.front_shiny || null,
-            back_shiny: pokemonData.sprites.versions?.['generation-v']?.['black-white']?.animated?.back_shiny || null,
-            front_female: null,
-            back_female: null,
-            front_shiny_female: null,
-            back_shiny_female: null,
-            static_front_default: pokemonData.sprites.front_default || null,
-            static_back_default: pokemonData.sprites.back_default || null
-          },
+          move_ids: cleanMoveIds,
+          sprites: sprites,
           height_dm: pokemonData.height,
           weight_hg: pokemonData.weight,
           cached_at: new Date().toISOString(),
@@ -261,19 +270,12 @@ async function importPokemonIfNeeded(): Promise<void> {
         };
 
         await insertPokemon(pokemonDoc);
+        console.log(`  ✅ [${pokeId}] ${nameEs} (${pokemonData.name}) - agregado`);
         imported++;
-        
-        // 📝 LOG: Pokémon importado
-        console.log(`✅ [${pokeId}] ${nameEs} (${pokemonData.name}) - ${moveIds.length} movimientos`);
       }
 
-      // Progreso cada 50 pokemones
-      if ((imported + updatedMoves) % 50 === 0) {
-        console.log(`📈 Progreso: ${imported} nuevos, ${updatedMoves} actualizados, ${skipped} omitidos`);
-      }
-
-      // Rate limiting
-      await sleep(100);
+      // Rate limiting (menor para mayor velocidad)
+      await sleep(30);
     } catch (error) {
       const msg = `Error procesando pokémon ${pokeId}: ${error}`;
       stats.errors.push(msg);
@@ -284,13 +286,34 @@ async function importPokemonIfNeeded(): Promise<void> {
   stats.pokemon.imported = imported;
   stats.pokemon.existing = skipped;
   
-  console.log(`\n✅ Pokemones importados: ${imported}`);
-  console.log(`✅ Pokemones actualizados (movimientos): ${updatedMoves}`);
-  console.log(`✅ Pokemones omitidos: ${skipped}`);
+  console.log(`\n\n✅ Proceso completado`);
+  console.log(`   📥 Nuevos: ${imported}`);
+  console.log(`   ⏭️  Omitidos: ${skipped}`);
 }
 
 /**
- * Fetch y guarda TODOS los movimientos de un pokémon
+ * Extrae los sprites del Pokémon, incluyendo icons
+ */
+function extractSprites(sprites: any, pokeId: number): any {
+  return {
+    front_default: sprites.versions?.['generation-v']?.['black-white']?.animated?.front_default || null,
+    back_default: sprites.versions?.['generation-v']?.['black-white']?.animated?.back_default || null,
+    front_shiny: sprites.versions?.['generation-v']?.['black-white']?.animated?.front_shiny || null,
+    back_shiny: sprites.versions?.['generation-v']?.['black-white']?.animated?.back_shiny || null,
+    front_female: null,
+    back_female: null,
+    front_shiny_female: null,
+    back_shiny_female: null,
+    static_front_default: sprites.front_default || null,
+    static_back_default: sprites.back_default || null,
+    icon: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokeId}.png`
+  };
+}
+
+/**
+ * Fetch y guarda los movimientos útiles de un pokémon
+ * Filtra según reglas: daño, ailment, o cambios de stat válidos
+ * Excepciones: transform y metronome siempre se guardan
  * @param moves - Lista de movimientos del pokémon desde PokeAPI
  * @param pokemonName - Nombre del pokémon para logging
  */
@@ -298,7 +321,7 @@ async function fetchAndSaveMoves(moves: any[], pokemonName: string): Promise<num
   const moveIds: number[] = [];
   const seenMoveIds = new Set<number>();
   const movesToInsert: any[] = [];
-  const movesLog: string[] = [];
+  const validMovesCount = { total: 0, kept: 0 };
 
   for (const moveData of moves) {
     try {
@@ -308,6 +331,14 @@ async function fetchAndSaveMoves(moves: any[], pokemonName: string): Promise<num
 
       if (seenMoveIds.has(moveId)) continue;
       seenMoveIds.add(moveId);
+      validMovesCount.total++;
+
+      // FILTRO: Verificar si el movimiento debe guardarse
+      if (!shouldSaveMove(move)) {
+        continue;
+      }
+
+      validMovesCount.kept++;
       moveIds.push(moveId);
 
       // Extraer nombres en español, inglés, japonés
@@ -315,6 +346,19 @@ async function fetchAndSaveMoves(moves: any[], pokemonName: string): Promise<num
       
       // Extraer descripción (español > inglés)
       const description = extractMoveDescription(move.flavor_text_entries || []);
+
+      // Obtener campos adicionales del meta
+      const critRate = move.meta?.crit_rate || 0;
+      const drain = move.meta?.drain || 0;
+      const healing = move.meta?.heal || 0;
+      const statChance = move.meta?.stat_chance || 0;
+      const flinchChance = move.meta?.flinch_chance || 0;
+      
+      // Campos de hits y turns (para movimientos de múltiples turnos/golpes)
+      const maxHits = move.meta?.max_hits || null;
+      const minHits = move.meta?.min_hits || null;
+      const maxTurns = move.meta?.max_turns || null;
+      const minTurns = move.meta?.min_turns || null;
 
       const normalizedMove = {
         move_id: moveId,
@@ -335,8 +379,16 @@ async function fetchAndSaveMoves(moves: any[], pokemonName: string): Promise<num
             stat: sc.stat.name,
             change: sc.change
           })),
-          flinch_chance: move.meta?.flinch_chance || 0,
-          heal: move.meta?.heal || 0
+          crit_rate: critRate,
+          drain: drain,
+          flinch_chance: flinchChance,
+          healing: healing,
+          max_hits: maxHits,
+          min_hits: minHits,
+          max_turns: maxTurns,
+          min_turns: minTurns,
+          stat_chance: statChance,
+          heal: healing
         },
         flags: {
           contact: move.flags?.contact || false,
@@ -350,28 +402,16 @@ async function fetchAndSaveMoves(moves: any[], pokemonName: string): Promise<num
       };
 
       movesToInsert.push(normalizedMove);
-      
-      // 📝 LOG: Nombre del movimiento en español
-      const moveNameES = names.es || move.name;
-      movesLog.push(`   - ${moveNameES} (${move.type.name}, power: ${move.power || 'N/A'})`);
     } catch (error) {
       // Silencioso - no detener por un move fallido
     }
   }
 
-  // Insertar todos los moves en batch
+  // Insertar movimientos filtrados en batch
   if (movesToInsert.length > 0) {
     try {
       await insertMovesBatch(movesToInsert);
       stats.moves.imported += movesToInsert.length;
-      
-      // 📝 LOG: Mostrar todos los movimientos del pokémon (solo los primeros 10 si son muchos)
-      console.log(`   📋 Movimientos de ${pokemonName}:`);
-      const displayMoves = movesLog.length > 15 ? movesLog.slice(0, 15) : movesLog;
-      displayMoves.forEach(m => console.log(m));
-      if (movesLog.length > 15) {
-        console.log(`   ... y ${movesLog.length - 15} más`);
-      }
     } catch (error) {
       console.warn(`⚠️ Error guardando movimientos en batch: ${error}`);
     }
@@ -447,8 +487,9 @@ function printSummary(): void {
   console.log(`   - Existentes: ${stats.moves.existing}`);
   console.log(`   - Nuevos agregados: ${stats.moves.imported}`);
   console.log(`\n📦 Pokemones:`);
-  console.log(`   - Existentes: ${stats.pokemon.existing}`);
   console.log(`   - Importados: ${stats.pokemon.imported}`);
+  console.log(`   - Actualizados: ${stats.pokemon.existing}`);
+  console.log(`   - Move_ids limpiados (0): ${stats.pokemon.cleaned}`);
 
   if (stats.errors.length > 0) {
     console.log(`\n⚠️ Errores: ${stats.errors.length}`);

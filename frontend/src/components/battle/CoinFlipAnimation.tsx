@@ -44,10 +44,13 @@ export const CoinFlipAnimation: React.FC<CoinFlipAnimationProps> = ({
   return (
     <div className="coinflip-overlay">
       <div className="coinflip-container">
-        {/* Moneda animada */}
+        {/* Moneda animada con imagen real */}
         <div className={`coin ${phase === 'flipping' ? 'flipping' : ''}`}>
-          <div className="coin-side coin-front">J1</div>
-          <div className="coin-side coin-back">J2</div>
+          <img 
+            src="/assets/items/coin.png" 
+            alt="Coin" 
+            className="coin-image"
+          />
         </div>
 
         {/* Resultado */}

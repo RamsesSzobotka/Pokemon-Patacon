@@ -168,7 +168,7 @@ const PokédexView: React.FC = () => {
           <div className="filters-header">
             <button
               className="back-btn-filters"
-              onClick={() => router.navigate('/')}
+              onClick={() => router.navigate({ to: '/' })}
               title="Volver al menú"
             >
               ◀
@@ -320,7 +320,7 @@ const PokédexView: React.FC = () => {
             {error && (
               <div className="error-state">
                 <p>❌ Error: {error}</p>
-                <button onClick={fetchPokemon} className="btn btn-primary">
+                <button onClick={fetchPokemon} className="btn btn-primary btn-float">
                   Reintentar
                 </button>
               </div>
@@ -417,7 +417,7 @@ const PokédexView: React.FC = () => {
             {!loading && pokemon.length === 0 && !error && (
               <div className="no-results">
                 <p>😔 No se encontraron Pokémon con los filtros aplicados</p>
-                <button onClick={clearAllFilters} className="btn btn-primary">
+                <button onClick={clearAllFilters} className="btn btn-primary btn-float">
                   Limpiar filtros
                 </button>
               </div>

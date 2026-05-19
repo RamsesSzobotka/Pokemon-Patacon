@@ -53,6 +53,7 @@ export interface BattleMove {
   moveId: number;
   name: string;
   type: string;
+  target?: string;
   damageClass: MoveDamageClass;
   power: number | null;
   accuracy: number | null;
