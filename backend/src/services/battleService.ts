@@ -9,6 +9,8 @@
  * - Ejecución de turnos
  */
 
+import { randomBytes } from 'crypto';
+
 import type { 
   BattleState, 
   PokemonInBattle, 
@@ -17,10 +19,17 @@ import type {
   ActionResult, 
   TurnResult,
   BattleMove,
-  BattlePhase
+  BattlePhase,
+  V3MoveMetadata,
+  EvasiveMoveMetadata,
+  FatigueMoveMetadata
 } from '../types/battle.js';
 import { 
-  BATTLE_CONFIG
+  BATTLE_CONFIG,
+  V3_MOVES,
+  EVASIVE_MOVES,
+  FATIGUE_MOVES,
+  TEST_MOVES
 } from '../types/battle.js';
 import { getTypeEffectiveness } from '../db/mongodb.js';
 
@@ -100,9 +109,13 @@ export function determineExecutionOrder(
 /**
  * Lanza una moneda para determinar orden cuando hay empate de prioridad
  * Retorna aleatoriamente 'player1' o 'player2'
+ * Usa crypto.randomBytes para mayor precisión que Math.random()
  */
 export function coinflip(): 'player1' | 'player2' {
-  return Math.random() < 0.5 ? 'player1' : 'player2';
+  const randomBytesResult = randomBytes(4);
+  const randomNumber = randomBytesResult.readUInt32BE(0);
+  // Distribución uniforme: si el número es par → player1, impar → player2
+  return randomNumber % 2 === 0 ? 'player1' : 'player2';
 }
 
 // ============================================
@@ -239,6 +252,18 @@ export function canActWithAilments(pokemon: PokemonInBattle): {
     return { canAct: false, reason: 'Pokémon desfallecido' };
   }
   
+  // V3: Si está en fase de carga de 2 turnos, DEBE poder actuar (ejecutar el movimiento preparado)
+  // chargePhase = 'charge' significa que está preparándose para ejecutar en el siguiente turno
+  if (pokemon.isChargingTwoTurn && pokemon.chargePhase === 'charge') {
+    return { canAct: true, reason: '' }; // Debe ejecutar el movimiento de 2 turnos
+  }
+  
+  // V3: Verificar fatiga ANTES de otros estados (must be first to prevent action)
+  // Only recharge-type fatigue blocks action; exhaustion is narrative only
+  if (pokemon.isFatigued && pokemon.fatigueSource === 'recharge') {
+    return { canAct: false, reason: 'Agotado (necesita descansar)' };
+  }
+  
   // Verificar banderas especiales
   if (pokemon.cannotActNextTurn) {
     return { canAct: false, reason: 'Agotado (necesita descansar)' };
@@ -302,23 +327,23 @@ export function applyEndOfTurnAilmentDamage(pokemon: PokemonInBattle): {
       pokemon.hp = Math.max(0, pokemon.hp - damage);
       totalDamage += damage;
       
-      // Mensaje de daño
+      // Mensaje de daño (estilo limpio sin números)
       let damageMessage = `${pokemon.name}`;
       switch (ailment.type) {
         case 'burn':
-          damageMessage += ` está quemado y recibió ${damage} de daño.`;
+          damageMessage += ` está quemado.`;
           break;
         case 'poison':
-          damageMessage += ` está envenenado y recibió ${damage} de daño.`;
+          damageMessage += ` está envenenado.`;
           break;
         case 'toxic':
-          damageMessage += ` está envenenado gravemente y recibió ${damage} de daño.`;
+          damageMessage += ` está envenenado gravemente.`;
           break;
         case 'leech_seed':
-          damageMessage += ` está siendo absorbido por Emboscada Semilla y recibió ${damage} de daño.`;
+          damageMessage += ` está siendo absorbido por Emboscada Semilla.`;
           break;
         case 'curse':
-          damageMessage += ` está maldito y recibió ${damage} de daño.`;
+          damageMessage += ` está maldito.`;
           break;
       }
       
@@ -372,6 +397,342 @@ export function decrementAilmentTurns(pokemon: PokemonInBattle): {
   }
   
   return { expiredAilments, messages };
+}
+
+// ============================================
+// V3: HELPER FUNCTIONS (2 Turnos y Fatiga)
+// ============================================
+
+/**
+ * Determina si un movimiento es de 2 turnos (carga + ejecución)
+ * Un movimiento es de 2 turnos si tiene flag 'charge' pero no 'recharge'
+ * 
+ * @param move - El movimiento a verificar
+ * @returns true si es movimiento de 2 turnos, false en otro caso
+ */
+export function isMoveTwoTurn(move: BattleMove | null): boolean {
+  if (!move) return false;
+  return move.flags.charge === true && !move.flags.recharge;
+}
+
+/**
+ * Obtiene lista de nombres de movimientos de 2 turnos desde V3_MOVES
+ * 
+ * @returns Array de nombres de movimientos de 2 turnos
+ */
+export function getTwoTurnMoveList(): string[] {
+  return Object.values(V3_MOVES)
+    .filter((meta: V3MoveMetadata) => meta.isTwoTurn === true)
+    .map((meta: V3MoveMetadata) => meta.name);
+}
+
+/**
+ * Verifica si un Pokémon está actualmente cargando un movimiento de 2 turnos
+ * Retorna true solo si TODOS estos campos son verdaderos:
+ * - isChargingTwoTurn = true
+ * - chargePhase = 'charge'
+ * - currentTwoTurnMove !== null
+ * - El movimiento tiene flag charge = true
+ * 
+ * @param pokemon - Pokémon a verificar
+ * @returns true si está en fase de carga, false en otro caso
+ */
+export function isTwoTurnCharging(pokemon: PokemonInBattle): boolean {
+  return (
+    pokemon.isChargingTwoTurn === true &&
+    pokemon.chargePhase === 'charge' &&
+    pokemon.currentTwoTurnMove !== null &&
+    isMoveTwoTurn(pokemon.currentTwoTurnMove)
+  );
+}
+
+/**
+ * Verifica si un Pokémon está cargando un movimiento evasivo
+ * Los movimientos evasivos permiten evitar ataques durante la carga
+ * 
+ * @param pokemon - Pokémon a verificar
+ * @returns true si está cargando movimiento evasivo, false en otro caso
+ */
+export function isEvasivelyCharging(pokemon: PokemonInBattle): boolean {
+  if (!pokemon.isEvasivelyCharging || !pokemon.evasiveChargeMove) {
+    return false;
+  }
+  
+  return pokemon.evasiveChargeMove.flags.evasive === true;
+}
+
+/**
+ * Verifica si un Pokémon que está cargando puede ser interrumpido
+ * Un Pokémon solo puede ser interrumpido si:
+ * - Está en fase de carga de 2 turnos (isTwoTurnCharging = true)
+ * - El movimiento tiene flag interruptible = true
+ * 
+ * @param attacker - Pokémon atacante que está cargando
+ * @returns true si puede ser interrumpido, false en otro caso
+ */
+export function canBeInterrupted(attacker: PokemonInBattle): boolean {
+  // Solo puede ser interrumpido si está en fase de carga
+  if (!isTwoTurnCharging(attacker)) {
+    return false;
+  }
+  
+  // Verificar si el movimiento tiene la flag interruptible
+  const move = attacker.currentTwoTurnMove;
+  if (!move) return false;
+  
+  return move.flags.interruptible === true;
+}
+
+/**
+ * Aplica estado de fatiga a un Pokémon después de ejecutar ciertos movimientos
+ * La fatiga debilita el siguiente ataque del Pokémon
+ * 
+ * @param pokemon - Pokémon afectado
+ * @param fatigueType - Tipo de fatiga:
+ *   - 'recharge': Obligatorio (Hyper Beam) - Pokémon debe "descansar"
+ *   - 'exhaustion': Normal - Siguiente ataque es más débil
+ */
+export function applyFatigue(
+  pokemon: PokemonInBattle,
+  fatigueType: 'recharge' | 'exhaustion' = 'exhaustion'
+): void {
+  pokemon.isFatigued = true;
+  pokemon.fatigueSource = fatigueType;
+}
+
+/**
+ * Limpia el estado de fatiga de un Pokémon
+ * Se ejecuta generalmente al inicio del turno cuando el Pokémon recupera fuerzas
+ * 
+ * @param pokemon - Pokémon a limpiar
+ */
+export function resetFatigueState(pokemon: PokemonInBattle): void {
+  pokemon.isFatigued = false;
+  pokemon.fatigueSource = null;
+}
+
+/**
+ * Obtiene la fase actual de un movimiento de 2 turnos
+ * 
+ * @param pokemon - Pokémon a verificar
+ * @returns 'charge' si está en fase de carga, 'execute' si está en fase de ejecución, 'none' si no está cargando
+ */
+export function getMovePhase(pokemon: PokemonInBattle): 'charge' | 'execute' | 'none' {
+  if (!pokemon.isChargingTwoTurn) {
+    return 'none';
+  }
+  
+  if (pokemon.chargePhase === 'charge') {
+    return 'charge';
+  }
+  
+  if (pokemon.chargePhase === 'execute') {
+    return 'execute';
+  }
+  
+  return 'none';
+}
+
+/**
+ * Maneja la lógica completa de movimientos de 2 turnos (carga y ejecución)
+ * 
+ * Fase de Carga:
+ * - Establece los flags de carga
+ * - Si es movimiento evasivo, marca como evadiendo
+ * - Si es Skull Bash, aplica +1 defensa temporal
+ * - Retorna mensaje de carga
+ * 
+ * Fase de Ejecución:
+ * - Calcula daño normalmente
+ * - Verifica si el defensor está evadiendo
+ * - Aplica fatiga si corresponde
+ * - Limpia todos los flags de carga
+ * 
+ * @param attacker - Pokémon atacante
+ * @param defender - Pokémon defensor
+ * @param move - Movimiento de 2 turnos
+ * @param phase - Fase actual ('charge' o 'execute')
+ * @param playerId - ID del jugador atacante
+ * @returns ActionResult con los resultados de la acción
+ */
+export function handleTwoTurnMove(
+  attacker: PokemonInBattle,
+  defender: PokemonInBattle,
+  move: BattleMove,
+  phase: 'charge' | 'execute',
+  playerId: 'player1' | 'player2'
+): ActionResult {
+  
+  if (phase === 'charge') {
+    // ===== FASE DE CARGA =====
+    
+    // Establecer flags de carga
+    attacker.isChargingTwoTurn = true;
+    attacker.chargePhase = 'charge';  // ← Fase de carga (esperar siguiente turno)
+    attacker.currentTwoTurnMove = move;
+    
+    // Verificar si es movimiento evasivo (Fly, Dig, Bounce, Dive, Shadow Force)
+    if (move.flags.evasive === true) {
+      attacker.isEvasivelyCharging = true;
+      attacker.evasiveChargeMove = move;
+    }
+    
+    // Verificar si es Skull Bash para aplicar +1 defensa temporal
+    if (move.moveId === 37) {  // Skull Bash moveId
+      attacker.defense += Math.floor(attacker.defense * 0.25); // +25% defensa
+    }
+    
+    // Construir mensaje de carga
+    const chargeMessage = `¡${attacker.name} está cargando ${move.name}!`;
+    
+    return {
+      success: true,
+      action: { playerId, type: 'attack', move, moveId: move.moveId },
+      message: chargeMessage,
+      isCharging: true,
+      attackerName: attacker.name,
+      moveName: move.name
+    };
+  }
+  
+  // ===== FASE DE EJECUCIÓN =====
+  
+  // Calcular daño normalmente
+  const { damage, effectiveness } = calculateDamage(attacker, defender, move);
+  
+  // Verificar si el defensor está evadiendo
+  if (isDefenderEvading(defender)) {
+    // Limpiar flags de carga
+    attacker.isChargingTwoTurn = false;
+    attacker.chargePhase = null;
+    attacker.currentTwoTurnMove = null;
+    attacker.isEvasivelyCharging = false;
+    attacker.evasiveChargeMove = null;
+    
+    return {
+      success: true,
+      action: { playerId, type: 'attack', move, moveId: move.moveId },
+      message: `${attacker.name} usado ${move.name}.\n${defender.name} evadio el ataque!`,
+      damage: 0,
+      targetHpBefore: defender.hp,
+      targetHpAfter: defender.hp,
+      effectiveness: 0,
+      failed: false,
+      attackerName: attacker.name,
+      defenderName: defender.name,
+      moveName: move.name
+    };
+  }
+  
+  // Aplicar daño
+  const hpBefore = defender.hp;
+  defender.hp = Math.max(0, defender.hp - damage);
+  const hpAfter = defender.hp;
+  
+  // Construir mensaje narrativo estilo Pokémon BW
+  let message = `${attacker.name} usado ${move.name}.`;
+  
+  // Agregar efectividad del ataque
+  if (effectiveness > 1) {
+    message += '\n¡Es muy efectivo!';
+  } else if (effectiveness < 1 && effectiveness > 0) {
+    message += '\nNo es muy efectivo...';
+  } else if (effectiveness === 0) {
+    message += '\n¡No tiene efecto!';
+  }
+  
+  // Verificar si se debilitó
+  const fainted = hpAfter <= 0;
+  if (fainted) {
+    defender.isFainted = true;
+    message += `\n${defender.name} se debilito.`;
+  }
+  
+  // Verificar si el movimiento causa fatiga
+  if (FATIGUE_MOVES[move.moveId]) {
+    const fatigueInfo = FATIGUE_MOVES[move.moveId];
+    if (fatigueInfo.fatigueType === 'recharge') {
+      applyFatigue(attacker, 'recharge');
+      message += `\n¡${attacker.name} necesita descansar!`;
+    } else if (fatigueInfo.fatigueType === 'exhaustion') {
+      applyFatigue(attacker, 'exhaustion');
+      message += `\n¡${attacker.name} está agotado!`;
+    }
+  }
+  
+  // Limpiar flags de carga
+  attacker.isChargingTwoTurn = false;
+  attacker.chargePhase = null;
+  attacker.currentTwoTurnMove = null;
+  attacker.isEvasivelyCharging = false;
+  attacker.evasiveChargeMove = null;
+  
+  // Si era Skull Bash, restaurar defensa
+  if (move.moveId === 37) {  // Skull Bash moveId
+    attacker.defense = Math.floor(attacker.defense / 1.25); // Revertir +25%
+  }
+  
+  return {
+    success: true,
+    action: { playerId, type: 'attack', move, moveId: move.moveId },
+    message,
+    damage,
+    targetHpBefore: hpBefore,
+    targetHpAfter: hpAfter,
+    effectiveness,
+    failed: fainted,
+    attackerName: attacker.name,
+    defenderName: defender.name,
+    moveName: move.name
+  };
+}
+
+/**
+ * Verifica si el defensor está evadiendo un ataque
+ * Un defensor solo puede evadir si:
+ * - Está en fase de carga de movimiento evasivo
+ * - El movimiento tiene flag evasive = true
+ * 
+ * @param defender - Pokémon defensor
+ * @returns true si el defensor puede evadir, false en otro caso
+ */
+export function isDefenderEvading(defender: PokemonInBattle): boolean {
+  // Verificar si está en fase de carga evasiva
+  if (!defender.isEvasivelyCharging) {
+    return false;
+  }
+  
+  // Verificar si el movimiento evasivo tiene flag evasive = true
+  if (!defender.evasiveChargeMove || !defender.evasiveChargeMove.flags.evasive) {
+    return false;
+  }
+  
+  // Verificar si está en fase de carga
+  // chargePhase = 'charge' means "preparing to execute move next turn" (can evade attacks)
+  // chargePhase = 'execute' means "about to execute (deprecated)"
+  // chargePhase = null means "not charging"
+  if (defender.chargePhase !== 'charge') {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Reinicia los flags de estado de carga de 2 turnos al inicio de un turno
+ * Se ejecuta antes de procesar las acciones del turno
+ * 
+ * @param pokemon - Pokémon a reiniciar
+ */
+export function updateTwoTurnState(pokemon: PokemonInBattle): void {
+  // No hacer nada si no está cargando
+  if (!pokemon.isChargingTwoTurn) {
+    return;
+  }
+  
+  // Si está en fase de ejecución, es responsabilidad de handleTwoTurnMove limpiar
+  // Este función solo se usa para diagnosticar o hacer reset completo
+  // Por ahora, no hacemos nada aquí ya que handleTwoTurnMove limpia los flags
 }
 
 // ============================================
@@ -459,12 +820,85 @@ export function executeMove(
     };
   }
   
+  // ===== V3: MANEJO DE HYPER BEAM (Recharge Move) =====
+  // Hyper Beam se ejecuta inmediatamente + aplica fatiga
+  if (move.flags.recharge === true) {
+    // Ignorar si el movimiento no causa daño
+    if (!move.power || move.power === 0 || move.damageClass === 'status') {
+      return {
+        success: true,
+        action: { playerId: attackerPlayerId, type: 'attack', move, moveId: move.moveId },
+        message: `${attacker.name} usado ${move.name}.\nEl ataque no tuvo efecto!`,
+        failed: false
+      };
+    }
+    
+    // Calcular daño normalmente
+    const { damage, effectiveness } = calculateDamage(attacker, defender, move);
+    
+    // Aplicar daño
+    const hpBefore = defender.hp;
+    defender.hp = Math.max(0, defender.hp - damage);
+    const hpAfter = defender.hp;
+    
+// Construir mensaje narrativo estilo Pokémon BW
+  let message = `${attacker.name} usado ${move.name}.`;
+  
+  // Agregar efectividad del ataque
+  if (effectiveness > 1) {
+    message += '\n¡Es muy efectivo!';
+  } else if (effectiveness < 1 && effectiveness > 0) {
+    message += '\nNo es muy efectivo...';
+  } else if (effectiveness === 0) {
+    message += '\n¡No tiene efecto!';
+  }
+  
+  // Verificar si se debilitó
+  const fainted = hpAfter <= 0;
+  if (fainted) {
+    defender.isFainted = true;
+    message += `\n${defender.name} se debilito.`;
+  }
+    
+    // Aplicar fatiga inmediatamente (Recharge)
+    applyFatigue(attacker, 'recharge');
+    message += `\n¡${attacker.name} necesita descansar!`;
+    
+    return {
+      success: true,
+      action: { playerId: attackerPlayerId, type: 'attack', move, moveId: move.moveId },
+      message,
+      damage,
+      targetHpBefore: hpBefore,
+      targetHpAfter: hpAfter,
+      effectiveness,
+      failed: fainted,
+      attackerName: attacker.name,
+      defenderName: defender.name,
+      moveName: move.name
+    };
+  }
+  
+  // ===== V3: MANEJO DE MOVIMIENTOS DE 2 TURNOS =====
+  if (isMoveTwoTurn(move)) {
+    // Verificar si ya está cargando
+    if (!isTwoTurnCharging(attacker)) {
+      // Primera ejecución: Fase de Carga
+      return handleTwoTurnMove(attacker, defender, move, 'charge', attackerPlayerId);
+    } else {
+      // Segunda ejecución: Fase de Ejecución
+      return handleTwoTurnMove(attacker, defender, move, 'execute', attackerPlayerId);
+    }
+  }
+  
+  // ===== MOVIMIENTOS NORMALES (Sin carga, sin recharge) =====
+  
   // Ignorar movimientos que no causan daño
   if (!move.power || move.power === 0 || move.damageClass === 'status') {
     return {
       success: true,
       action: { playerId: attackerPlayerId, type: 'attack', move, moveId: move.moveId },
-      message: `¡${attacker.name} usó ${move.name}! Pero... ¡No tuvo efecto!`,
+      message: `${attacker.name} usado ${move.name}.\nEl ataque no tuvo efecto!`,
       failed: false
     };
   }
@@ -477,8 +911,8 @@ export function executeMove(
   defender.hp = Math.max(0, defender.hp - damage);
   const hpAfter = defender.hp;
   
-  // Construir mensaje narrativo
-  let message = `¡${attacker.name} usó ${move.name}!`;
+  // Construir mensaje narrativo estilo Pokémon BW
+  let message = `${attacker.name} usado ${move.name}.`;
   
   // Agregar efectividad del ataque
   if (effectiveness > 1) {
@@ -489,14 +923,11 @@ export function executeMove(
     message += '\n¡No tiene efecto!';
   }
   
-  // Mostrar daño
-  message += `\n¡${defender.name} recibió ${damage} de daño!`;
-  
   // Verificar si se debilitó
   const fainted = hpAfter <= 0;
   if (fainted) {
     defender.isFainted = true;
-    message += `\n¡${defender.name} se debilitó!`;
+    message += `\n${defender.name} se debilito.`;
   }
   
   // V2: Aplicar efectos de estado si el movimiento los tiene
@@ -556,6 +987,13 @@ export function executeSwitch(
   
   // Guardar HP del Pokémon actual antes de salir
   previousPokemon.savedHp = previousPokemon.hp;
+  
+  // ===== V3: LIMPIAR ESTADOS DE 2 TURNOS DEL POKÉMON ANTERIOR =====
+  previousPokemon.isChargingTwoTurn = false;
+  previousPokemon.currentTwoTurnMove = null;
+  previousPokemon.chargePhase = null;
+  previousPokemon.isEvasivelyCharging = false;
+  previousPokemon.evasiveChargeMove = null;
   
   // Cambiar al nuevo Pokémon
   player.activePokemonIndex = newPokemonIndex;
@@ -682,6 +1120,19 @@ export function createPlayerBattleState(
     chargingMoveId: undefined,
     cannotActNextTurn: false,
     hasFlinched: false,
+    // V2: Estados
+    // (ya inicializados arriba)
+    // V3: Movimientos de 2 turnos
+    isChargingTwoTurn: false,
+    currentTwoTurnMove: null,
+    chargePhase: null,
+    // V3: Fatiga
+    isFatigued: false,
+    fatigueSource: null,
+    // V3: Evasión
+    isEvasivelyCharging: false,
+    evasiveChargeMove: null,
+    // Otros
     isFainted: false,
     savedHp: pokemon.stats?.hp || 100
   }));

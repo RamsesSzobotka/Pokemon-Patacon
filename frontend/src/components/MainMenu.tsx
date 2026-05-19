@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { socket, connect, getSessionId, isConnected, getCurrentRoom } from '../websocket';
+import { PokemonSlotAnimation } from './battle/PokemonSlotAnimation';
 import '../styles/MainMenu.css';
+import '../components/battle/PokemonSlotAnimation.css';
 
 interface RoomData {
   roomCode: string;
@@ -32,7 +34,8 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
   const [gameMode, setGameMode] = useState<'normal' | 'random'>('normal'); // Modo de juego
   const [showRandomLoading, setShowRandomLoading] = useState(false);
   const [randomTeams, setRandomTeams] = useState<{player1: any[], player2: any[]} | null>(null);
-  const [randomCountdown, setRandomCountdown] = useState<number>(5);
+  const [randomCountdown, setRandomCountdown] = useState<number>(8);
+  const [slotAnimationComplete, setSlotAnimationComplete] = useState(false);
 
 // Audio background music ref
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -181,13 +184,14 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
         player2: data.player2_team || []
       });
       setShowRandomLoading(true);
-      setRandomCountdown(5);
+      setSlotAnimationComplete(false); // Reiniciar estado de animación
+      setRandomCountdown(8);
     }));
 
     // Contador para modo aleatorio (simplemente guardar el valor)
     unsubscribes.push(socket.on('draft:countdown', (data) => {
       console.log('[MainMenu] Draft countdown:', data);
-      setRandomCountdown(5); // Reiniciar a 5 cuando llega el mensaje
+      setRandomCountdown(8); // Reiniciar a 5 cuando llega el mensaje
     }));
 
     // Battle starting - navegar a batalla
@@ -399,7 +403,19 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
     // Determinar qué equipo es el del jugador
     const myTeam = playerNumber === 1 ? randomTeams.player1 : (playerNumber === 2 ? randomTeams.player2 : randomTeams.player1);
     const opponentTeam = playerNumber === 1 ? randomTeams.player2 : (playerNumber === 2 ? randomTeams.player1 : randomTeams.player2);
-    
+
+    // Si la animación de slots no ha terminado, mostrarla
+    if (!slotAnimationComplete) {
+      return (
+        <PokemonSlotAnimation
+          myTeam={myTeam || []}
+          opponentTeam={opponentTeam || []}
+          onAnimationComplete={() => setSlotAnimationComplete(true)}
+        />
+      );
+    }
+
+    // Una vez terminada la animación, mostrar el resultado final con countdown
     return (
       <div className="main-menu-container">
         <div className="random-loading-screen">
@@ -709,8 +725,6 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
             </div>
           </>
         )}
-
-        <div className="divider"></div>
 
         <div className="footer">
           <div className="footer-info">

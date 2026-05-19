@@ -75,6 +75,10 @@ export interface BattleMove {
     charge: boolean; // Movimientos de 2 turnos
     protect: boolean;
     mirror: boolean;
+    // V3: Nuevos flags
+    evasive?: boolean;        // Puede evadir ataques (Fly, Dig)
+    interruptible?: boolean;  // Puede ser interrumpido durante carga
+    fatigue?: boolean;        // Aplica fatiga al atacante
   };
 }
 
@@ -128,6 +132,26 @@ export interface PokemonInBattle {
   chargingMove?: BattleMove;
   cannotActNextTurn: boolean;
   hasFlinched: boolean;
+  
+  // V3: Movimientos de 2 Turnos
+  /** ¿Está en fase de carga o ejecución de movimiento de 2 turnos? */
+  isChargingTwoTurn: boolean;
+  /** Movimiento de 2 turnos siendo cargado/ejecutado */
+  currentTwoTurnMove: BattleMove | null;
+  /** Fase actual en la secuencia de 2 turnos */
+  chargePhase: 'charge' | 'execute' | null;
+  
+  // V3: Fatiga
+  /** ¿Está fatigado después de ejecutar movimiento agotador? */
+  isFatigued: boolean;
+  /** Causa de la fatiga ('recharge' = obligatorio, 'exhaustion' = normal) */
+  fatigueSource: 'recharge' | 'exhaustion' | null;
+  
+  // V3: Evasión
+  /** ¿Está cargando movimiento evasivo para evitar ataques? */
+  isEvasivelyCharging: boolean;
+  /** Movimiento evasivo siendo cargado */
+  evasiveChargeMove: BattleMove | null;
   
   // ¿Está fuera de combate?
   isFainted: boolean;
@@ -491,3 +515,387 @@ export const MULTI_HIT_MOVES = new Set([
   'barrage', 'bonerush', 'armthrust', 'twinneedle', 'geargrind', 'scaleshot',
   'watershuriken', 'populationbomb', 'doublehit'
 ]);
+
+// ============================================
+// V3: METADATOS Y CONSTANTES (2 Turnos y Fatiga)
+// ============================================
+
+/**
+ * Metadatos para movimientos de 2 turnos
+ */
+export interface V3MoveMetadata {
+  moveId: number;
+  name: string;
+  isTwoTurn: boolean;
+  chargeMessage: string;
+  executeMessage: string;
+  hasRecharge?: boolean;    // Requiere turno de recharge obligatorio
+  isFatigueable?: boolean;  // Se aplica fatiga (distinto de recharge)
+}
+
+/**
+ * Constante V3_MOVES: Mapeo de ID → Metadatos para movimientos de 2 turnos
+ * Incluye movimientos que requieren carga o tienen fase de recharge
+ */
+export const V3_MOVES: Record<number, V3MoveMetadata> = {
+  76: {  // Solar Beam
+    moveId: 76,
+    name: 'Solar Beam',
+    isTwoTurn: true,
+    chargeMessage: 'is absorbing solar energy',
+    executeMessage: 'uses Solar Beam',
+    isFatigueable: true,
+    hasRecharge: false,
+  },
+  63: {  // Hyper Beam
+    moveId: 63,
+    name: 'Hyper Beam',
+    isTwoTurn: false,
+    chargeMessage: '',
+    executeMessage: 'uses Hyper Beam',
+    hasRecharge: true,
+  },
+  143: {  // Sky Attack
+    moveId: 143,
+    name: 'Sky Attack',
+    isTwoTurn: true,
+    chargeMessage: 'is gathering power',
+    executeMessage: 'uses Sky Attack',
+    isFatigueable: false,
+    hasRecharge: false,
+  },
+  91: {  // Dig
+    moveId: 91,
+    name: 'Dig',
+    isTwoTurn: true,
+    chargeMessage: 'is digging underground',
+    executeMessage: 'uses Dig',
+    isFatigueable: true,
+    hasRecharge: false,
+  },
+  34: {  // Fly
+    moveId: 34,
+    name: 'Fly',
+    isTwoTurn: true,
+    chargeMessage: 'is flying up',
+    executeMessage: 'uses Fly',
+    isFatigueable: false,
+    hasRecharge: false,
+  },
+  264: {  // Focus Punch
+    moveId: 264,
+    name: 'Focus Punch',
+    isTwoTurn: true,
+    chargeMessage: 'is tightening its focus',
+    executeMessage: 'uses Focus Punch',
+    isFatigueable: false,
+    hasRecharge: false,
+  },
+  37: {  // Skull Bash
+    moveId: 37,
+    name: 'Skull Bash',
+    isTwoTurn: true,
+    chargeMessage: 'is lowering its head',
+    executeMessage: 'uses Skull Bash',
+    isFatigueable: false,
+    hasRecharge: false,
+  },
+  13: {  // Razor Wind
+    moveId: 13,
+    name: 'Razor Wind',
+    isTwoTurn: true,
+    chargeMessage: 'is creating a whirlwind',
+    executeMessage: 'uses Razor Wind',
+    isFatigueable: false,
+    hasRecharge: false,
+  },
+  339: {  // Bounce
+    moveId: 339,
+    name: 'Bounce',
+    isTwoTurn: true,
+    chargeMessage: 'is bouncing high',
+    executeMessage: 'uses Bounce',
+    isFatigueable: true,
+    hasRecharge: false,
+  },
+  291: {  // Dive
+    moveId: 291,
+    name: 'Dive',
+    isTwoTurn: true,
+    chargeMessage: 'is diving underwater',
+    executeMessage: 'uses Dive',
+    isFatigueable: true,
+    hasRecharge: false,
+  },
+};
+
+/**
+ * Metadatos para movimientos evasivos
+ */
+export interface EvasiveMoveMetadata {
+  moveId: number;
+  name: string;
+  evasionType: 'full' | 'partial';
+  chargeMessage: string;
+  executeMessage: string;
+  vulnerableTo: string[];
+}
+
+/**
+ * Constante EVASIVE_MOVES: Movimientos que pueden evadir ataques
+ * Se usan durante la fase de carga para determinar si un ataque puede golpear
+ */
+export const EVASIVE_MOVES: Record<number, EvasiveMoveMetadata> = {
+  34: {  // Fly
+    moveId: 34,
+    name: 'Fly',
+    evasionType: 'full',
+    chargeMessage: 'is flying up',
+    executeMessage: 'uses Fly',
+    vulnerableTo: ['Thunder', 'Hurricane', 'Gust', 'Twister', 'Sky Uppercut'],
+  },
+  91: {  // Dig
+    moveId: 91,
+    name: 'Dig',
+    evasionType: 'full',
+    chargeMessage: 'is digging underground',
+    executeMessage: 'uses Dig',
+    vulnerableTo: ['Earthquake', 'Magnitude'],
+  },
+  339: {  // Bounce
+    moveId: 339,
+    name: 'Bounce',
+    evasionType: 'full',
+    chargeMessage: 'is bouncing high',
+    executeMessage: 'uses Bounce',
+    vulnerableTo: ['Thunder', 'Hurricane', 'Gust', 'Sky Uppercut'],
+  },
+  291: {  // Dive
+    moveId: 291,
+    name: 'Dive',
+    evasionType: 'full',
+    chargeMessage: 'is diving underwater',
+    executeMessage: 'uses Dive',
+    vulnerableTo: ['Surf', 'Earthquake', 'Dive'],
+  },
+  442: {  // Shadow Force
+    moveId: 442,
+    name: 'Shadow Force',
+    evasionType: 'full',
+    chargeMessage: 'is vanishing into shadows',
+    executeMessage: 'uses Shadow Force',
+    vulnerableTo: ['Moonlight', 'Sunsteel Strike'],
+  },
+};
+
+/**
+ * Metadatos para movimientos que causan fatiga
+ */
+export interface FatigueMoveMetadata {
+  moveId: number;
+  name: string;
+  fatigueStrength: 'mild' | 'strong';
+  fatigueType: 'recharge' | 'exhaustion';
+  turnsToRecover: number;
+}
+
+/**
+ * Constante FATIGUE_MOVES: Movimientos que aplican fatiga/recharge
+ * Define qué movimientos causan debilitamiento en el siguiente turno
+ */
+export const FATIGUE_MOVES: Record<number, FatigueMoveMetadata> = {
+  63: {  // Hyper Beam
+    moveId: 63,
+    name: 'Hyper Beam',
+    fatigueStrength: 'strong',
+    fatigueType: 'recharge',
+    turnsToRecover: 1,
+  },
+  76: {  // Solar Beam
+    moveId: 76,
+    name: 'Solar Beam',
+    fatigueStrength: 'mild',
+    fatigueType: 'exhaustion',
+    turnsToRecover: 1,
+  },
+  339: {  // Bounce
+    moveId: 339,
+    name: 'Bounce',
+    fatigueStrength: 'mild',
+    fatigueType: 'exhaustion',
+    turnsToRecover: 1,
+  },
+  291: {  // Dive
+    moveId: 291,
+    name: 'Dive',
+    fatigueStrength: 'mild',
+    fatigueType: 'exhaustion',
+    turnsToRecover: 1,
+  },
+};
+
+/**
+ * TEST_MOVES: Movimientos simulados para pruebas unitarias
+ * No requieren datos de base de datos
+ */
+export const TEST_MOVES = {
+  SOLAR_BEAM: {
+    moveId: 999001,
+    name: 'Test Solar Beam',
+    type: 'grass',
+    damageClass: 'special' as const,
+    power: 120,
+    accuracy: 100,
+    priority: 0,
+    pp: 10,
+    maxPp: 10,
+    meta: {
+      ailment: null,
+      ailmentChance: 0,
+      statChanges: [],
+      flinchChance: 0,
+      heal: 0,
+      minHits: null,
+      maxHits: null,
+      minTurns: 2,
+      maxTurns: 2,
+    },
+    flags: {
+      recharge: false,
+      charge: true,
+      protect: false,
+      mirror: false,
+      evasive: false,
+      interruptible: true,
+      fatigue: true,
+    },
+  } as BattleMove,
+  
+  HYPER_BEAM: {
+    moveId: 999002,
+    name: 'Test Hyper Beam',
+    type: 'normal',
+    damageClass: 'special' as const,
+    power: 150,
+    accuracy: 90,
+    priority: 0,
+    pp: 5,
+    maxPp: 5,
+    meta: {
+      ailment: null,
+      ailmentChance: 0,
+      statChanges: [],
+      flinchChance: 0,
+      heal: 0,
+      minHits: null,
+      maxHits: null,
+      minTurns: null,
+      maxTurns: null,
+    },
+    flags: {
+      recharge: true,
+      charge: false,
+      protect: false,
+      mirror: false,
+      evasive: false,
+      interruptible: false,
+      fatigue: true,
+    },
+  } as BattleMove,
+  
+  FLY: {
+    moveId: 999003,
+    name: 'Test Fly',
+    type: 'flying',
+    damageClass: 'physical' as const,
+    power: 90,
+    accuracy: 100,
+    priority: 0,
+    pp: 15,
+    maxPp: 15,
+    meta: {
+      ailment: null,
+      ailmentChance: 0,
+      statChanges: [],
+      flinchChance: 0,
+      heal: 0,
+      minHits: null,
+      maxHits: null,
+      minTurns: 2,
+      maxTurns: 2,
+    },
+    flags: {
+      recharge: false,
+      charge: true,
+      protect: false,
+      mirror: false,
+      evasive: true,
+      interruptible: true,
+      fatigue: false,
+    },
+  } as BattleMove,
+  
+  NORMAL_ATTACK: {
+    moveId: 999004,
+    name: 'Test Normal Attack',
+    type: 'normal',
+    damageClass: 'physical' as const,
+    power: 40,
+    accuracy: 100,
+    priority: 0,
+    pp: 30,
+    maxPp: 30,
+    meta: {
+      ailment: null,
+      ailmentChance: 0,
+      statChanges: [],
+      flinchChance: 0,
+      heal: 0,
+      minHits: null,
+      maxHits: null,
+      minTurns: null,
+      maxTurns: null,
+    },
+    flags: {
+      recharge: false,
+      charge: false,
+      protect: false,
+      mirror: false,
+      evasive: false,
+      interruptible: false,
+      fatigue: false,
+    },
+  } as BattleMove,
+
+  SKULL_BASH: {
+    moveId: 999005,
+    name: 'Test Skull Bash',
+    type: 'normal',
+    damageClass: 'physical' as const,
+    power: 100,
+    accuracy: 100,
+    priority: 0,
+    pp: 15,
+    maxPp: 15,
+    meta: {
+      ailment: null,
+      ailmentChance: 0,
+      statChanges: [{ stat: 'defense', change: 1 }],
+      flinchChance: 0,
+      heal: 0,
+      minHits: null,
+      maxHits: null,
+      minTurns: 2,
+      maxTurns: 2,
+    },
+    flags: {
+      recharge: false,
+      charge: true,
+      protect: false,
+      mirror: false,
+      evasive: false,
+      interruptible: true,
+      fatigue: false,
+    },
+  } as BattleMove,
+};

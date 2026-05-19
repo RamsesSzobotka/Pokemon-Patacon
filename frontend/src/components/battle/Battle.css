@@ -375,38 +375,60 @@
 }
 
 /* ============================================ */
-/* PANEL DE COMANDOS */
+/* PANEL DE COMANDOS - OCUPA TODO EL ESPACIO ABAJO */
 /* ============================================ */
 
 .battle-panel {
   background: linear-gradient(180deg, #f0f0f0 0%, #d8d8d8 100%);
   border-top: 4px solid #333;
-  padding: 15px;
+  padding: 20px 30px;
   display: flex;
-  gap: 15px;
-  min-height: 140px;
+  gap: 30px;
+  min-height: 180px;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: center;
 }
 
-/* Mensaje de batalla - Reducido para dar espacio al panel de acciones */
+/* Mensaje de batalla - Estilo Pokémon BW */
 .battle-message-box {
-  flex: 0.8;
-  min-width: 200px;
-  background: #fff;
-  border: 3px solid #333;
-  border-radius: 8px;
-  padding: 15px;
+  flex: 1;
+  max-width: 500px;
+  min-width: 300px;
+  background: #1a1a1a;
+  border: 2px solid #e10600;
+  border-radius: 12px;
+  padding: 24px 30px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  box-shadow: inset 2px 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 
+    0 0 20px rgba(225, 6, 0, 0.3),
+    inset 0 1px 1px rgba(225, 6, 0, 0.1);
+  min-height: 80px;
+  animation: messageFadeIn 0.3s ease-out;
+}
+
+@keyframes messageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .battle-message-box p {
-  font-size: 16px;
-  color: #333;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 15px;
+  color: #f5f5f5;
   text-align: center;
-  line-height: 1.4;
+  line-height: 1.5;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .continue-btn {
@@ -425,15 +447,16 @@
   background: #3a7cb2;
 }
 
-/* Panel de comandos - Expandido */
+/* Panel de comandos - Expandido para ocupar todo el espacio */
 .command-panel {
-  width: 400px;
+  flex: 1;
+  min-width: 500px;
   min-height: 120px;
   background: #fff;
   border: 3px solid #333;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 3px 3px 0 rgba(0,0,0,0.2);
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.25);
   display: flex;
   flex-direction: column;
 }
@@ -447,12 +470,12 @@
 }
 
 .command-btn {
-  padding: 15px 10px;
+  padding: 20px 15px;
   border: none;
   border-right: 2px solid #ccc;
   border-bottom: 2px solid #ccc;
   background: #f8f8f8;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: bold;
   color: #333;
   cursor: pointer;
@@ -460,7 +483,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 50px;
+  min-height: 60px;
   position: relative;
   overflow: hidden;
 }
@@ -1375,6 +1398,213 @@
     transform: scale(1.1); 
     opacity: 0.8; 
   }
+}
+
+/* ============================================ */
+/* V3: INDICADORES DE ESTADO (CARGA Y FATIGA) */
+/* ============================================ */
+
+/* Indicadores de estado V3 en el panel de info */
+.v3-status-indicator {
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #333;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Indicador de carga - Pulsing animation */
+.v3-status-indicator.charging {
+  background: rgba(255, 200, 0, 0.2);
+  border-color: #FF9800;
+  color: #E65100;
+  animation: v3-charging-pulse 1.2s infinite;
+}
+
+@keyframes v3-charging-pulse {
+  0%, 100% { 
+    background: rgba(255, 200, 0, 0.2);
+    transform: scale(1);
+  }
+  50% { 
+    background: rgba(255, 200, 0, 0.5);
+    transform: scale(1.05);
+  }
+}
+
+/* Indicador de evasión - Shield glow */
+.v3-status-indicator.evasion {
+  background: rgba(100, 200, 255, 0.2);
+  border-color: #2196F3;
+  color: #1565C0;
+  animation: v3-evasion-glow 1.5s infinite;
+}
+
+@keyframes v3-evasion-glow {
+  0%, 100% { 
+    background: rgba(100, 200, 255, 0.2);
+    box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.5);
+  }
+  50% { 
+    background: rgba(100, 200, 255, 0.4);
+    box-shadow: 0 0 8px 4px rgba(33, 150, 243, 0.3);
+  }
+}
+
+/* Indicador de fatiga - Dimmed effect */
+.v3-status-indicator.fatigue {
+  border-color: #FF5722;
+  animation: v3-fatigue-pulse 1s infinite;
+}
+
+.v3-status-indicator.fatigue.recharge {
+  background: rgba(244, 67, 54, 0.15);
+  color: #B71C1C;
+}
+
+.v3-status-indicator.fatigue.exhaustion {
+  background: rgba(255, 193, 7, 0.15);
+  color: #F57F17;
+}
+
+@keyframes v3-fatigue-pulse {
+  0%, 100% { 
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+/* ============================================ */
+/* V3: SPRITE EFFECTS */
+/* ============================================ */
+
+/* Sprite en estado de carga - Brillo sutil */
+.pokemon-sprite.v3-charging img {
+  filter: drop-shadow(0 0 8px rgba(255, 200, 0, 0.6));
+  animation: v3-sprite-charging 0.8s infinite;
+}
+
+@keyframes v3-sprite-charging {
+  0%, 100% { 
+    filter: drop-shadow(0 0 8px rgba(255, 200, 0, 0.4));
+  }
+  50% { 
+    filter: drop-shadow(0 0 12px rgba(255, 200, 0, 0.8));
+  }
+}
+
+/* Sprite en estado evasivo - Shield overlay */
+.pokemon-sprite.v3-evasive img {
+  filter: drop-shadow(0 0 10px rgba(33, 150, 243, 0.5));
+}
+
+.pokemon-sprite.v3-evasive::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 2px dashed rgba(33, 150, 243, 0.4);
+  animation: v3-evasion-shield 2s infinite linear;
+  pointer-events: none;
+}
+
+@keyframes v3-evasion-shield {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Sprite fatigado - Opacidad reducida */
+.pokemon-sprite.v3-fatigued img {
+  opacity: 0.7;
+  filter: grayscale(0.3) drop-shadow(2px 4px 6px rgba(0,0,0,0.3));
+}
+
+.pokemon-sprite.v3-fatigued-recharge img {
+  opacity: 0.6;
+  filter: grayscale(0.4) hue-rotate(0deg);
+}
+
+.pokemon-sprite.v3-fatigued-exhaustion img {
+  opacity: 0.75;
+  filter: grayscale(0.2) brightness(0.95);
+}
+
+/* ============================================ */
+/* V3: COMMAND PANEL MODES */
+/* ============================================ */
+
+/* Modo de carga - Mostrar botón EJECUTAR */
+.command-panel.v3-charging-mode {
+  background: linear-gradient(135deg, #fff9e6 0%, #ffe6b3 100%);
+  border-color: #FF9800;
+}
+
+.charging-notice {
+  background: rgba(255, 152, 0, 0.1);
+  border-bottom: 2px solid #FF9800;
+  padding: 10px;
+  text-align: center;
+  font-weight: bold;
+  color: #E65100;
+  font-size: 14px;
+}
+
+.command-btn.execute-charging {
+  background: #FFD54F;
+  border-color: #FFA000;
+  color: #E65100;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.command-btn.execute-charging:hover:not(:disabled) {
+  background: #FFCA28;
+  box-shadow: 0 0 10px rgba(255, 152, 0, 0.5);
+}
+
+.command-btn.change-forced {
+  background: #BBDEFB;
+  border-color: #64B5F6;
+  color: #1565C0;
+  font-size: 12px;
+}
+
+/* Modo de fatiga - Mostrar mensaje bloqueante */
+.command-panel.v3-fatigue-mode {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border-color: #F44336;
+}
+
+.fatigue-notice {
+  background: rgba(244, 67, 54, 0.1);
+  border-bottom: 2px solid #F44336;
+  padding: 10px;
+  text-align: center;
+  font-weight: bold;
+  color: #B71C1C;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.command-btn.fight:disabled,
+.command-btn.pokemon:disabled,
+.command-btn.run:disabled {
+  background: #ffcdd2;
+  color: #c62828;
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
 }
 
 /* ============================================ */

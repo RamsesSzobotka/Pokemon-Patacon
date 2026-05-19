@@ -54,6 +54,12 @@ interface BattlePokemon {
   isFainted: boolean;
   ailments?: Ailment[];
   moves?: BattleMove[];
+  // V3: 2-Turn Moves and Fatigue
+  isChargingTwoTurn?: boolean;
+  chargePhase?: 'charge' | 'execute' | null;
+  isFatigued?: boolean;
+  fatigueSource?: 'recharge' | 'exhaustion' | null;
+  isEvasivelyCharging?: boolean;
 }
 
 interface BattleState {
@@ -105,6 +111,71 @@ function getAilmentName(ailmentType: string): string {
 }
 
 /**
+ * Procesa el mensaje del servidor y lo convierte en secuencia de narración estilo Pokémon
+ * Elimina información técnica como "recibió X de daño"
+ */
+function processServerMessage(message: string, actionType?: string, result?: any): string[] {
+  // Si es un cambio de Pokémon, devolver mensaje simple
+  if (actionType === 'change') {
+    return [message || '¡Pokémon cambiado!'];
+  }
+  
+  // Si es un ataque, procesar el mensaje
+  const lines = message.split('\n').filter(line => line.trim());
+  const narration: string[] = [];
+  
+  for (const line of lines) {
+    // Eliminar líneas con información técnica
+    if (line.includes('recibió') && line.includes('de daño')) {
+      continue; // Skip "X recibió Y de daño"
+    }
+    if (line.includes('recibió') && line.includes('HP')) {
+      continue; // Skip "recibió X HP"
+    }
+    if (line.includes('Turno') && !line.includes('turno')) {
+      continue; // Skip "Turno X"
+    }
+    if (line.includes('usado') && line.includes('.')) {
+      // Skip "Pikachu usado Impactrueno." - se procesa después
+    }
+    
+    // Limpiar el mensaje
+    let cleanedLine = line
+      .replace(/\[.*?\]/g, '') // Remover tags como [turn:1]
+      .replace(/\(.*?\)/g, '') // Remover paréntesis con info técnica
+      .trim();
+    
+    // Reformatear mensajes de efectividad al estilo BW (sin acentos para evitar problemas)
+    //Buscar cualquier variación de "muy efectivo" o "poco efectivo"
+    const lowerLine = cleanedLine.toLowerCase();
+    
+    if (lowerLine.includes('muy efectivo') || lowerLine.includes('super efectivo')) {
+      cleanedLine = '¡Es muy efectivo!';
+    } else if (lowerLine.includes('no es muy efectivo') || lowerLine.includes('poco efectivo')) {
+      cleanedLine = 'No es muy efectivo...';
+    } else if (lowerLine.includes('no tiene efecto') || lowerLine.includes('sin efecto')) {
+      cleanedLine = '¡No tiene efecto!';
+    } else if (cleanedLine.toLowerCase().includes('se debilit') || cleanedLine.toLowerCase().includes('se debilito')) {
+      cleanedLine = line; // Mantener el mensaje de KO tal cual
+    } else if (cleanedLine.includes('usado')) {
+      // Convertir "Pikachu usado Impactrueno." a "Pikachu usó Impactrueno."
+      cleanedLine = cleanedLine.replace(/usado/g, 'usó').replace(/\.$/, '!');
+    }
+    
+    if (cleanedLine && cleanedLine.trim() !== '') {
+      narration.push(cleanedLine);
+    }
+  }
+  
+  // Si no hay narración válida, usar mensaje original
+  if (narration.length === 0) {
+    return [message];
+  }
+  
+  return narration;
+}
+
+/**
  * Obtiene el color del efecto
  */
 function getAilmentColor(ailmentType: string): string {
@@ -125,7 +196,8 @@ function getAilmentColor(ailmentType: string): string {
 
 /**
  * Panel de Información del Pokémon (HUD estilo Pokémon)
- * Con animación de HP cuando recibe daño y indicador de efectos
+ * Con animación de HP cuando recibe daño e indicador de efectos
+ * V3: Con indicadores de carga y fatiga
  */
 function PokemonInfoPanel({
   pokemon,
@@ -183,6 +255,32 @@ function PokemonInfoPanel({
         </div>
       )}
 
+      {/* V3: Indicador de carga (2-Turn Moves) */}
+      {pokemon.isChargingTwoTurn && pokemon.chargePhase === 'execute' && (
+        <div className="v3-status-indicator charging" title="Cargando movimiento">
+          <span>⚡ Cargando...</span>
+        </div>
+      )}
+
+      {/* V3: Indicador de evasión (Fly, Dig, etc) */}
+      {pokemon.isEvasivelyCharging && (
+        <div className="v3-status-indicator evasion" title="En posición evasiva">
+          <span>🛡️ Evasivo</span>
+        </div>
+      )}
+
+      {/* V3: Indicador de fatiga */}
+      {pokemon.isFatigued && (
+        <div 
+          className={`v3-status-indicator fatigue ${pokemon.fatigueSource || 'unknown'}`}
+          title={pokemon.fatigueSource === 'recharge' ? 'Agotado (necesita descansar)' : 'Exhausto (débil)'}
+        >
+          <span>
+            {pokemon.fatigueSource === 'recharge' ? '💤 Agotado' : '😓 Exhausto'}
+          </span>
+        </div>
+      )}
+
       <div className="hp-bar-container">
         <div className="hp-label">HP</div>
         <div className="hp-bar-bg">
@@ -204,6 +302,7 @@ function PokemonInfoPanel({
 
 /**
  * Sprite del Pokémon en el campo de batalla
+ * V3: Con soporte para carga, evasión y fatiga
  */
 function PokemonSprite({
   pokemon,
@@ -249,11 +348,15 @@ function PokemonSprite({
   const spriteClasses = [
     spriteClass,
     isAttacking ? 'attacking' : '',
-    isHit ? 'hit' : ''
+    isHit ? 'hit' : '',
+    // V3: Agregar clases para estados V3
+    pokemon.isChargingTwoTurn ? 'v3-charging' : '',
+    pokemon.isEvasivelyCharging ? 'v3-evasive' : '',
+    pokemon.isFatigued ? `v3-fatigued v3-fatigued-${pokemon.fatigueSource || 'unknown'}` : ''
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={`pokemon-sprite ${isPlayer ? 'player' : 'enemy'} ${isAttacking ? 'attacking' : ''} ${isHit ? 'hit' : ''}`}>
+    <div className={`pokemon-sprite ${isPlayer ? 'player' : 'enemy'} ${isAttacking ? 'attacking' : ''} ${isHit ? 'hit' : ''} ${pokemon.isChargingTwoTurn ? 'v3-charging' : ''} ${pokemon.isEvasivelyCharging ? 'v3-evasive' : ''} ${pokemon.isFatigued ? 'v3-fatigued' : ''}`}>
       {sprite ? (
         <img
           src={sprite}
@@ -269,17 +372,29 @@ function PokemonSprite({
 
 /**
  * Panel de Comandos (Luchar, Cambiar, etc.)
+ * V3: Con soporte para movimientos de 2 turnos y fatiga
  */
 function CommandPanel({
   onAttack,
   onChange,
   moves,
-  disabled
+  disabled,
+  isChargingTwoTurn,
+  chargePhase,
+  currentTwoTurnMove,
+  isFatigued,
+  fatigueSource
 }: {
   onAttack: (moveId: number) => void;
   onChange: () => void;
   moves?: any[];
   disabled?: boolean;
+  // V3 props
+  isChargingTwoTurn?: boolean;
+  chargePhase?: 'charge' | 'execute' | null;
+  currentTwoTurnMove?: any;
+  isFatigued?: boolean;
+  fatigueSource?: 'recharge' | 'exhaustion' | null;
 }) {
   const [showMoves, setShowMoves] = useState(false);
 
@@ -329,6 +444,78 @@ function CommandPanel({
     };
     return typeColors[type?.toLowerCase() || ''] || 'rgba(168, 168, 120, 0.75)';
   };
+
+  // V3: Determinar si el Pokémon puede actuar
+  const isFatigueBlocking = isFatigued && fatigueSource === 'recharge';
+  const canActNormally = !isFatigueBlocking;
+
+  // V3: Si está en ejecución de movimiento de 2 turnos, mostrar botón "Ejecutar"
+  if (isChargingTwoTurn && chargePhase === 'execute' && currentTwoTurnMove) {
+    return (
+      <div className="command-panel v3-charging-mode">
+        <div className="charging-notice">
+          <p>⚡ Ejecutando {formatMoveName(currentTwoTurnMove.name)}</p>
+        </div>
+        <div className="commands-grid">
+          <button
+            className="command-btn execute-charging"
+            disabled={disabled}
+            onClick={() => {
+              onAttack(currentTwoTurnMove.moveId);
+            }}
+          >
+            EJECUTAR
+          </button>
+          <button
+            className="command-btn change-forced"
+            onClick={onChange}
+            disabled={disabled}
+          >
+            CAMBIAR*
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // V3: Si está fatigado (recharge), mostrar mensaje bloqueante
+  if (isFatigueBlocking) {
+    return (
+      <div className="command-panel v3-fatigue-mode">
+        <div className="fatigue-notice">
+          <p>💤 ¡Tu Pokémon está agotado! Necesita descansar.</p>
+        </div>
+        <div className="commands-grid">
+          <button
+            className="command-btn fight"
+            disabled={true}
+            title="Tu Pokémon está agotado y no puede atacar"
+          >
+            LUCHAR (Bloqueado)
+          </button>
+          <button
+            className="command-btn bag"
+            onClick={onChange}
+            disabled={disabled}
+          >
+            CAMBIAR
+          </button>
+          <button
+            className="command-btn pokemon"
+            disabled={true}
+          >
+            MOCHILA
+          </button>
+          <button
+            className="command-btn run"
+            disabled={true}
+          >
+            HUIR
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="command-panel">
@@ -829,6 +1016,24 @@ export default function Battle() {
   // Estado de la batalla
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [lastBattleMessage, setLastBattleMessage] = useState<string>('¡La batalla está por comenzar!');
+  
+  // Sistema de narración secuencial (estilo Pokémon BW)
+  const narrationQueueRef = useRef<string[]>([]);
+  const isProcessingNarrationRef = useRef(false);
+  
+  // Función para mostrar secuencia de narración con delay
+  const showNarrationSequence = useCallback(async (messages: string[], delay: number = 1000) => {
+    for (const msg of messages) {
+      setLastBattleMessage(msg);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }, []);
+  
+  // Función para procesar un mensaje individual (sin secuencia)
+  const showSingleNarration = useCallback((message: string) => {
+    setLastBattleMessage(message);
+  }, []);
+  
   const [showPokemonSelector, setShowPokemonSelector] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [loadingCountdown, setLoadingCountdown] = useState<number | null>(5); // Iniciar con 5 segundos visible
@@ -946,20 +1151,58 @@ export default function Battle() {
           // La animación durará 4 segundos (2 de flip + 2 de resultado)
           // No establecer lastBattleMessage aquí, dejar que la animación lo maneje
         } else {
-          // Si no es coinflip, mostrar mensaje normal de orden
+          // Si no es coinflip, mostrar mensaje limpio de orden (sin número de turno)
           const orderMessage = message.data.reason;
-          setLastBattleMessage(`Turno ${message.data.turn} - ${orderMessage}`);
+          // Limpiar el mensaje de orden
+          const cleanMessage = orderMessage
+            .replace(/player1 tiene mayor prioridad.*/gi, 'Jugador 1 ataca primero.')
+            .replace(/player2 tiene mayor prioridad.*/gi, 'Jugador 2 ataca primero.')
+            .replace(/coinflip.*/gi, 'Se determin\u00f3 el orden de ataque.')
+            .replace(/\d+/g, ''); // Eliminar números restantes
+          setLastBattleMessage(cleanMessage || 'Turno de acci\u00f3n.');
         }
-        break;
         break;
         
       case 'battle:action-result':
-        // Procesar resultado del ataque - mostrar mensaje directamente
+        // Procesar resultado de la acción
         if (battleState) {
           const isP1Action = message.data.playerId === 'player1';
+          const attackerPlayerId = isP1Action ? 'player1' : 'player2';
           const defenderPlayerId = isP1Action ? 'player2' : 'player1';
           const defenderHp = message.data.defenderHp || 0;
 
+          // Si es un CAMBIO de Pokémon, NO hacer animación de ataque
+          if (message.data.action.type === 'change') {
+            // El cambio de Pokémon no tiene animación de ataque
+            // Actualizar el estado del jugador con el nuevo Pokémon
+            setBattleState(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                [attackerPlayerId]: {
+                  ...prev[attackerPlayerId],
+                  activePokemon: message.data.result.newPokemon || prev[attackerPlayerId].activePokemon,
+                  team: prev[attackerPlayerId].team.map(p =>
+                    p.id === message.data.result.newPokemon?.id ? message.data.result.newPokemon : p
+                  )
+                },
+                [defenderPlayerId]: {
+                  ...prev[defenderPlayerId],
+                  activePokemon: {
+                    ...prev[defenderPlayerId].activePokemon,
+                    hp: defenderHp,
+                    isFainted: defenderHp <= 0
+                  }
+                }
+              };
+            });
+
+            // Mostrar mensaje de cambio
+            setLastBattleMessage(message.data.result.message || '¡Pokémon cambiado!');
+            break; // Salir del case sin animación
+          }
+
+          // Continuar con la lógica de ataque normal...
           // Detectar si el defensor llegó a 0 HP (para animación)
           const defenderPreviousHp = isP1Action
             ? battleState?.player2.activePokemon.hp
@@ -1011,14 +1254,39 @@ export default function Battle() {
               }
             };
           });
-        }
 
-        // Mostrar mensaje de resultado directamente (V1 - solo daño)
-        if (message.data.action.type === 'attack') {
+          // Mostrar mensaje de resultado del ataque con secuencia narrativa
           const result = message.data.result;
-          setLastBattleMessage(result.message);
-        } else if (message.data.action.type === 'change') {
-          setLastBattleMessage(message.data.result.message || '¡Pokémon cambiado!');
+          const actionType = message.data.action.type;
+          
+          // Debug: log del mensaje original
+          console.log('[Battle] Action result:', message.data.playerId, 'message:', result.message);
+          
+          // Procesar el mensaje para obtener secuencia limpia
+          const narrationSequence = processServerMessage(
+            result.message,
+            actionType,
+            result
+          );
+          
+          console.log('[Battle] Narration sequence:', narrationSequence);
+          
+          // Mostrar el primer mensaje inmediatamente
+          if (narrationSequence.length > 0) {
+            setLastBattleMessage(narrationSequence[0]);
+            
+            // Si hay más mensajes, mostrar en secuencia
+            if (narrationSequence.length > 1) {
+              // Usar un timeout para crear la secuencia
+              let delay = 1000;
+              for (let i = 1; i < narrationSequence.length; i++) {
+                setTimeout(() => {
+                  setLastBattleMessage(narrationSequence[i]);
+                }, delay);
+                delay += 1000;
+              }
+            }
+          }
         }
         break;
 
@@ -1140,6 +1408,15 @@ export default function Battle() {
         const amIReady = hasSelectedActionRef.current;
         if (!amIReady) {
           setLastBattleMessage('El oponente ya seleccionó. ¡Rápido, elige tu acción!');
+        }
+        break;
+      }
+
+      case 'battle:v3-state-message': {
+        // V3: Mostrar mensajes de carga y fatiga desde el servidor
+        const v3Message = message.data.message;
+        if (v3Message) {
+          setLastBattleMessage(v3Message);
         }
         break;
       }
@@ -1303,6 +1580,12 @@ export default function Battle() {
           onChange={handleOpenChange}
           moves={moves}
           disabled={!isMyTurn || battleState.phase === 'ended' || hasSelectedAction}
+          // V3: Pasar información sobre carga y fatiga
+          isChargingTwoTurn={myPokemon?.isChargingTwoTurn}
+          chargePhase={myPokemon?.chargePhase}
+          currentTwoTurnMove={myPokemon?.isChargingTwoTurn ? moves?.[0] : undefined}
+          isFatigued={myPokemon?.isFatigued}
+          fatigueSource={myPokemon?.fatigueSource}
         />
       </div>
       

@@ -4,7 +4,6 @@
   align-items: center;
   min-height: 100vh;
   padding: 20px;
-  background: linear-gradient(135deg, #0D0D0D 0%, #1a1a1a 50%, #2d2d2d 100%);
   position: relative;
   overflow: hidden;
 }

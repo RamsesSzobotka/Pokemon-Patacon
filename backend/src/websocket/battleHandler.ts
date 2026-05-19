@@ -5,7 +5,7 @@
  */
 
 import { broadcast, sendTo, getConnection, getRoomPlayers } from './roomManager.js';
-import { createBattleState, createPlayerBattleState, determineExecutionOrder, executeMove, executeSwitch, checkBattleEnd, canActWithAilments, applyEndOfTurnAilmentDamage, decrementAilmentTurns } from '../services/battleService.js';
+import { createBattleState, createPlayerBattleState, determineExecutionOrder, executeMove, executeSwitch, checkBattleEnd, canActWithAilments, applyEndOfTurnAilmentDamage, decrementAilmentTurns, resetFatigueState } from '../services/battleService.js';
 import { getMovesByIds, getPokemonById } from '../db/mongodb.js';
 import type { BattleState, PokemonInBattle, BattleMove, PlayerAction, PlayerBattleState } from '../types/battle.js';
 import type { Room } from '../db/rooms.js';
@@ -199,7 +199,15 @@ async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
       cannotActNextTurn: false,
       hasFlinched: false,
       isFainted: false,
-      savedHp: pokeData.stats?.hp || 100
+      savedHp: pokeData.stats?.hp || 100,
+      // V3: 2-Turn Moves and Fatigue
+      isChargingTwoTurn: false,
+      currentTwoTurnMove: null,
+      chargePhase: null,
+      isFatigued: false,
+      fatigueSource: null,
+      isEvasivelyCharging: false,
+      evasiveChargeMove: null
     });
   }
   
@@ -241,6 +249,17 @@ function serializePokemon(pokemon: PokemonInBattle, includeMoves: boolean = true
       sprites: sprites,
       isFainted: pokemon.isFainted || false,
       ailments: ailments,
+      // V3: 2-Turn Moves and Fatigue state
+      isChargingTwoTurn: pokemon.isChargingTwoTurn || false,
+      chargePhase: pokemon.chargePhase || null,
+      currentTwoTurnMove: pokemon.currentTwoTurnMove ? {
+        moveId: pokemon.currentTwoTurnMove.moveId,
+        name: pokemon.currentTwoTurnMove.name,
+        type: pokemon.currentTwoTurnMove.type
+      } : null,
+      isFatigued: pokemon.isFatigued || false,
+      fatigueSource: pokemon.fatigueSource || null,
+      isEvasivelyCharging: pokemon.isEvasivelyCharging || false,
       ...(includeMoves && moves.length > 0 && { 
         moves: moves.map(m => ({
           moveId: m.moveId || 0,
@@ -479,6 +498,11 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
   let p1Active = player1.team[player1.activePokemonIndex];
   let p2Active = player2.team[player2.activePokemonIndex];
   
+  // PHASE 1: SELECCIÓN - V3: Reset fatigue state at start of turn
+  // Allows Hyper Beam Pokemon to act normally the turn after fatigue
+  resetFatigueState(p1Active);
+  resetFatigueState(p2Active);
+  
   // Ejecutar acciones en orden
   for (const attackerId of order) {
     const attacker = attackerId === 'player1' ? player1 : player2;
@@ -595,9 +619,31 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     
     let result;
     
-    if (action.type === 'attack' && action.move) {
+    // ===== V3: MANEJO DE 2 TURNOS - Si está cargando, ejecutar el movimiento preparado =====
+    let moveToExecute = action.move;
+    
+    // Si el jugador está en fase de carga (charging phase), debe ejecutar el movimiento que tenía preparado
+    // No puede elegir otra acción - se ejecuta automáticamente
+    if (attackerPokemon.isChargingTwoTurn && attackerPokemon.chargePhase === 'charge' && attackerPokemon.currentTwoTurnMove) {
+      console.log(`[BATTLE] ${attackerPokemon.name} está cargando ${attackerPokemon.currentTwoTurnMove.name} - ejecutando automáticamente`);
+      moveToExecute = attackerPokemon.currentTwoTurnMove;
+      
+      // Notificar que está ejecutando el movimiento preparado
+      broadcast(roomCode, {
+        type: 'battle:charging-move-execute',
+        data: {
+          playerId: attackerId,
+          pokemonName: attackerPokemon.name,
+          moveName: moveToExecute.name
+        }
+      });
+      
+      await sleep(1000);
+    }
+    
+    if (action.type === 'attack' && moveToExecute) {
       // Ejecutar movimiento
-      result = executeMove(attackerPokemon, defenderPokemon, action.move, attackerId);
+      result = executeMove(attackerPokemon, defenderPokemon, moveToExecute, attackerId);
     } else if (action.type === 'change' && action.pokemonId !== undefined) {
       // Ejecutar cambio
       const currentIndex = attacker.activePokemonIndex;
@@ -605,11 +651,17 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
       
       if (newIndex >= 0 && newIndex !== currentIndex) {
         const switchResult = executeSwitch(attacker, newIndex, currentIndex);
+        
+        // Obtener el nuevo Pokémon después del cambio
+        const newPokemon = attacker.team[attacker.activePokemonIndex];
+        
         result = {
           success: switchResult.success,
           action,
           message: switchResult.message,
-          failed: !switchResult.success
+          failed: !switchResult.success,
+          // Incluir el nuevo Pokémon serializado
+          newPokemon: serializePokemon(newPokemon)
         };
         
         // Actualizar referencia al Pokémon activo
@@ -636,6 +688,28 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
     }
     
     // Notificar resultado de la acción
+    // Incluir newPokemon si es un cambio de Pokémon
+    const resultData: any = {
+      success: result.success,
+      message: result.message,
+      damage: result.damage,
+      targetHp: result.targetHpAfter,
+      isCritical: result.isCritical,
+      effectiveness: result.effectiveness,
+      ailmentApplied: result.ailmentApplied,
+      isCharging: result.isCharging,
+      cannotActNextTurn: result.cannotActNextTurn,
+      flinchedTarget: result.flinchedTarget,
+      attackerName: result.attackerName,
+      defenderName: result.defenderName,
+      moveName: result.moveName
+    };
+
+    // Agregar newPokemon si la acción es un cambio
+    if (action.type === 'change' && result.newPokemon) {
+      resultData.newPokemon = result.newPokemon;
+    }
+
     broadcast(roomCode, {
       type: 'battle:action-result',
       data: {
@@ -645,25 +719,51 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
           moveId: action.moveId,
           pokemonId: action.pokemonId
         },
-        result: {
-          success: result.success,
-          message: result.message,
-          damage: result.damage,
-          targetHp: result.targetHpAfter,
-          isCritical: result.isCritical,
-          effectiveness: result.effectiveness,
-          ailmentApplied: result.ailmentApplied,
-          isCharging: result.isCharging,
-          cannotActNextTurn: result.cannotActNextTurn,
-          flinchedTarget: result.flinchedTarget,
-          attackerName: result.attackerName,
-          defenderName: result.defenderName,
-          moveName: result.moveName
-        },
+        result: resultData,
         attackerHp: attackerPokemon.hp,
         defenderHp: defenderPokemon.hp
       }
     });
+    
+    // V3: Add follow-up messages for charging and fatigue states
+    const v3Messages: string[] = [];
+    
+    // Check if attacker is now charging (2-turn move) - phase 'charge' means preparing for next turn
+    if (attackerPokemon.isChargingTwoTurn && attackerPokemon.chargePhase === 'charge') {
+      const chargingMove = attackerPokemon.currentTwoTurnMove;
+      if (chargingMove) {
+        v3Messages.push(`¡${attackerPokemon.name} está preparándose para usar ${chargingMove.name}!`);
+      }
+    }
+    
+    // Check if attacker is now fatigued
+    if (attackerPokemon.isFatigued) {
+      if (attackerPokemon.fatigueSource === 'recharge') {
+        v3Messages.push(`¡${attackerPokemon.name} está agotado y debe descansar el próximo turno!`);
+      } else if (attackerPokemon.fatigueSource === 'exhaustion') {
+        v3Messages.push(`¡${attackerPokemon.name} está exhausto! Su próximo ataque será más débil.`);
+      }
+    }
+    
+    // Send V3 state messages if any
+    if (v3Messages.length > 0) {
+      broadcast(roomCode, {
+        type: 'battle:v3-state-message',
+        data: {
+          playerId: attackerId,
+          messages: v3Messages,
+          pokemonState: {
+            name: attackerPokemon.name,
+            isChargingTwoTurn: attackerPokemon.isChargingTwoTurn,
+            chargePhase: attackerPokemon.chargePhase,
+            isFatigued: attackerPokemon.isFatigued,
+            fatigueSource: attackerPokemon.fatigueSource
+          }
+        }
+      });
+      
+      await sleep(1500); // Brief pause for client to display state messages
+    }
     
     battle.actionResults.push(result);
     
