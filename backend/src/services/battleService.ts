@@ -808,7 +808,13 @@ export function executeMove(
   move: BattleMove,
   attackerPlayerId: 'player1' | 'player2'
 ): ActionResult {
-  
+
+  // Decrementar PP del movimiento (si tiene PP)
+  if (move.pp !== undefined && move.pp > 0) {
+    move.pp = Math.max(0, move.pp - 1);
+    console.log(`[PP] ${attacker.name} usó ${move.name}. PP restantes: ${move.pp}/${move.maxPp}`);
+  }
+
   // Verificar accuracy
   if (move.accuracy && Math.random() * 100 > move.accuracy) {
     return {

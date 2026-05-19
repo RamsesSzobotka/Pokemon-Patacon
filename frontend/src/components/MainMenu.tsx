@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from '@tanstack/react-router';
 import { socket, connect, getSessionId, isConnected, getCurrentRoom } from '../websocket';
 import { PokemonSlotAnimation } from './battle/PokemonSlotAnimation';
 import '../styles/MainMenu.css';
@@ -12,7 +12,7 @@ interface RoomData {
 }
 
 const MainMenu: React.FC = () => {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [screen, setScreen] = useState<'menu' | 'create' | 'join'>('menu');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
@@ -66,9 +66,9 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
   useEffect(() => {
     if (showRandomLoading && randomCountdown === 0 && createdRoomCode) {
       console.log('[MainMenu] Countdown finished, navigating to battle');
-      navigate(`/battle/${createdRoomCode}`);
+      router.navigate({ to: '/battle/$roomCode', params: { roomCode: createdRoomCode } });
     }
-  }, [showRandomLoading, randomCountdown, createdRoomCode, navigate]);
+  }, [showRandomLoading, randomCountdown, createdRoomCode, router]);
 
   // Si ya había creado o entrado en una sala, restaurar código
   useEffect(() => {
@@ -144,7 +144,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
         setPlayer2DisplayName(data.player2_name || 'Esperando oponente...');
       }
       if (data.state === 'in_draft') {
-        navigate(`/draft/${data.roomCode}`);
+        router.navigate({ to: '/draft/$roomCode', params: { roomCode: data.roomCode } });
       }
 
       setCreatedRoomCode(data.roomCode);
@@ -198,7 +198,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
     unsubscribes.push(socket.on('battle:starting', (data) => {
       console.log('[MainMenu] Battle starting:', data);
       if (showRandomLoading && createdRoomCode) {
-        navigate(`/battle/${createdRoomCode}`);
+        router.navigate({ to: '/battle/$roomCode', params: { roomCode: createdRoomCode } });
       }
     }));
 
@@ -233,7 +233,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 // Draft iniciado
     unsubscribes.push(socket.on('draft:started', () => {
       console.log('[MainMenu] Draft started');
-      navigate(`/draft/${createdRoomCode}`);
+      router.navigate({ to: '/draft/$roomCode', params: { roomCode: createdRoomCode } });
     }));
 
     // Error del servidor
@@ -511,7 +511,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
                 ⚪ UNIRSE A SALA
                 <span className="btn-hint">Ingresa un código</span>
               </button>
-              <button className="btn btn-tertiary" onClick={() => navigate('/pokedex')}>
+              <button className="btn btn-tertiary" onClick={() => router.navigate('/pokedex')}>
                 📖 VER POKÉDEX
                 <span className="btn-hint">649 Pokémon disponibles</span>
               </button>

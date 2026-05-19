@@ -349,6 +349,21 @@ export async function handleBattleAction(
       sendTo(sessionId, { type: 'error', message: 'Movimiento no válido' });
       return;
     }
+
+    // Verificar PP disponible
+    if (move.pp <= 0) {
+      console.log('[BATTLE] Move has no PP:', move.name);
+      sendTo(sessionId, { 
+        type: 'battle:pp-exhausted', 
+        data: { 
+          moveId: move.moveId, 
+          moveName: move.name,
+          pp: move.pp,
+          maxPp: move.maxPp
+        }
+      });
+      return;
+    }
   }
   
   // Crear la acción
@@ -940,5 +955,98 @@ export function endBattle(roomCode: string): void {
   if (activeBattles.has(roomCode)) {
     console.log(`[BATTLE] Batalla terminada en sala ${roomCode}`);
     activeBattles.delete(roomCode);
+  }
+}
+
+// ============================================
+// RENDICIÓN
+// ============================================
+
+/**
+ * Maneja la rendición de un jugador
+ * 1. Establece HP de todos los pokémon del jugador a 0
+ * 2. Envía mensaje de rendición
+ * 3. Después de delay, declara victoria del oponente
+ * 4. Marca la room como finished
+ */
+export async function handleBattleSurrender(sessionId: string, roomCode: string): Promise<void> {
+  console.log(`[BATTLE] ${sessionId} se ha rendu en sala ${roomCode}`);
+
+  const battle = activeBattles.get(roomCode);
+  if (!battle) {
+    console.error(`[BATTLE] No se encontró batalla activa en sala ${roomCode}`);
+    return;
+  }
+
+  // Determinar qué jugador se rindió
+  const surrenderPlayerId = battle.players.player1.sessionId === sessionId ? 'player1' : 'player2';
+  const winnerPlayerId = surrenderPlayerId === 'player1' ? 'player2' : 'player1';
+  
+  const surrenderPlayer = battle.players[surrenderPlayerId as keyof typeof battle.players];
+  const winnerPlayer = battle.players[winnerPlayerId as keyof typeof battle.players];
+
+  const surrenderPlayerName = surrenderPlayer.name;
+  const winnerPlayerName = winnerPlayer.name;
+
+  console.log(`[BATTLE] Jugador ${surrenderPlayerName} (${surrenderPlayerId}) se rinde. ${winnerPlayerName} gana.`);
+
+  // Establecer HP de todos los pokémon del jugador que se rindió a 0
+  for (const pokemon of surrenderPlayer.team) {
+    pokemon.hp = 0;
+    pokemon.isFainted = true;
+  }
+
+  // Enviar mensaje de rendición
+  broadcast(roomCode, {
+    type: 'battle:end',
+    data: {
+      winner: winnerPlayerId,
+      message: `¡${surrenderPlayerName} se rindió!`,
+      surrender: true,
+      finalState: {
+        player1: {
+          activePokemon: serializePokemon(battle.players.player1.team[battle.players.player1.activePokemonIndex]),
+          remainingPokemon: surrenderPlayerId === 'player1' ? 0 : battle.players.player1.team.filter(p => !p.isFainted).length
+        },
+        player2: {
+          activePokemon: serializePokemon(battle.players.player2.team[battle.players.player2.activePokemonIndex]),
+          remainingPokemon: surrenderPlayerId === 'player2' ? 0 : battle.players.player2.team.filter(p => !p.isFainted).length
+        }
+      }
+    }
+  });
+
+  // Esperar 2 segundos antes de mostrar el mensaje de victoria
+  await sleep(2000);
+
+  // Enviar mensaje de victoria
+  broadcast(roomCode, {
+    type: 'battle:end',
+    data: {
+      winner: winnerPlayerId,
+      message: `¡${winnerPlayerName} gana la batalla!`,
+      finalState: {
+        player1: {
+          activePokemon: serializePokemon(battle.players.player1.team[battle.players.player1.activePokemonIndex]),
+          remainingPokemon: battle.players.player1.team.filter(p => !p.isFainted).length
+        },
+        player2: {
+          activePokemon: serializePokemon(battle.players.player2.team[battle.players.player2.activePokemonIndex]),
+          remainingPokemon: battle.players.player2.team.filter(p => !p.isFainted).length
+        }
+      }
+    }
+  });
+
+  // Limpiar batalla activa
+  activeBattles.delete(roomCode);
+
+  // Marcar la room como finished
+  try {
+    const { updateRoomState } = await import('../db/rooms.js');
+    await updateRoomState(roomCode, 'finished');
+    console.log(`[BATTLE] Sala ${roomCode} marcada como finished`);
+  } catch (error) {
+    console.error(`[BATTLE] Error al marcar sala ${roomCode} como finished:`, error);
   }
 }

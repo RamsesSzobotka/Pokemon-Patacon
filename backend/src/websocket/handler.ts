@@ -221,6 +221,16 @@ export async function handleMessageFromSession(sessionId: string, rawMessage: st
       }
       break;
 
+    case 'battle:surrender':
+      // El jugador se rinde
+      console.log('[WS] battle:surrender received from', sessionId);
+      const roomCodeSurrender = getPlayerRoom(sessionId);
+      if (roomCodeSurrender) {
+        const { handleBattleSurrender } = await import('./battleHandler.js');
+        await handleBattleSurrender(sessionId, roomCodeSurrender);
+      }
+      break;
+
     default:
       sendTo(sessionId, { type: 'error', message: `Unknown message type: ${message.type}` });
   }

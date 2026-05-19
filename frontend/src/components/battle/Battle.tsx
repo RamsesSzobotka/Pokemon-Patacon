@@ -10,7 +10,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams } from 'react-router-dom';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { joinRoom } from '../../websocket';
 import { CoinFlipAnimation } from './CoinFlipAnimation';
@@ -377,6 +376,7 @@ function PokemonSprite({
 function CommandPanel({
   onAttack,
   onChange,
+  onSurrender,
   moves,
   disabled,
   isChargingTwoTurn,
@@ -387,6 +387,7 @@ function CommandPanel({
 }: {
   onAttack: (moveId: number) => void;
   onChange: () => void;
+  onSurrender?: () => void;
   moves?: any[];
   disabled?: boolean;
   // V3 props
@@ -510,7 +511,7 @@ function CommandPanel({
             className="command-btn run"
             disabled={true}
           >
-            HUIR
+            RENDIRSE
           </button>
         </div>
       </div>
@@ -544,8 +545,13 @@ function CommandPanel({
           <button
             className="command-btn run"
             disabled={disabled}
+            onClick={() => {
+              if (onSurrender && confirm('¿Estás seguro de que quieres rendirte?')) {
+                onSurrender();
+              }
+            }}
           >
-            HUIR
+            RENDIRSE
           </button>
         </div>
       ) : (
@@ -561,19 +567,26 @@ function CommandPanel({
             {[0, 1, 2, 3].map((index) => {
               const move = moves?.[index];
               if (move) {
+                // Verificar si el movimiento tiene PP disponible
+                const hasPP = (move?.pp || 0) > 0;
+                const isDisabled = disabled || !hasPP;
+
                 return (
                   <button
                     key={move?.moveId || index}
-                    className="move-btn"
+                    className={`move-btn ${!hasPP ? 'no-pp' : ''}`}
                     style={{
                       backgroundColor: getTypeColor(move?.type),
-                      borderColor: getTypeColor(move?.type)
+                      borderColor: getTypeColor(move?.type),
+                      opacity: !hasPP ? 0.5 : 1
                     }}
                     onClick={() => {
-                      onAttack(move?.moveId);
-                      setShowMoves(false);
+                      if (hasPP) {
+                        onAttack(move?.moveId);
+                        setShowMoves(false);
+                      }
                     }}
-                    disabled={disabled}
+                    disabled={isDisabled}
                   >
                     <div className="move-name">
                       {formatMoveName(move?.name)}
@@ -583,8 +596,8 @@ function CommandPanel({
                       <span className="move-power">
                         {move?.power || 0} PWR
                       </span>
-                      <span className="move-pp">
-                        PP {move?.pp || 0}/{move?.maxPp || 0}
+                      <span className={`move-pp ${!hasPP ? 'pp-exhausted' : ''}`}>
+                        {hasPP ? `PP ${move?.pp}/${move?.maxPp}` : 'SIN PP'}
                       </span>
                     </div>
                   </button>
@@ -985,9 +998,13 @@ function BattleMessage({
 // COMPONENTE PRINCIPAL
 // ============================================
 
-export default function Battle() {
-  const { roomCode } = useParams<{ roomCode: string }>();
+interface BattleProps {
+  roomCode?: string;
+}
+
+export default function Battle({ roomCode }: BattleProps) {
   const { sendMessage, lastMessage } = useWebSocket();
+  const returnToMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Unirse a la sala al montar el componente
   useEffect(() => {
@@ -1399,6 +1416,15 @@ export default function Battle() {
           phase: 'ended'
         } : null);
         setLastBattleMessage(message.data.message);
+        
+        // Navegar al menú después de 2.5 segundos (dar tiempo a ver el mensaje de victoria)
+        if (returnToMenuTimeoutRef.current) {
+          clearTimeout(returnToMenuTimeoutRef.current);
+        }
+        returnToMenuTimeoutRef.current = setTimeout(() => {
+          sessionStorage.removeItem('patacon_room_code');
+          window.location.assign('/');
+        }, 2500);
         break;
         
       case 'battle:action-selected': {
@@ -1454,6 +1480,20 @@ export default function Battle() {
   
   const handleOpenChange = useCallback(() => {
     setShowPokemonSelector(true);
+  }, []);
+
+  const handleSurrender = useCallback(() => {
+    sendMessage({ type: 'battle:surrender', data: {} });
+    // Limpiar session storage y navegar al menú
+    sessionStorage.removeItem('patacon_room_code');
+  }, [sendMessage]);
+
+  useEffect(() => {
+    return () => {
+      if (returnToMenuTimeoutRef.current) {
+        clearTimeout(returnToMenuTimeoutRef.current);
+      }
+    };
   }, []);
   
   // Obtener datos del jugador actual según playerNumber
@@ -1578,6 +1618,7 @@ export default function Battle() {
         <CommandPanel 
           onAttack={(moveId: number) => handleAttack(moveId)}
           onChange={handleOpenChange}
+          onSurrender={handleSurrender}
           moves={moves}
           disabled={!isMyTurn || battleState.phase === 'ended' || hasSelectedAction}
           // V3: Pasar información sobre carga y fatiga

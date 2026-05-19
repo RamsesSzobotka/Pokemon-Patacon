@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from '@tanstack/react-router';
 import { PokemonType, MoveType, POKEMON_TYPES, TYPE_COLORS, GENERATIONS } from '../types/game';
 import '../styles/Pokedex.css';
 
@@ -24,7 +24,7 @@ interface MovesResponse {
 }
 
 const PokédexView: React.FC = () => {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [pokemon, setPokemon] = useState<PokemonType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -168,7 +168,7 @@ const PokédexView: React.FC = () => {
           <div className="filters-header">
             <button
               className="back-btn-filters"
-              onClick={() => navigate('/')}
+              onClick={() => router.navigate('/')}
               title="Volver al menú"
             >
               ◀

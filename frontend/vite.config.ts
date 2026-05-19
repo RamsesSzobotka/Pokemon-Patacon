@@ -1,9 +1,17 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import path from 'path';
+import { tanstackRouter } from '@tanstack/router-plugin/vite';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    tanstackRouter({
+      routesDirectory: './src/app',
+      generatedRouteTree: './src/routeTree.gen.ts',
+      routeFileIgnorePrefix: '-',
+    }),
+    react(),
+  ],
   server: {
     port: 5173,
     host: true,
