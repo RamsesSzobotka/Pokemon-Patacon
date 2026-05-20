@@ -1,27 +1,59 @@
-/* 🎮 Pokémon Patacon - Base Styles */
+/* 🎮 Pokémon Patacon - Base Styles - PIXEL ART STYLE */
 
-/* Importar fuente Montserrat */
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
+/* Importar fuente pixel art */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
-/* CSS Variables - Paleta B&W Pokémon */
+/* ============================================
+   🎮 POKÉMON PATACON - PIXEL ART DESIGN SYSTEM
+   Based on SKILL.md Ruby/GBA Visual Specification
+   ============================================ */
+
+/* CSS Variables - Paleta Ruby/GBA Pixel Art - Rojo */
 :root {
-  /* Colores Primarios */
-  --color-deep-black: #0D0D0D;
-  --color-black: #1a1a1a;
-  --color-dark-gray: #2d2d2d;
-  --color-gray: #4a4a4a;
-  --color-light-gray: #B3B3B3;
-  --color-white: #f5f5f5;
-  --color-pure-white: #ffffff;
+  /* Colores Principales - SKILL.md §1 */
+  --ruby-bg: #0A1F3D;
+  --ruby-red: #E31C2B;
+  --ruby-red-dark: #8B1428;
+  --ruby-red-light: #070606;
+  --ruby-gold: #FFD700;
+  --ruby-white: #FFFFFF;
+  --ruby-text-light: #B0C8E0;
+  
+  /* HP Colors - SKILL.md §1 */
+  --hp-green: #48D048;
+  --hp-yellow: #F8D048;
+  --hp-red: #F83030;
+  
+  /* UI Colors - Rojo oscuro */
+  --ruby-panel: #2A1520;
+  --ruby-panel-dark: #1A0D12;
+  --ruby-border: #4A2530;
+  --ruby-border-light: #6A3550;
 
-  /* Acentos */
-  --color-red-pokemon: #E10600;
-  --color-red-dark: #cc0d0d;
-  --color-red-light: #ff4444;
-  --color-green-success: #2ECC71;
-  --color-yellow-warning: #FFB90F;
-  --color-blue-zekrom: #00BFFF;
-  --color-cyan-glow: #00E5FF;
+  /* Tipografía - Pixel Art */
+  --font-pixel: 'Press Start 2P', 'Courier New', monospace;
+
+/* ============================================
+      PIXEL ART SYSTEM
+      ============================================ */
+  /* Pixel spacing (múltiplos de 4) */
+  --pixel-xs: 4px;
+  --pixel-sm: 8px;
+  --pixel-md: 12px;
+  --pixel-lg: 16px;
+  --pixel-xl: 24px;
+  --pixel-2xl: 32px;
+
+  /* Pixel borders (minimal radius for GBA style) */
+  --pixel-radius: 0px;
+  --pixel-radius-sm: 2px;
+
+  /* Pixel shadows */
+  --pixel-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+  --pixel-shadow-light: 2px 2px 0px rgba(0, 0, 0, 0.3);
+
+  /* Pixel transitions */
+  --pixel-transition: 0.1s steps(2);
 
   /* Espaciado */
   --spacing-xs: 4px;
@@ -31,41 +63,229 @@
   --spacing-xl: 32px;
   --spacing-2xl: 48px;
 
-  /* Border Radius */
-  --radius-xs: 2px;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-full: 999px;
-
-  /* Shadows */
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.6);
-  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.8);
-
-  /* Transiciones */
-  --transition-fast: 0.15s ease-out;
-  --transition-base: 0.3s ease-out;
-  --transition-slow: 0.5s ease-out;
-
-  /* Tipografía */
-  --font-family: 'Montserrat', 'Segoe UI', sans-serif;
-  --font-size-xs: 10px;
-  --font-size-sm: 12px;
-  --font-size-base: 14px;
-  --font-size-lg: 16px;
-  --font-size-xl: 20px;
-  --font-size-2xl: 24px;
-  --font-size-3xl: 32px;
+  /* Tipografía pixel */
+  --font-family: 'Press Start 2P', 'Courier New', monospace;
+  --font-size-xs: 8px;
+  --font-size-sm: 10px;
+  --font-size-base: 12px;
+  --font-size-lg: 14px;
+  --font-size-xl: 16px;
+  --font-size-2xl: 20px;
+  --font-size-3xl: 24px;
 
   /* Line Heights */
   --line-height-tight: 1.2;
-  --line-height-normal: 1.5;
-  --line-height-relaxed: 1.8;
+  --line-height-normal: 1.6;
+  --line-height-relaxed: 2;
+
+  /* ============================================
+     ANIMATIONS - PIXEL STYLE
+     ============================================ */
+  --animation-fast: 0.1s steps(2);
+  --animation-base: 0.2s steps(3);
+  --animation-slow: 0.3s steps(4);
+  --animation-bounce: 0.3s steps(3);
 }
 
-/* Reset & Base */
+/* ============================================
+   PIXEL GRID BACKGROUND ANIMATION
+   ============================================ */
+.particle-grid::before,
+.particle-grid::after {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background-image: 
+    linear-gradient(rgba(227, 28, 43, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(227, 28, 43, 0.02) 1px, transparent 1px);
+  background-size: 24px 24px, 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.particle-grid::before {
+  animation: pixel-drift 20s linear infinite;
+}
+
+.particle-grid::after {
+  animation: pixel-drift 30s linear infinite reverse;
+  opacity: 0.5;
+}
+
+@keyframes pixel-drift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-24px, -24px); }
+}
+
+/* ============================================
+   GLOBAL PIXEL ANIMATIONS
+   ============================================ */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.1);
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes loadingSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes pulse-status {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes dot-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    box-shadow: 0 0 8px rgba(72, 208, 72, 0.5);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(72, 208, 72, 0.8);
+  }
+}
+
+@keyframes countdownPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.9;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pixel-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ============================================
+   PIXEL ART COMPONENTS
+   ============================================ */
+
+/* Pixel Card */
+.pixel-card {
+  background: var(--ruby-panel);
+  border: 3px solid var(--ruby-border-light);
+  border-radius: 0;
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+}
+
+/* Pixel Button Base */
+.pixel-btn {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  padding: 12px 20px;
+  background: var(--ruby-panel);
+  border: 3px solid var(--ruby-border);
+  border-radius: 0;
+  color: var(--ruby-white);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.4);
+  transition: all 0.1s steps(2);
+}
+
+.pixel-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.4);
+  border-color: var(--ruby-gold);
+}
+
+.pixel-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.4);
+}
+
+/* Primary Button (Red) */
+.pixel-btn-primary {
+  background: var(--ruby-red);
+  border-color: #8B1428;
+}
+
+.pixel-btn-primary:hover {
+  background: #FF2D3B;
+  border-color: #FF2D3B;
+}
+
+/* Secondary Button */
+.pixel-btn-secondary {
+  background: var(--ruby-panel-dark);
+  border-color: var(--ruby-border);
+}
+
+.pixel-btn-secondary:hover {
+  background: var(--ruby-border);
+  border-color: var(--ruby-gold);
+}
+
+/* ============================================
+   RESET & BASE STYLES
+   ============================================ */
 * {
   margin: 0;
   padding: 0;
@@ -74,30 +294,39 @@
 
 html {
   scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: none; /* Mantener sharpness pixel */
+  -moz-osx-font-smoothing: unset;
 }
 
 body {
-  font-family: var(--font-family);
+  font-family: var(--font-pixel);
   font-size: var(--font-size-base);
   line-height: var(--line-height-normal);
-  color: var(--color-white);
-  background: linear-gradient(
-    135deg,
-    var(--color-deep-black) 0%,
-    var(--color-black) 50%,
-    var(--color-dark-gray) 100%
-  );
+  color: var(--ruby-white);
   min-height: 100vh;
   overflow-x: hidden;
+  position: relative;
+  image-rendering: pixelated;
 }
 
-/* Tipografía */
+/* Tipografía Pixel Art */
 h1, h2, h3, h4, h5, h6 {
-  font-weight: 700;
+  font-weight: normal;
   line-height: var(--line-height-tight);
-  color: var(--color-white);
+  color: var(--ruby-white);
+}
+
+/* Pokémon Names */
+.pokemon-name,
+.pokemon-name-display {
+  font-family: var(--font-pixel);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* UI Text */
+.ui-text {
+  font-family: var(--font-pixel);
 }
 
 h1 {
@@ -125,67 +354,67 @@ p {
 }
 
 a {
-  color: var(--color-red-pokemon);
+  color: var(--ruby-gold);
   text-decoration: none;
-  transition: color var(--transition-base);
+  transition: color var(--animation-base);
 }
 
 a:hover {
-  color: var(--color-red-light);
+  color: var(--ruby-white);
   text-decoration: underline;
 }
 
-/* Scrollbar Styling */
+/* Scrollbar Styling - Pixel Style */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-black);
+  background: var(--ruby-panel-dark);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-gray);
-  border-radius: 4px;
+  background: var(--ruby-border);
+  border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-light-gray);
+  background: var(--ruby-border-light);
 }
 
 /* Selection */
 ::selection {
-  background-color: var(--color-red-pokemon);
-  color: var(--color-white);
+  background-color: var(--ruby-red);
+  color: var(--ruby-white);
 }
 
 ::-moz-selection {
-  background-color: var(--color-red-pokemon);
-  color: var(--color-white);
+  background-color: var(--ruby-red);
+  color: var(--ruby-white);
 }
 
 /* Focus Visible */
 :focus-visible {
-  outline: 2px solid var(--color-red-pokemon);
+  outline: 2px solid var(--ruby-gold);
   outline-offset: 2px;
 }
 
 /* Placeholder */
 ::placeholder {
-  color: var(--color-light-gray);
+  color: var(--ruby-text-light);
   opacity: 0.8;
 }
 
 ::-moz-placeholder {
-  color: var(--color-light-gray);
+  color: var(--ruby-text-light);
   opacity: 0.8;
 }
 
 /* Print Styles */
 @media print {
   body {
-    background: var(--color-pure-white);
+    background: var(--ruby-white);
     color: #000;
   }
 
@@ -194,15 +423,10 @@ a:hover {
   }
 }
 
-/* Dark Mode (Default) */
+/* Dark Mode (Default) - Ya es oscuro por defecto en pixel art */
 @media (prefers-color-scheme: dark) {
   body {
-    background: linear-gradient(
-      135deg,
-      var(--color-deep-black) 0%,
-      var(--color-black) 50%,
-      var(--color-dark-gray) 100%
-    );
-    color: var(--color-white);
+    background: linear-gradient(180deg, var(--ruby-bg) 0%, var(--ruby-panel-dark) 50%, var(--ruby-bg) 100%);
+    color: var(--ruby-white);
   }
 }

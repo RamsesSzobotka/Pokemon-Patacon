@@ -9,14 +9,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './app/__root'
+import { Route as SplashRouteImport } from './app/splash'
 import { Route as PokedexRouteImport } from './app/pokedex'
+import { Route as MenuRouteImport } from './app/menu'
 import { Route as IndexRouteImport } from './app/index'
 import { Route as DraftRoomCodeRouteImport } from './app/draft.$roomCode'
 import { Route as BattleRoomCodeRouteImport } from './app/battle.$roomCode'
 
+const SplashRoute = SplashRouteImport.update({
+  id: '/splash',
+  path: '/splash',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PokedexRoute = PokedexRouteImport.update({
   id: '/pokedex',
   path: '/pokedex',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MenuRoute = MenuRouteImport.update({
+  id: '/menu',
+  path: '/menu',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,45 +49,86 @@ const BattleRoomCodeRoute = BattleRoomCodeRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/menu': typeof MenuRoute
   '/pokedex': typeof PokedexRoute
+  '/splash': typeof SplashRoute
   '/battle/$roomCode': typeof BattleRoomCodeRoute
   '/draft/$roomCode': typeof DraftRoomCodeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/menu': typeof MenuRoute
   '/pokedex': typeof PokedexRoute
+  '/splash': typeof SplashRoute
   '/battle/$roomCode': typeof BattleRoomCodeRoute
   '/draft/$roomCode': typeof DraftRoomCodeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/menu': typeof MenuRoute
   '/pokedex': typeof PokedexRoute
+  '/splash': typeof SplashRoute
   '/battle/$roomCode': typeof BattleRoomCodeRoute
   '/draft/$roomCode': typeof DraftRoomCodeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/pokedex' | '/battle/$roomCode' | '/draft/$roomCode'
+  fullPaths:
+    | '/'
+    | '/menu'
+    | '/pokedex'
+    | '/splash'
+    | '/battle/$roomCode'
+    | '/draft/$roomCode'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/pokedex' | '/battle/$roomCode' | '/draft/$roomCode'
-  id: '__root__' | '/' | '/pokedex' | '/battle/$roomCode' | '/draft/$roomCode'
+  to:
+    | '/'
+    | '/menu'
+    | '/pokedex'
+    | '/splash'
+    | '/battle/$roomCode'
+    | '/draft/$roomCode'
+  id:
+    | '__root__'
+    | '/'
+    | '/menu'
+    | '/pokedex'
+    | '/splash'
+    | '/battle/$roomCode'
+    | '/draft/$roomCode'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MenuRoute: typeof MenuRoute
   PokedexRoute: typeof PokedexRoute
+  SplashRoute: typeof SplashRoute
   BattleRoomCodeRoute: typeof BattleRoomCodeRoute
   DraftRoomCodeRoute: typeof DraftRoomCodeRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/splash': {
+      id: '/splash'
+      path: '/splash'
+      fullPath: '/splash'
+      preLoaderRoute: typeof SplashRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pokedex': {
       id: '/pokedex'
       path: '/pokedex'
       fullPath: '/pokedex'
       preLoaderRoute: typeof PokedexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/menu': {
+      id: '/menu'
+      path: '/menu'
+      fullPath: '/menu'
+      preLoaderRoute: typeof MenuRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -104,7 +157,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MenuRoute: MenuRoute,
   PokedexRoute: PokedexRoute,
+  SplashRoute: SplashRoute,
   BattleRoomCodeRoute: BattleRoomCodeRoute,
   DraftRoomCodeRoute: DraftRoomCodeRoute,
 }

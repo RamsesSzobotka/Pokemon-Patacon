@@ -65,7 +65,8 @@ export interface BattleMove {
     ailmentChance: number;
     statChanges: Array<{ stat: string; change: number }>;
     flinchChance: number;
-    heal: number;
+    healing: number;
+    drain: number;
     minHits: number | null;
     maxHits: number | null;
     minTurns: number | null;

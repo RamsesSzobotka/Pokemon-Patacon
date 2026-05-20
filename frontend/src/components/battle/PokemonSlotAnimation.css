@@ -1,4 +1,28 @@
-/* Overlay contenedor - estilo menú */
+/* ============================================
+   🎮 POKÉMON PATACON - SLOT ANIMATION
+   Estilo Pixel Art - Pokémon Ruby (GBA)
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  /* Paleta Ruby/GBA - Rojo */
+  --ruby-bg: #0A1F3D;
+  --ruby-red: #E31C2B;
+  --ruby-red-dark: #8B1428;
+  --ruby-red-light: #FF2D3B;
+  --ruby-gold: #FFD700;
+  --ruby-white: #FFFFFF;
+  --ruby-text-light: #B0C8E0;
+  --ruby-panel: #2A1520;
+  --ruby-panel-dark: #1A0D12;
+  --ruby-border: #4A2530;
+  --ruby-border-light: #6A3550;
+  --hp-green: #48D048;
+  --font-pixel: 'Press Start 2P', 'Courier New', monospace;
+}
+
+/* Overlay contenedor */
 .slot-animation-overlay {
   position: fixed;
   top: 0;
@@ -9,160 +33,147 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  /* Fondo con partículas igual que el menú */
+  /* Fondo con partículas rojas */
   background-image: 
-    radial-gradient(circle at 1px 1px, rgba(225, 6, 0, 0.1) 1px, transparent 1px),
-    radial-gradient(circle at 2px 2px, rgba(0, 181, 255, 0.08) 1px, transparent 1px);
-  background-size: 80px 80px, 120px 120px;
-  animation: drift 20s linear infinite;
+    linear-gradient(rgba(227, 28, 43, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(227, 28, 43, 0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
+  animation: pixel-drift 20s linear infinite;
 }
 
-@keyframes drift {
+@keyframes pixel-drift {
   0% { transform: translate(0, 0); }
-  100% { transform: translate(50px, 50px); }
+  100% { transform: translate(-24px, -24px); }
 }
 
-/* Contenedor principal de la máquina - estilo menú */
+/* Contenedor principal */
 .slot-machine-container {
   text-align: center;
-  max-width: 600px;
+  max-width: 560px;
   width: 100%;
-  padding: 48px 40px;
-  background: rgba(15, 15, 15, 0.85);
-  backdrop-filter: blur(10px);
-  border: 1.5px solid rgba(225, 6, 0, 0.2);
-  border-radius: 20px;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.6),
-    inset 0 1px 1px rgba(225, 6, 0, 0.1);
-  animation: slideIn 0.6s ease-out;
+  padding: 36px 32px;
+  background: var(--ruby-panel);
+  border: 4px solid var(--ruby-border-light);
+  border-radius: 0;
+  box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.6);
+  animation: card-appear 0.4s steps(4);
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(30px) scale(0.95);
+@keyframes card-appear {
+  from { 
+    opacity: 0; 
+    transform: translateY(16px); 
   }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
   }
 }
 
-/* Título - rojo como el menú */
+/* Título */
 .slot-title {
-  color: #E10600;
-  font-size: 28px;
-  font-weight: 900;
+  font-family: var(--font-pixel);
+  color: var(--ruby-gold);
+  font-size: 14px;
   text-transform: uppercase;
-  letter-spacing: 3px;
-  margin-bottom: 32px;
-  text-shadow: 0 0 20px rgba(225, 6, 0, 0.3);
-  animation: pulse-countdown 1s ease-in-out infinite;
+  letter-spacing: 2px;
+  margin-bottom: 24px;
+  text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+  animation: blink 1s steps(2) infinite;
 }
 
-@keyframes pulse-countdown {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.9;
-  }
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
 }
 
-/* Contenedor de los dos equipos */
+/* Contenedor de equipos */
 .slot-teams-container {
   display: flex;
   justify-content: space-around;
-  gap: 16px;
-  margin: 32px 0;
+  gap: 12px;
+  margin: 24px 0;
 }
 
-/* Sección de equipo - igual que .team-section del menú */
+/* Sección de equipo */
 .slot-team-section {
   flex: 1;
-  background: rgba(26, 26, 26, 0.6);
-  border-radius: 12px;
-  padding: 16px;
-  border: 1.5px solid rgba(225, 6, 0, 0.2);
-  backdrop-filter: blur(3px);
+  background: var(--ruby-panel-dark);
+  border: 3px solid var(--ruby-border);
+  padding: 12px;
 }
 
 .slot-team-section.opponent {
-  border-color: rgba(225, 6, 0, 0.3);
+  border-color: var(--ruby-border-light);
 }
 
-/* Título del equipo - rojo */
+/* Título del equipo */
 .slot-team-title {
-  color: #E10600;
-  font-size: 12px;
-  font-weight: 800;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--ruby-red);
   text-transform: uppercase;
-  letter-spacing: 2px;
-  margin-bottom: 14px;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
 }
 
 .slot-team-section.opponent .slot-team-title {
-  color: #B3B3B3;
+  color: var(--ruby-text-light);
 }
 
-/* Reel (grid de slots) */
+/* Reel */
 .slot-reel {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* Slot individual */
 .slot-item {
-  width: 64px;
-  height: 72px;
+  width: 56px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(30, 30, 30, 0.8);
-  border-radius: 10px;
-  border: 1px solid rgba(225, 6, 0, 0.2);
+  background: var(--ruby-panel);
+  border: 2px solid var(--ruby-border);
   position: relative;
-  transition: all 0.3s ease;
+  transition: all 0.1s steps(2);
 }
 
 .slot-item.spinning {
-  border-color: rgba(225, 6, 0, 0.5);
-  box-shadow: 0 0 15px rgba(225, 6, 0, 0.3);
+  border-color: var(--ruby-red);
+  box-shadow: 3px 3px 0px rgba(227, 28, 43, 0.4);
 }
 
 .slot-item.stopped {
-  border-color: rgba(76, 175, 80, 0.5);
-  box-shadow: 0 0 10px rgba(76, 175, 80, 0.2);
+  border-color: var(--hp-green);
+  box-shadow: 2px 2px 0px rgba(72, 208, 72, 0.4);
 }
 
-/* Sprite del slot */
+/* Sprite */
 .slot-sprite {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   image-rendering: pixelated;
-  filter: drop-shadow(0 0 4px rgba(225, 6, 0, 0.2));
-  transition: transform 0.1s;
+  filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.4));
+  transition: transform 0.1s steps(2);
 }
 
 .slot-item.spinning .slot-sprite {
-  animation: spinSprite 0.1s steps(1) infinite;
-  filter: blur(0.5px) drop-shadow(0 0 4px rgba(225, 6, 0, 0.2));
+  animation: spinSprite 0.1s steps(2) infinite;
 }
 
 @keyframes spinSprite {
-  0% { transform: translateY(-3px); }
+  0% { transform: translateY(-2px); }
   50% { transform: translateY(0px); }
-  100% { transform: translateY(3px); }
+   100% { transform: translateY(2px); }
 }
 
 .slot-item.stopped .slot-sprite {
   animation: none;
-  filter: blur(0) drop-shadow(0 0 6px rgba(76, 175, 80, 0.3));
+  filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 4px rgba(72, 208, 72, 0.4));
   transform: scale(1.05);
 }
 
@@ -171,9 +182,9 @@
   position: absolute;
   top: 2px;
   left: 4px;
-  font-size: 8px;
-  font-weight: bold;
-  color: #666;
+  font-family: var(--font-pixel);
+  font-size: 6px;
+  color: #5a6a7a;
 }
 
 /* Indicador de detenido */
@@ -183,29 +194,29 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #4CAF50, #8BC34A);
+  background: var(--hp-green);
 }
 
-/* Estado / Indicador */
+/* Estado */
 .slot-status {
-  height: 30px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .slot-spinning-indicator {
-  color: #B3B3B3;
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--ruby-text-light);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .slot-spinner {
-  animation: spin 0.5s linear infinite;
+  animation: spin 0.5s steps(4) infinite;
   display: inline-block;
 }
 
@@ -215,17 +226,17 @@
 }
 
 .slot-stopping-indicator {
-  color: #E10600;
-  font-size: 13px;
-  font-weight: 700;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--ruby-red);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
 .slot-complete-indicator {
-  color: #4CAF50;
-  font-size: 14px;
-  font-weight: 700;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--hp-green);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -233,25 +244,25 @@
 /* Responsive */
 @media (max-width: 600px) {
   .slot-machine-container {
-    padding: 32px 20px;
+    padding: 24px 16px;
   }
 
   .slot-teams-container {
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
   }
 
   .slot-item {
-    width: 46px;
-    height: 54px;
+    width: 44px;
+    height: 52px;
   }
 
   .slot-sprite {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
   }
 
   .slot-title {
-    font-size: 18px;
+    font-size: 11px;
   }
 }

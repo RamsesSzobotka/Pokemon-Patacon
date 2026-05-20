@@ -37,6 +37,17 @@ button {
   letter-spacing: 1px;
   font-family: 'Montserrat', sans-serif;
   position: relative;
+  animation: float-btn 2s ease-in-out infinite;
+}
+
+@keyframes float-btn {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+button:hover:not(:disabled) {
+  animation: none;
+  transform: translateY(-6px);
 }
 
 button:hover:not(:disabled) {
@@ -54,6 +65,8 @@ button:disabled {
 }
 
 /* Inputs Generales */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
 input[type="text"],
 input[type="number"],
 input[type="email"],
@@ -65,8 +78,8 @@ textarea {
   background-color: #1a1a1a;
   color: #f5f5f5;
   border-radius: 4px;
-  font-size: 14px;
-  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-family: 'Press Start 2P', 'Courier New', monospace;
   transition: all 0.3s ease;
 }
 

@@ -1,0 +1,278 @@
+/* ============================================
+   🎮 POKÉMON PATACON - PIXEL ART STYLE
+   Based on Pokémon Ruby (GBA) Visual Specification
+   ============================================ */
+
+/* Importar fuente pixel art */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+/* ============================================
+   CSS VARIABLES - PALETA RUBY/GBA
+   ============================================ */
+:root {
+  /* Colores Principal (SKILL.md §1) */
+  --ruby-bg: #0A1F3D;           /* Fondo principal - azul oscuro estilo GBA */
+  --ruby-red: #E31C2B;          /* Rojo Ruby - acento principal */
+  --ruby-gold: #FFD700;         /* Dorado - resaltes */
+  --ruby-white: #FFFFFF;        /* Texto principal */
+  --ruby-text-light: #B0C8E0;   /* Texto secundario */
+  
+  /* HP Colors (SKILL.md §1) */
+  --hp-green: #48D048;          /* Barra HP - seguro */
+  --hp-yellow: #F8D048;         /* Barra HP - aviso */
+  --hp-red: #F83030;            /* Barra HP - crítico */
+  
+  /* UI Colors */
+  --ruby-panel: #1E3A6B;        /* Paneles/controles */
+  --ruby-panel-dark: #0D1832;   /* Panel oscuro */
+  --ruby-border: #3D5A80;       /* Bordes */
+  --ruby-border-light: #5A7FA8; /* Bordes claros */
+  
+  /* Tipografía */
+  --font-pixel: 'Press Start 2P', 'Courier New', monospace;
+  --font-ui-pixel: 'Press Start 2P', monospace;
+  
+  /* Espaciado pixel (múltiplos de 4) */
+  --pixel-xs: 4px;
+  --pixel-sm: 8px;
+  --pixel-md: 12px;
+  --pixel-lg: 16px;
+  --pixel-xl: 24px;
+  --pixel-2xl: 32px;
+  
+  /* Border radius minimal (estilo GBA) */
+  --pixel-radius: 0px;          /* Sin redondeo para estilo pixel */
+  --pixel-radius-sm: 2px;
+  
+  /* Sombras - estilo pixel */
+  --pixel-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+  --pixel-shadow-light: 2px 2px 0px rgba(0, 0, 0, 0.3);
+  
+  /* Transiciones */
+  --pixel-transition: 0.1s steps(2);
+}
+
+/* ============================================
+   BASE STYLES - PIXEL ART
+   ============================================ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  image-rendering: pixelated; /* Para sprites pixel */
+  image-rendering: crisp-edges;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: none; /* Mantener sharpness */
+  -moz-osx-font-smoothing: unset;
+}
+
+body {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--ruby-white);
+  background: var(--ruby-bg);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ============================================
+   PIXEL ART BUTTONS
+   ============================================ */
+.pixel-btn {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  padding: var(--pixel-md) var(--pixel-lg);
+  background: var(--ruby-panel);
+  color: var(--ruby-white);
+  border: 3px solid var(--ruby-border-light);
+  border-radius: var(--pixel-radius);
+  cursor: pointer;
+  text-transform: uppercase;
+  position: relative;
+  box-shadow: var(--pixel-shadow);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.pixel-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.5);
+  background: var(--ruby-border);
+}
+
+.pixel-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+}
+
+.pixel-btn-primary {
+  background: var(--ruby-red);
+  border-color: #8B1428;
+}
+
+.pixel-btn-primary:hover {
+  background: #FF2D3B;
+}
+
+.pixel-btn-gold {
+  background: var(--ruby-gold);
+  color: var(--ruby-bg);
+  border-color: #B8960A;
+}
+
+.pixel-btn-gold:hover {
+  background: #FFE34D;
+}
+
+/* ============================================
+   PIXEL ART PANELS
+   ============================================ */
+.pixel-panel {
+  background: var(--ruby-panel);
+  border: 3px solid var(--ruby-border-light);
+  border-radius: var(--pixel-radius);
+  box-shadow: var(--pixel-shadow);
+  padding: var(--pixel-lg);
+}
+
+.pixel-panel-dark {
+  background: var(--ruby-panel-dark);
+  border-color: var(--ruby-border);
+}
+
+.pixel-panel-gold {
+  border-color: var(--ruby-gold);
+  box-shadow: var(--pixel-shadow), 0 0 0 2px var(--ruby-gold);
+}
+
+/* ============================================
+   PIXEL ART INPUTS
+   ============================================ */
+.pixel-input {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  padding: var(--pixel-sm) var(--pixel-md);
+  background: var(--ruby-panel-dark);
+  color: var(--ruby-white);
+  border: 3px solid var(--ruby-border);
+  border-radius: var(--pixel-radius);
+  outline: none;
+}
+
+.pixel-input:focus {
+  border-color: var(--ruby-gold);
+  box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.3);
+}
+
+.pixel-input::placeholder {
+  color: var(--ruby-text-light);
+}
+
+/* ============================================
+   HP BAR - ESTILO GBA
+   ============================================ */
+.hp-bar-container {
+  display: flex;
+  align-items: center;
+  gap: var(--pixel-sm);
+  font-family: var(--font-pixel);
+  font-size: 8px;
+}
+
+.hp-label {
+  color: var(--ruby-gold);
+  font-weight: bold;
+}
+
+.hp-bar-bg {
+  width: 150px;
+  height: 8px;
+  background: #1a1a1a;
+  border: 2px solid var(--ruby-border-light);
+  border-radius: var(--pixel-radius-sm);
+  overflow: hidden;
+}
+
+.hp-bar-fill {
+  height: 100%;
+  transition: width 0.3s steps(10), background-color 0.3s;
+}
+
+/* ============================================
+   PIXEL ART TEXT STYLES
+   ============================================ */
+.pixel-title {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--ruby-gold);
+  text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.pixel-subtitle {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--ruby-text-light);
+  text-transform: uppercase;
+}
+
+.pixel-text {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--ruby-white);
+}
+
+.pixel-text-gold {
+  color: var(--ruby-gold);
+}
+
+.pixel-text-red {
+  color: var(--ruby-red);
+}
+
+/* ============================================
+   ANIMATIONS - PIXEL STYLE
+   ============================================ */
+@keyframes pixel-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes pixel-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.2); }
+}
+
+@keyframes pixel-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes pixel-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+/* ============================================
+   RESPONSIVE - PIXEL ART
+   ============================================ */
+@media (max-width: 768px) {
+  :root {
+    --pixel-lg: 12px;
+    --pixel-xl: 16px;
+    --pixel-2xl: 24px;
+  }
+  
+  body {
+    font-size: 8px;
+  }
+  
+  .pixel-title {
+    font-size: 12px;
+  }
+}

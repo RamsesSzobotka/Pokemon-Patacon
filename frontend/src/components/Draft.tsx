@@ -43,6 +43,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
   const [loadingMoves, setLoadingMoves] = useState(false);
   const [selectedMove, setSelectedMove] = useState<MoveType | null>(null);
   const [selectedMoves, setSelectedMoves] = useState<MoveType[]>([]);
+  const [activeTab, setActiveTab] = useState<'stats' | 'moves'>('stats');
   const [myPicks, setMyPicks] = useState<PokemonSprite[]>([]);
   const [opponentPicks, setOpponentPicks] = useState<PokemonSprite[]>([]);
   const [currentTurn, setCurrentTurn] = useState<'player1' | 'player2' | null>(null);
@@ -527,7 +528,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
 
       <div className="draft-content">
         {/* Mi equipo (izquierda) */}
-        <div className="team-panel my-team">
+        <div className={`team-panel my-team ${isMyTurn ? 'active' : ''}`}>
           <h2>TUS POKÉMON</h2>
           <div className="pokemon-slots">
             {[...Array(6)].map((_, i) => (
@@ -573,91 +574,110 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
                 </div>
 
                 <div className="selected-preview-scrolls">
-                  <div className="pokemon-info-card">
-                    <div className="pokemon-info-row">
-                      <span className="pokemon-info-label">Tipo</span>
-                      <div className="pokemon-type-tags">
-                        {selectedPokemon.types.map((type) => (
-                          <span
-                            key={type}
-                            className="pokemon-type-tag"
-                            style={{ backgroundColor: TYPE_COLORS[type] || '#4a4a4a' }}
-                          >
-                            {type}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="pokemon-info-grid">
-                      <div className="pokemon-info-item">
-                        <span className="pokemon-info-label">Gen</span>
-                        <strong>{selectedPokemon.generation}</strong>
-                      </div>
-                      <div className="pokemon-info-item">
-                        <span className="pokemon-info-label">Base EXP</span>
-                        <strong>{selectedPokemon.base_experience}</strong>
-                      </div>
-                      <div className="pokemon-info-item">
-                        <span className="pokemon-info-label">Altura</span>
-                        <strong>{(selectedPokemon.height_dm / 10).toFixed(1)} m</strong>
-                      </div>
-                      <div className="pokemon-info-item">
-                        <span className="pokemon-info-label">Peso</span>
-                        <strong>{(selectedPokemon.weight_hg / 10).toFixed(1)} kg</strong>
-                      </div>
-                    </div>
-                    <div className="pokemon-stats-list">
-                      <div className="pokemon-stat-row"><span>HP</span><strong>{selectedPokemon.stats.hp}</strong></div>
-                      <div className="pokemon-stat-row"><span>Ataque</span><strong>{selectedPokemon.stats.attack}</strong></div>
-                      <div className="pokemon-stat-row"><span>Defensa</span><strong>{selectedPokemon.stats.defense}</strong></div>
-                      <div className="pokemon-stat-row"><span>At. Esp.</span><strong>{selectedPokemon.stats.sp_attack}</strong></div>
-                      <div className="pokemon-stat-row"><span>Def. Esp.</span><strong>{selectedPokemon.stats.sp_defense}</strong></div>
-                      <div className="pokemon-stat-row"><span>Velocidad</span><strong>{selectedPokemon.stats.speed}</strong></div>
-                    </div>
+                  <div className="pokemon-tabs">
+                    <button 
+                      className={`pokemon-tab ${activeTab === 'stats' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('stats')}
+                    >
+                      ESTADÍSTICAS
+                    </button>
+                    <button 
+                      className={`pokemon-tab ${activeTab === 'moves' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('moves')}
+                    >
+                      ATAQUES
+                    </button>
                   </div>
 
-                  <div className="pokemon-moves-card">
-                    <div className="pokemon-moves-header">
-                      <span className="pokemon-info-label">Ataques</span>
-                      <span className="pokemon-moves-count">
-                        {loadingMoves ? 'Cargando...' : `${selectedPokemonMoves.length} mostrados`}
-                      </span>
-                    </div>
-
-                    {loadingMoves ? (
-                      <div className="pokemon-moves-loading">
-                        <div className="spinner-small"></div>
-                        <span>Cargando ataques...</span>
-                      </div>
-                    ) : selectedPokemonMoves.length > 0 ? (
-                      <div className="pokemon-moves-list">
-                        {selectedPokemonMoves.map((move) => (
-                          <div 
-                            key={move.move_id} 
-                            className={`pokemon-move-row ${isMoveSelected(move.move_id) ? 'selected' : ''}`}
-                            onClick={() => handleMoveClick(move)}
-                          >
-                            <div className="pokemon-move-main">
-                              <span className="pokemon-move-name">
-                                {move.names?.es?.toUpperCase() || move.name.toUpperCase()}
-                              </span>
+                  <div className="pokemon-tab-content">
+                    {activeTab === 'stats' ? (
+                      <div className="pokemon-info-card">
+                        <div className="pokemon-type-row">
+                          <span className="pokemon-info-label">Tipo: </span>
+                          <div className="pokemon-type-tags">
+                            {selectedPokemon.types.map((type) => (
                               <span
-                                className="pokemon-move-type"
-                                style={{ backgroundColor: TYPE_COLORS[move.type] || '#4a4a4a' }}
+                                key={type}
+                                className="pokemon-type-tag"
+                                style={{ backgroundColor: TYPE_COLORS[type] || '#4a4a4a' }}
                               >
-                                {move.type.toUpperCase()}
+                                {type}
                               </span>
-                            </div>
-                            <div className="pokemon-move-meta">
-                              <span>Poder: {move.power !== null ? move.power : '—'}</span>
-                              <span>Precisión: {move.accuracy !== null ? `${move.accuracy}%` : '—'}</span>
-                              <span>PP: {move.pp || '—'}</span>
-                            </div>
+                            ))}
                           </div>
-                        ))}
+                        </div>
+                        <div className="pokemon-info-grid">
+                          <div className="pokemon-info-item">
+                            <span className="pokemon-info-label">Gen</span>
+                            <strong>{selectedPokemon.generation}</strong>
+                          </div>
+                          <div className="pokemon-info-item">
+                            <span className="pokemon-info-label">Base EXP</span>
+                            <strong>{selectedPokemon.base_experience}</strong>
+                          </div>
+                          <div className="pokemon-info-item">
+                            <span className="pokemon-info-label">Altura</span>
+                            <strong>{(selectedPokemon.height_dm / 10).toFixed(1)} m</strong>
+                          </div>
+                          <div className="pokemon-info-item">
+                            <span className="pokemon-info-label">Peso</span>
+                            <strong>{(selectedPokemon.weight_hg / 10).toFixed(1)} kg</strong>
+                          </div>
+                        </div>
+                        <div className="pokemon-stats-list">
+                          <div className="pokemon-stat-row"><span>HP</span><strong>{selectedPokemon.stats.hp}</strong></div>
+                          <div className="pokemon-stat-row"><span>Ataque</span><strong>{selectedPokemon.stats.attack}</strong></div>
+                          <div className="pokemon-stat-row"><span>Defensa</span><strong>{selectedPokemon.stats.defense}</strong></div>
+                          <div className="pokemon-stat-row"><span>At. Esp.</span><strong>{selectedPokemon.stats.sp_attack}</strong></div>
+                          <div className="pokemon-stat-row"><span>Def. Esp.</span><strong>{selectedPokemon.stats.sp_defense}</strong></div>
+                          <div className="pokemon-stat-row"><span>Velocidad</span><strong>{selectedPokemon.stats.speed}</strong></div>
+                        </div>
                       </div>
                     ) : (
-                      <p className="pokemon-moves-empty">Este Pokémon no tiene ataques disponibles en la base de datos.</p>
+                      <div className="pokemon-moves-card">
+                        <div className="pokemon-moves-header">
+                          <span className="pokemon-info-label">Ataques</span>
+                          <span className="pokemon-moves-count">
+                            {loadingMoves ? 'Cargando...' : `${selectedPokemonMoves.length} mostrados`}
+                          </span>
+                        </div>
+
+                        {loadingMoves ? (
+                          <div className="pokemon-moves-loading">
+                            <div className="spinner-small"></div>
+                            <span>Cargando ataques...</span>
+                          </div>
+                        ) : selectedPokemonMoves.length > 0 ? (
+                          <div className="pokemon-moves-list">
+                            {selectedPokemonMoves.map((move) => (
+                              <div 
+                                key={move.move_id} 
+                                className={`pokemon-move-row ${isMoveSelected(move.move_id) ? 'selected' : ''}`}
+                                onClick={() => handleMoveClick(move)}
+                              >
+                                <div className="pokemon-move-main">
+                                  <span className="pokemon-move-name">
+                                    {move.names?.es?.toUpperCase() || move.name.toUpperCase()}
+                                  </span>
+                                  <span
+                                    className="pokemon-move-type"
+                                    style={{ backgroundColor: TYPE_COLORS[move.type] || '#4a4a4a' }}
+                                  >
+                                    {move.type.toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="pokemon-move-meta">
+                                  <span>Poder: {move.power !== null ? move.power : '—'}</span>
+                                  <span>Precisión: {move.accuracy !== null ? `${move.accuracy}%` : '—'}</span>
+                                  <span>PP: {move.pp || '—'}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="pokemon-moves-empty">Este Pokémon no tiene ataques disponibles en la base de datos.</p>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -763,7 +783,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
         </div>
 
         {/* Equipo oponente (derecha) */}
-        <div className="team-panel opponent-team">
+        <div className={`team-panel opponent-team ${!isMyTurn ? 'active' : ''}`}>
           <h2>EQUIPO OPONENTE</h2>
           <div className="pokemon-slots">
             {[...Array(6)].map((_, i) => (
@@ -794,21 +814,20 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
       {selectedMove && (
         <div className="move-detail-overlay" onClick={() => setSelectedMove(null)}>
           <div className="move-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <button 
-              className="move-detail-close"
-              onClick={() => setSelectedMove(null)}
-            >
-              ✕
-            </button>
-
             <div className="move-detail-header">
               <h2>{selectedMove.names?.es?.toUpperCase() || selectedMove.name.toUpperCase()}</h2>
-              <span 
-                className="move-type-badge-large"
-                style={{ backgroundColor: TYPE_COLORS[selectedMove.type] || '#999' }}
-              >
-                {selectedMove.type.toUpperCase()}
-              </span>
+              <div className="move-type-row">
+                <span 
+                  className="move-type-badge-large"
+                  style={{ backgroundColor: TYPE_COLORS[selectedMove.type] || '#999' }}
+                >
+                  {selectedMove.type.toUpperCase()}
+                </span>
+                <span className={`damage-class-badge ${selectedMove.damage_class}`}>
+                  {selectedMove.damage_class === 'physical' ? 'FÍSICO' : 
+                   selectedMove.damage_class === 'special' ? 'ESPECIAL' : 'ESTADO'}
+                </span>
+              </div>
             </div>
 
             <div className="move-detail-description">
@@ -832,13 +851,6 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
                 <span className="label">PRIORIDAD</span>
                 <span className="value">{selectedMove.priority >= 0 ? `+${selectedMove.priority}` : selectedMove.priority}</span>
               </div>
-            </div>
-
-            <div className="move-detail-class">
-              <span className={`damage-class-large ${selectedMove.damage_class}`}>
-                {selectedMove.damage_class === 'physical' ? '⚔️ FÍSICO' : 
-                 selectedMove.damage_class === 'special' ? '✨ ESPECIAL' : '📋 ESTADO'}
-              </span>
             </div>
 
             <div className="move-detail-ailment">
@@ -882,7 +894,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
                   className="move-action-btn remove-move"
                   onClick={() => handleRemoveMove(selectedMove.move_id)}
                 >
-                  ✕ Quitar Ataque
+                  Quitar Ataque
                 </button>
               ) : (
                 <button 
@@ -893,6 +905,12 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
                   {selectedMoves.length >= 4 ? 'Máximo 4 ataques' : '✓ Elegir Ataque'}
                 </button>
               )}
+              <button 
+                className="move-action-btn close-move"
+                onClick={() => setSelectedMove(null)}
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

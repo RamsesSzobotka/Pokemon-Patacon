@@ -703,13 +703,50 @@ export function handleTwoTurnMove(
     message += '\n¡No tiene efecto!';
   }
   
-  // Verificar si se debilitó
+// Verificar si se debilitó
   const fainted = hpAfter <= 0;
   if (fainted) {
     defender.isFainted = true;
     message += `\n${defender.name} se debilito.`;
   }
-  
+
+  // V4: Aplicar Drain (robo de vida o autolesión)
+  const drain = move.meta?.drain ?? 0;
+  if (drain !== 0 && damage > 0 && !attacker.isFainted) {
+    const drainPercent = Math.abs(drain) / 100;
+    const drainAmount = Math.floor(damage * drainPercent);
+
+    if (drain > 0) {
+      const maxHeal = attacker.maxHp - attacker.hp;
+      const drainHealed = Math.min(drainAmount, maxHeal);
+      attacker.hp += drainHealed;
+      if (drainHealed > 0) {
+        message += `\n¡${attacker.name} recuperó ${drainHealed} PS!`;
+      }
+    } else {
+      const drainDamage = Math.min(drainAmount, attacker.hp);
+      attacker.hp = Math.max(0, attacker.hp - drainDamage);
+      message += `\n¡${attacker.name} se lastimó con su propio ataque!`;
+    }
+  }
+
+  // V5: Aplicar Healing (curación al usuario o objetivo)
+  const healing = move.meta?.healing ?? 0;
+  if (healing > 0 && !attacker.isFainted) {
+    const targetIsUser = move.target?.toLowerCase() === 'user';
+    const healTarget = targetIsUser ? attacker : defender;
+    
+    const healAmount = Math.floor(healTarget.maxHp * (healing / 100));
+    const maxHeal = healTarget.maxHp - healTarget.hp;
+    const actualHeal = Math.min(healAmount, maxHeal);
+    
+    if (actualHeal > 0) {
+      healTarget.hp += actualHeal;
+      const targetName = targetIsUser ? attacker.name : defender.name;
+      message += `\n¡${targetName} recuperó ${actualHeal} PS!`;
+    }
+  }
+   
   // Verificar si el movimiento causa fatiga
   if (FATIGUE_MOVES[move.moveId]) {
     const fatigueInfo = FATIGUE_MOVES[move.moveId];
@@ -881,18 +918,14 @@ function normalizeStatName(stat: string): BattleStatKey | null {
   return STAT_NAME_MAP[normalized] ?? null;
 }
 
-function resolveStatChangeTarget(move: BattleMove, changeValue: number): StatChangeTarget {
+function resolveStatChangeTarget(move: BattleMove, _changeValue: number): StatChangeTarget {
   const target = move.target?.toLowerCase();
 
-  if (target && SELF_TARGETS.has(target)) {
+  if (target === 'user') {
     return 'attacker';
   }
 
-  if (target && target !== 'selected-pokemon') {
-    return 'defender';
-  }
-
-  return changeValue >= 0 ? 'attacker' : 'defender';
+  return 'defender';
 }
 
 function getStatLabel(stat: BattleStatKey): string {
@@ -1030,6 +1063,46 @@ export function executeMove(
     message += `\n${defender.name} se debilito.`;
   }
 
+  // V4: Aplicar Drain (robo de vida o autolesión)
+  const drain = move.meta?.drain ?? 0;
+  let drainHealed = 0;
+  let drainDamage = 0;
+
+  if (drain !== 0 && damage > 0 && !attacker.isFainted) {
+    const drainPercent = Math.abs(drain) / 100;
+    const drainAmount = Math.floor(damage * drainPercent);
+
+    if (drain > 0) {
+      const maxHeal = attacker.maxHp - attacker.hp;
+      drainHealed = Math.min(drainAmount, maxHeal);
+      attacker.hp += drainHealed;
+      if (drainHealed > 0) {
+        message += `\n¡${attacker.name} recuperó ${drainHealed} PS!`;
+      }
+    } else {
+      drainDamage = Math.min(drainAmount, attacker.hp);
+      attacker.hp = Math.max(0, attacker.hp - drainDamage);
+      message += `\n¡${attacker.name} se lastimó con su propio ataque!`;
+    }
+  }
+
+  // V5: Aplicar Healing (curación al usuario o objetivo)
+  const healing = move.meta?.healing ?? 0;
+  if (healing > 0 && !attacker.isFainted) {
+    const targetIsUser = move.target?.toLowerCase() === 'user';
+    const healTarget = targetIsUser ? attacker : defender;
+    
+    const healAmount = Math.floor(healTarget.maxHp * (healing / 100));
+    const maxHeal = healTarget.maxHp - healTarget.hp;
+    const actualHeal = Math.min(healAmount, maxHeal);
+    
+    if (actualHeal > 0) {
+      healTarget.hp += actualHeal;
+      const targetName = targetIsUser ? attacker.name : defender.name;
+      message += `\n¡${targetName} recuperó ${actualHeal} PS!`;
+    }
+  }
+
   const statChangeResults = applyMoveStatChanges(move, attacker, defender, defenderFainted);
   // NOTA: los cambios de estadística se aplican pero no generan líneas narrativas.
   // Se incluyen en el campo `statChanges` del ActionResult para el frontend si es necesario.
@@ -1109,6 +1182,46 @@ export function executeMove(
     message += `\n${defender.name} se debilito.`;
   }
 
+  // V4: Aplicar Drain (robo de vida o autolesión)
+  const drain = move.meta?.drain ?? 0;
+  let drainHealed = 0;
+  let drainDamage = 0;
+
+  if (drain !== 0 && damage > 0 && !attacker.isFainted) {
+    const drainPercent = Math.abs(drain) / 100;
+    const drainAmount = Math.floor(damage * drainPercent);
+
+    if (drain > 0) {
+      const maxHeal = attacker.maxHp - attacker.hp;
+      drainHealed = Math.min(drainAmount, maxHeal);
+      attacker.hp += drainHealed;
+      if (drainHealed > 0) {
+        message += `\n¡${attacker.name} recuperó ${drainHealed} PS!`;
+      }
+    } else {
+      drainDamage = Math.min(drainAmount, attacker.hp);
+      attacker.hp = Math.max(0, attacker.hp - drainDamage);
+      message += `\n¡${attacker.name} se lastimó con su propio ataque!`;
+    }
+  }
+
+  // V5: Aplicar Healing (curación al usuario o objetivo)
+  const healing = move.meta?.healing ?? 0;
+  if (healing > 0 && !attacker.isFainted) {
+    const targetIsUser = move.target?.toLowerCase() === 'user';
+    const healTarget = targetIsUser ? attacker : defender;
+    
+    const healAmount = Math.floor(healTarget.maxHp * (healing / 100));
+    const maxHeal = healTarget.maxHp - healTarget.hp;
+    const actualHeal = Math.min(healAmount, maxHeal);
+    
+    if (actualHeal > 0) {
+      healTarget.hp += actualHeal;
+      const targetName = targetIsUser ? attacker.name : defender.name;
+      message += `\n¡${targetName} recuperó ${actualHeal} PS!`;
+    }
+  }
+
   const statChangeResults = applyMoveStatChanges(move, attacker, defender, defenderFainted);
   // NOTA: los cambios de estadística se aplican pero no generan líneas narrativas.
   // Se incluyen en el campo `statChanges` del ActionResult para el frontend si es necesario.
@@ -1117,7 +1230,7 @@ export function executeMove(
   let ailmentApplied: AilmentType | undefined = undefined;
   let ailmentSuccess = false;
   const moveAilment = move.meta?.ailment;
-  const hasAilment = Boolean(moveAilment);
+  const hasAilment = Boolean(moveAilment && moveAilment !== 'none');
   const ailmentChance = move.meta?.ailmentChance ?? 0;
 
   if (hasAilment && !defenderFainted && (damage > 0 || move.damageClass === 'status')) {

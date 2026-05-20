@@ -1,0 +1,274 @@
+/* ============================================
+   🎮 POKÉMON PATACON - SPLASH SCREEN
+   Estilo Pixel Art - Pokémon Ruby (GBA)
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  /* Paleta Ruby/GBA - Rojo Principal */
+  --ruby-bg: #0A1F3D;
+  --ruby-red: #E31C2B;
+  --ruby-red-dark: #8B1428;
+  --ruby-red-light: #FF2D3B;
+  --ruby-gold: #FFD700;
+  --ruby-white: #FFFFFF;
+  --ruby-text-light: #B0C8E0;
+  --ruby-panel: #2A1520;  /* Panel oscuro con tinte rojo */
+  --ruby-panel-dark: #1A0D12;
+  --ruby-border: #4A2530;
+  --ruby-border-light: #6A3550;
+  --font-pixel: 'Press Start 2P', 'Courier New', monospace;
+}
+
+.splash-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  /* Sin fondo para ver el GIF */
+  background: transparent;
+}
+
+/* Animated Grid Background - Estilo GBA */
+.splash-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.splash-background::before {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background-image: 
+    linear-gradient(rgba(227, 28, 43, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(227, 28, 43, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  animation: grid-scroll 20s linear infinite;
+}
+
+@keyframes grid-scroll {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-32px, -32px); }
+}
+
+.splash-background .background-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 1;
+  image-rendering: pixelated;
+}
+
+.splash-content {
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  /* Semi-transparente para ver el fondo */
+  background: rgba(42, 21, 32, 0.8);
+  padding: 40px 60px;
+  border: 4px solid var(--ruby-border-light);
+  box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.6);
+}
+
+.splash-logo {
+  position: relative;
+  animation: logo-float 3s ease-in-out infinite;
+}
+
+@keyframes logo-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.splash-logo::before {
+  content: '';
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.15) 0%, transparent 70%);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: translate(-50%, -50%) scale(0.8); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+
+.splash-logo-img {
+  max-width: 280px;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(4px 4px 0px rgba(0, 0, 0, 0.8));
+  image-rendering: pixelated;
+  position: relative;
+}
+
+.splash-subtitle {
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  font-weight: normal;
+  color: var(--ruby-gold);
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.8);
+  margin-top: -10px;
+}
+
+/* Pixel Art Button */
+.splash-start-btn {
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  padding: 16px 32px;
+  background: var(--ruby-red);
+  color: var(--ruby-white);
+  border: 4px solid #8B1428;
+  border-radius: 0;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.6);
+  transition: all 0.1s steps(2);
+  position: relative;
+  margin-top: 20px;
+  animation: float 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes btn-pulse {
+  0%, 100% { box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.6); }
+  50% { box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 215, 0, 0.4); }
+}
+
+.splash-start-btn:hover {
+  background: #FF2D3B;
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 0 10px var(--ruby-gold);
+}
+
+.splash-start-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.6);
+}
+
+/* Bottom Actions - Pixel Style */
+.splash-bottom-actions {
+  position: absolute;
+  bottom: 30px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 0 20px;
+}
+
+.splash-icon-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: var(--ruby-panel);
+  border: 3px solid var(--ruby-border);
+  border-radius: 0;
+  padding: 12px 20px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
+  transition: all 0.1s steps(2);
+  animation: float 2.5s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.splash-icon-btn:hover {
+  background: var(--ruby-border);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+  border-color: var(--ruby-gold);
+}
+
+.splash-icon-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: var(--ruby-white);
+  image-rendering: pixelated;
+}
+
+.splash-icon-btn span {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--ruby-text-light);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.splash-icon-btn:hover span {
+  color: var(--ruby-gold);
+}
+
+/* Version indicator */
+.splash-version {
+  position: absolute;
+  bottom: 10px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--ruby-text-light);
+  opacity: 0.5;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .splash-logo-img {
+    max-width: 200px;
+  }
+
+  .splash-subtitle {
+    font-size: 12px;
+    letter-spacing: 4px;
+  }
+
+  .splash-start-btn {
+    font-size: 10px;
+    padding: 12px 24px;
+  }
+
+  .splash-bottom-actions {
+    gap: 8px;
+    bottom: 20px;
+  }
+
+  .splash-icon-btn {
+    padding: 8px 12px;
+  }
+
+  .splash-icon-btn span {
+    font-size: 6px;
+  }
+}
