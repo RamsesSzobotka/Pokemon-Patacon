@@ -387,11 +387,31 @@ export async function handleBattleAction(
   const playerId = isPlayer1 ? 'player1' : 'player2';
   const player = isPlayer1 ? battle.players.player1 : battle.players.player2;
   const opponent = isPlayer1 ? battle.players.player2 : battle.players.player1;
+  const activePokemon = player.team[player.activePokemonIndex];
+
+  // VERIFICACIÓN: Si el Pokémon está en fase de carga (2 turnos), solo puede rendirse
+  if (activePokemon.isChargingTwoTurn && activePokemon.chargePhase === 'charge' && activePokemon.currentTwoTurnMove) {
+    if (actionData.type === 'attack') {
+      // No puede elegir otro ataque - debe esperar a ejecutar el movimiento preparado
+      sendTo(sessionId, {
+        type: 'error',
+        message: `¡${activePokemon.name} está preparándose para usar ${activePokemon.currentTwoTurnMove.name}! No puedes elegir otro movimiento.`
+      });
+      return;
+    }
+    // Si es change, también rechazamos (no puede cambiar durante carga)
+    if (actionData.type === 'change') {
+      sendTo(sessionId, {
+        type: 'error',
+        message: `¡${activePokemon.name} está preparándose para usar ${activePokemon.currentTwoTurnMove.name}! No puedes cambiar de Pokémon.`
+      });
+      return;
+    }
+  }
   
   // Obtener el movimiento si es ataque
   let move: BattleMove | undefined;
   if (actionData.type === 'attack' && actionData.moveId) {
-    const activePokemon = player.team[player.activePokemonIndex];
     console.log('[BATTLE] Active pokemon:', activePokemon.name, 'moves:', activePokemon.moves?.map(m => m.moveId));
     move = activePokemon.moves?.find(m => m.moveId === actionData.moveId);
     
@@ -446,7 +466,6 @@ export async function handleBattleAction(
   console.log(`[BATTLE] ${player.name} seleccionó: ${actionData.type}, pending p1:`, !!battle.pendingActions.player1, 'pending p2:', !!battle.pendingActions.player2);
 
   // Verificar si el jugador necesita cambio obligatorio (su pokemon active tiene HP=0)
-  const activePokemon = player.team[player.activePokemonIndex];
   const needsMandatorySwitch = activePokemon.hp <= 0 || activePokemon.isFainted;
 
   // Si el jugador necesita cambio obligatorio, ejecutar el cambio inmediatamente (sin esperar al oponente)

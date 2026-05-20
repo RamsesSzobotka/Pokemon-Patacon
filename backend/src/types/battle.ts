@@ -20,7 +20,8 @@ export type AilmentType =
   | 'confusion'
   | 'flinch'
   | 'leech_seed'
-  | 'curse';
+  | 'curse'
+  | 'trap';
 
 /**
  * Categorías de movimientos para el cálculo de daño
@@ -95,6 +96,8 @@ export interface ActiveAilment {
   toxicTurn?: number;
   // Para confusion: si ya actúó este turno
   hasActedThisTurn?: boolean;
+  // Para trap: power del movimiento que lo causó (daño por turno)
+  trapPower?: number;
 }
 
 /**

@@ -134,20 +134,18 @@ export function getAilmentDuration(ailmentType: string): number {
   switch (ailmentType) {
     case 'sleep':
     case 'confusion':
-      return 3; // Duran 3 turnos
     case 'paralysis':
     case 'burn':
     case 'poison':
     case 'toxic':
     case 'leech_seed':
     case 'curse':
-      return -1; // Duran indefinidamente (-1 = no se decrementa)
     case 'freeze':
-      return -1; // Permanente hasta descongelar
     case 'flinch':
-      return 1; // Solo afecta el siguiente turno
+    case 'trap':
+      return 3; // Todos duran 3 turnos
     default:
-      return -1;
+      return 3;
   }
 }
 
@@ -197,6 +195,8 @@ export function getAilmentName(ailmentType: string): string {
       return 'Emboscada Semilla';
     case 'curse':
       return 'Maldito';
+    case 'trap':
+      return 'Atrapado';
     default:
         return 'Desconocido';
   }
@@ -246,6 +246,11 @@ export function getAilmentName(ailmentType: string): string {
       case 'maldito':
       case 'curse':
         return 'curse';
+      case 'atrapado':
+      case 'trap':
+      case 'bind':
+      case 'wrap':
+        return 'trap';
       default:
         return a; // devolver el valor canónico si ya lo es o el original en minúsculas
     }
@@ -257,7 +262,8 @@ export function getAilmentName(ailmentType: string): string {
 export function applyAilment(
   pokemon: PokemonInBattle,
   ailmentType: string,
-  appliedBy: 'player1' | 'player2'
+  appliedBy: 'player1' | 'player2',
+  trapPower?: number
 ): { applied: boolean; message: string } {
   
   // No aplicar efectos si el Pokémon ya está debilitado
@@ -277,15 +283,25 @@ export function applyAilment(
     return { applied: false, message: `${pokemon.name} ya está ${getAilmentName(normalized).toLowerCase()}.` };
   }
   
+  // Verificar si ya tiene cualquier efecto activo (solo 1 efecto permitido)
+  if (pokemon.ailments.length > 0) {
+    return { applied: false, message: `${pokemon.name} ya tiene un efecto activo.` };
+  }
+  
   // Crear nuevo efecto
-  const newAilment = {
+  const newAilment: any = {
     type: normalized,
     turnsRemaining: getAilmentDuration(normalized),
     appliedBy,
     toxicTurn: normalized === 'toxic' ? 1 : undefined
   };
   
-  pokemon.ailments.push(newAilment as any);
+  // Para trap, guardar el power del movimiento
+  if (normalized === 'trap' && trapPower) {
+    newAilment.trapPower = trapPower;
+  }
+  
+  pokemon.ailments.push(newAilment);
   
   return {
     applied: true,
@@ -382,6 +398,15 @@ export function applyEndOfTurnAilmentDamage(pokemon: PokemonInBattle): {
   let totalDamage = 0;
   
   for (const ailment of pokemon.ailments) {
+    // Trap usa power fijo en lugar de porcentaje
+    if (ailment.type === 'trap' && ailment.trapPower) {
+      const damage = ailment.trapPower;
+      pokemon.hp = Math.max(0, pokemon.hp - damage);
+      totalDamage += damage;
+      messages.push(`${pokemon.name} está atrapado.`);
+      continue;
+    }
+    
     const damagePercent = getAilmentDamagePercentage(ailment.type, ailment.toxicTurn);
     
     if (damagePercent > 0) {
@@ -1004,8 +1029,14 @@ export function executeMove(
   attackerPlayerId: 'player1' | 'player2'
 ): ActionResult {
 
-  // Decrementar PP del movimiento (si tiene PP)
-  if (move.pp !== undefined && move.pp > 0) {
+  // Decrementar PP del movimiento
+  // Para movimientos de carga (2 turnos): descontar al seleccionar en el turno 1 (cuando NO está cargando)
+  // No descontar en el turno 2 cuando se ejecuta el movimiento preparado
+  const isTwoTurnMove = move.flags?.charge === true;
+  const isAlreadyCharging = attacker.isChargingTwoTurn && attacker.chargePhase === 'charge' && attacker.currentTwoTurnMove;
+  
+  // Descontar si: es movimiento normal O movimiento de carga Y todavía no está cargando
+  if ((!isTwoTurnMove || !isAlreadyCharging) && move.pp !== undefined && move.pp > 0) {
     move.pp = Math.max(0, move.pp - 1);
     console.log(`[PP] ${attacker.name} usó ${move.name}. PP restantes: ${move.pp}/${move.maxPp}`);
   }
@@ -1241,7 +1272,12 @@ export function executeMove(
       const rollSucceeded = guaranteedStatusMove || Math.random() * 100 < ailmentChance;
 
       if (rollSucceeded) {
-        const ailmentResult = applyAilment(defender, moveAilment, attackerPlayerId);
+        const ailmentResult = applyAilment(
+          defender,
+          moveAilment,
+          attackerPlayerId,
+          moveAilment === 'trap' ? (move.power || 0) : undefined
+        );
 
         if (ailmentResult.applied) {
           ailmentApplied = moveAilment;

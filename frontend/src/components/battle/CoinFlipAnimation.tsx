@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import './CoinFlipAnimation.css';
 
 interface CoinFlipAnimationProps {
@@ -16,6 +16,7 @@ export const CoinFlipAnimation: React.FC<CoinFlipAnimationProps> = ({
 }) => {
   const [phase, setPhase] = useState<'flipping' | 'result' | 'done'>('flipping');
   const [showResult, setShowResult] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     // Fase 1: Animación de lanzamiento (2 segundos)
@@ -39,18 +40,35 @@ export const CoinFlipAnimation: React.FC<CoinFlipAnimationProps> = ({
     }
   }, [phase, onAnimationComplete]);
 
+  const handleVideoEnded = () => {
+    // Cuando el video termina, mostrar la imagen estática
+    setPhase('result');
+    setShowResult(true);
+  };
+
   const firstPlayerName = firstPlayerId === 'player1' ? player1Name : player2Name;
 
   return (
     <div className="coinflip-overlay">
       <div className="coinflip-container">
-        {/* Moneda animada con imagen real */}
-        <div className={`coin ${phase === 'flipping' ? 'flipping' : ''}`}>
-          <img 
-            src="/assets/items/coin.png" 
-            alt="Coin" 
-            className="coin-image"
-          />
+        {/* Moneda - video o imagen según fase */}
+        <div className="coin">
+          {phase === 'flipping' ? (
+            <video
+              ref={videoRef}
+              src={firstPlayerId === 'player1' ? '/assets/items/CoinJ1.mp4' : '/assets/items/CoinJ2.mp4'}
+              autoPlay
+              muted
+              onEnded={handleVideoEnded}
+              className="coin-video"
+            />
+          ) : (
+            <img 
+              src="/assets/items/coin.png" 
+              alt="Coin" 
+              className="coin-image"
+            />
+          )}
         </div>
 
         {/* Resultado */}
