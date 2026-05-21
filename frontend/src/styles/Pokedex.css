@@ -297,8 +297,6 @@
   justify-content: center;
   align-items: center;
   height: 80px;
-  background: var(--ruby-panel-dark);
-  border: 2px solid var(--ruby-border);
 }
 
 .sprite-img {
@@ -532,8 +530,6 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background: var(--ruby-panel-dark);
-  border: 3px solid var(--ruby-border);
   padding: 16px;
   min-height: 240px;
 }

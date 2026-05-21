@@ -1,6 +1,7 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
+import { useAuthSession } from '../hooks/useAuthSession';
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -19,6 +20,8 @@ function RootComponent() {
       }),
     []
   );
+
+  const { isSyncing } = useAuthSession();
 
   return (
     <QueryClientProvider client={queryClient}>

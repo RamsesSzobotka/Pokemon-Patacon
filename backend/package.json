@@ -13,10 +13,12 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
-    "hono": "^4.0.0",
-    "mongodb": "^6.0.0",
+    "@clerk/backend": "^3.4.11",
     "axios": "^1.6.0",
-    "dotenv": "^16.0.3"
+    "dotenv": "^16.0.3",
+    "hono": "^4.0.0",
+    "jose": "^6.2.3",
+    "mongodb": "^6.0.0"
   },
   "devDependencies": {
     "@types/bun": "latest",

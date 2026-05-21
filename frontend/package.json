@@ -11,6 +11,7 @@
     "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.6",
     "@tanstack/react-query": "^5.60.0",
     "@tanstack/react-router": "^1.80.0",
     "@tanstack/react-start": "^1.168.6",

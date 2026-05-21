@@ -346,6 +346,16 @@ class WebSocketManager {
     return this.sessionId;
   }
 
+  /**
+   * Set a session ID externally (e.g., from Clerk authenticated session)
+   * Updates both the runtime sessionId and localStorage
+   */
+  public setSessionId(sessionId: string): void {
+    this.sessionId = sessionId;
+    localStorage.setItem('patacon_session_id', sessionId);
+    console.log('[WS] Session ID actualizado externamente:', sessionId);
+  }
+
   public getCurrentRoom(): string | null {
     return this.currentRoomCode;
   }
@@ -372,6 +382,7 @@ export const createRoom = (playerName: string) => socket.createRoom(playerName);
 export const joinRoom = (roomCode: string, playerName: string) => socket.joinRoom(roomCode, playerName);
 export const leaveRoom = () => socket.leaveRoom();
 export const getSessionId = () => socket.getSessionId();
+export const setSessionId = (sessionId: string) => socket.setSessionId(sessionId);
 export const getCurrentRoom = () => socket.getCurrentRoom();
 export const isConnected = () => socket.getIsConnected();
 

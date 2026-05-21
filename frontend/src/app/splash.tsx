@@ -1,4 +1,8 @@
+import { useState } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useAuth, useUser, UserButton } from '@clerk/clerk-react';
+import { useAuthSession } from '../hooks/useAuthSession';
+import { AuthModal } from '../components/AuthModal';
 import './../styles/Splash.css';
 
 export const Route = createFileRoute('/splash')({
@@ -7,6 +11,10 @@ export const Route = createFileRoute('/splash')({
 
 function Splash() {
   const navigate = useNavigate();
+  const { isSignedIn } = useAuth();
+  const { user } = useUser();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const { isAuthenticated, isSyncing, playerName } = useAuthSession();
 
   return (
     <div className="splash-container">
@@ -32,21 +40,40 @@ function Splash() {
         </div>
         <h1 className="splash-subtitle">PATACON</h1>
 
+        {isAuthenticated && !isSyncing && playerName && (
+          <p className="splash-welcome">Bienvenido, {playerName}</p>
+        )}
+
         <button
           className="splash-start-btn"
           onClick={() => navigate({ to: '/menu' })}
+          disabled={isSyncing}
         >
-          COMENZAR
+          {isSyncing ? 'SINCRONIZANDO...' : 'COMENZAR'}
         </button>
       </div>
 
       <div className="splash-bottom-actions">
-        <button className="splash-icon-btn" onClick={() => {}}>
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-          </svg>
-          <span>CUENTA</span>
-        </button>
+        {isSignedIn ? (
+          <div className="splash-user-section">
+            <UserButton afterSignOutUrl="/splash" />
+            <span className="splash-user-name">
+              {user?.firstName || 'Cuenta'}
+            </span>
+          </div>
+        ) : (
+          <button className="splash-icon-btn" onClick={() => setShowAuthModal(true)}>
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+            <span>CUENTA</span>
+          </button>
+        )}
+
+        <AuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+        />
 
         <button className="splash-icon-btn" onClick={() => navigate({ to: '/pokedex' })}>
           <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

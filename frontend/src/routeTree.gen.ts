@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './app/__root'
+import { Route as SsoCallbackRouteImport } from './app/sso-callback'
 import { Route as SplashRouteImport } from './app/splash'
 import { Route as PokedexRouteImport } from './app/pokedex'
 import { Route as MenuRouteImport } from './app/menu'
@@ -16,6 +17,11 @@ import { Route as IndexRouteImport } from './app/index'
 import { Route as DraftRoomCodeRouteImport } from './app/draft.$roomCode'
 import { Route as BattleRoomCodeRouteImport } from './app/battle.$roomCode'
 
+const SsoCallbackRoute = SsoCallbackRouteImport.update({
+  id: '/sso-callback',
+  path: '/sso-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SplashRoute = SplashRouteImport.update({
   id: '/splash',
   path: '/splash',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/menu': typeof MenuRoute
   '/pokedex': typeof PokedexRoute
   '/splash': typeof SplashRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/battle/$roomCode': typeof BattleRoomCodeRoute
   '/draft/$roomCode': typeof DraftRoomCodeRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/menu': typeof MenuRoute
   '/pokedex': typeof PokedexRoute
   '/splash': typeof SplashRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/battle/$roomCode': typeof BattleRoomCodeRoute
   '/draft/$roomCode': typeof DraftRoomCodeRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/menu': typeof MenuRoute
   '/pokedex': typeof PokedexRoute
   '/splash': typeof SplashRoute
+  '/sso-callback': typeof SsoCallbackRoute
   '/battle/$roomCode': typeof BattleRoomCodeRoute
   '/draft/$roomCode': typeof DraftRoomCodeRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/menu'
     | '/pokedex'
     | '/splash'
+    | '/sso-callback'
     | '/battle/$roomCode'
     | '/draft/$roomCode'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/menu'
     | '/pokedex'
     | '/splash'
+    | '/sso-callback'
     | '/battle/$roomCode'
     | '/draft/$roomCode'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/menu'
     | '/pokedex'
     | '/splash'
+    | '/sso-callback'
     | '/battle/$roomCode'
     | '/draft/$roomCode'
   fileRoutesById: FileRoutesById
@@ -104,12 +116,20 @@ export interface RootRouteChildren {
   MenuRoute: typeof MenuRoute
   PokedexRoute: typeof PokedexRoute
   SplashRoute: typeof SplashRoute
+  SsoCallbackRoute: typeof SsoCallbackRoute
   BattleRoomCodeRoute: typeof BattleRoomCodeRoute
   DraftRoomCodeRoute: typeof DraftRoomCodeRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sso-callback': {
+      id: '/sso-callback'
+      path: '/sso-callback'
+      fullPath: '/sso-callback'
+      preLoaderRoute: typeof SsoCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/splash': {
       id: '/splash'
       path: '/splash'
@@ -160,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   MenuRoute: MenuRoute,
   PokedexRoute: PokedexRoute,
   SplashRoute: SplashRoute,
+  SsoCallbackRoute: SsoCallbackRoute,
   BattleRoomCodeRoute: BattleRoomCodeRoute,
   DraftRoomCodeRoute: DraftRoomCodeRoute,
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from '@tanstack/react-router';
 import { socket, connect, getSessionId, isConnected, getCurrentRoom } from '../websocket';
+import { useAuthSession } from '../hooks/useAuthSession';
 import { PokemonSlotAnimation } from './battle/PokemonSlotAnimation';
 import '../styles/MainMenu.css';
 import '../components/battle/PokemonSlotAnimation.css';
@@ -22,10 +23,24 @@ const MainMenu: React.FC = () => {
   const router = useRouter();
   const [backgroundImage] = useState<string>(() => getRandomBackground());
   const [screen, setScreen] = useState<'menu' | 'create' | 'join'>('menu');
-  const [playerName, setPlayerName] = useState('');
+  // Inicializar playerName desde localStorage (persiste entre sesiones y
+  // evita que el botón cree/una sala quede deshabilitado mientras se sincroniza auth)
+  const [playerName, setPlayerName] = useState(() => {
+    return localStorage.getItem('patacon_player_name') || '';
+  });
   const [roomCode, setRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
 const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
+  const { playerName: authPlayerName, isAuthenticated } = useAuthSession();
+
+  // Cuando auth sincroniza, actualiza localStorage + estado local
+  useEffect(() => {
+    if (isAuthenticated && authPlayerName) {
+      localStorage.setItem('patacon_player_name', authPlayerName);
+      setPlayerName(authPlayerName);
+    }
+  }, [isAuthenticated, authPlayerName]);
+
   const [sessionId] = useState<string>(() => {
     const saved = localStorage.getItem('patacon_session_id');
     if (saved) return saved;
@@ -262,7 +277,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
   // ==================== ACTIONS ====================
 
   const handleCreateRoom = async () => {
-    if (!playerName.trim()) {
+    if (!isAuthenticated && !playerName.trim()) {
       alert('Por favor ingresa tu nombre');
       return;
     }
@@ -314,7 +329,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
   };
 
   const handleJoinRoom = async () => {
-    if (!playerName.trim()) {
+    if (!isAuthenticated && !playerName.trim()) {
       alert('Por favor ingresa tu nombre');
       return;
     }
@@ -653,20 +668,24 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
               </div>
             ) : (
               <div className="form-container">
-                <label>TU NOMBRE</label>
-                <input
-                  type="text"
-                  placeholder="Ingresa tu nombre"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  maxLength={20}
-                  onKeyPress={(e) => e.key === 'Enter' && handleCreateRoom()}
-                  className="bw-input"
-                />
+                {!isAuthenticated && (
+                <>
+                  <label>TU NOMBRE</label>
+                  <input
+                    type="text"
+                    placeholder="Ingresa tu nombre"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    maxLength={20}
+                    onKeyPress={(e) => e.key === 'Enter' && handleCreateRoom()}
+                    className="bw-input"
+                  />
+                </>
+              )}
                 <button
                   className={`btn btn-primary btn-float ${loading ? 'loading' : ''}`}
                   onClick={handleCreateRoom}
-                  disabled={loading || !playerName.trim()}
+                  disabled={loading || (!isAuthenticated && !playerName.trim())}
                 >
                   {loading ? '⏳ CREANDO SALA...' : '🔴 CREAR SALA'}
                 </button>
@@ -694,15 +713,19 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
             <div className="divider"></div>
 
             <div className="form-container">
-              <label>TU NOMBRE</label>
-              <input
-                type="text"
-                placeholder="Ingresa tu nombre"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                maxLength={20}
-                className="bw-input"
-              />
+              {!isAuthenticated && (
+                <>
+                  <label>TU NOMBRE</label>
+                  <input
+                    type="text"
+                    placeholder="Ingresa tu nombre"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    maxLength={20}
+                    className="bw-input"
+                  />
+                </>
+              )}
 
               <label>CÓDIGO DE LA SALA</label>
               <div className="room-code-input-wrapper">

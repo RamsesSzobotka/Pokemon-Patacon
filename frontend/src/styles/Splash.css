@@ -134,6 +134,30 @@
   margin-top: -10px;
 }
 
+/* Welcome Greeting - Player Name */
+.splash-welcome {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--ruby-white);
+  text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.8);
+  text-align: center;
+  margin: 0;
+  padding: 4px 12px;
+  letter-spacing: 1px;
+  animation: welcome-fadein 0.4s steps(3);
+}
+
+@keyframes welcome-fadein {
+  0% { opacity: 0; transform: translateY(-4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 480px) {
+  .splash-welcome {
+    font-size: 8px;
+  }
+}
+
 /* Pixel Art Button */
 .splash-start-btn {
   font-family: var(--font-pixel);
@@ -271,4 +295,19 @@
   .splash-icon-btn span {
     font-size: 6px;
   }
+}
+
+/* Clerk auth styles for splash */
+.splash-user-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.splash-user-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  color: #fff;
+  font-weight: 600;
 }

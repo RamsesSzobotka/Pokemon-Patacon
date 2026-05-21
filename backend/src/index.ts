@@ -5,8 +5,11 @@ import { connectDB, disconnectDB } from './db/mongodb';
 import { pokemonService } from './services/pokemonService';
 import { importAllData } from './services/dataImportService';
 import { initializeRoomsIndexes } from './db/rooms';
+import { initializeUsersIndexes } from './db/users';
 import pokemonRoutes from './routes/pokemon';
 import roomRoutes from './routes/rooms';
+import authRoutes from './routes/auth';
+import { clerkAuth } from './middleware/auth';
 import { handleMessage, handleClose, handleMessageFromSession } from './websocket/handler';
 import { cleanup as cleanupWebSocket, registerConnection, removeConnection } from './websocket/roomManager';
 
@@ -22,6 +25,9 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Authorization']
 }));
 
+// Clerk auth middleware (anota requests con userId si hay token, nunca bloquea)
+app.use('/api/*', clerkAuth);
+
 // Root endpoint
 app.get('/', (c) => {
   return c.json({
@@ -30,6 +36,7 @@ app.get('/', (c) => {
     endpoints: {
       pokemon: '/api/pokemon',
       rooms: '/api/rooms',
+      auth: '/api/auth',
       websocket: 'ws://localhost:3000/ws?session_id=xxx'
     }
   });
@@ -40,6 +47,9 @@ app.route('/api/pokemon', pokemonRoutes);
 
 // Mount Room routes
 app.route('/api/rooms', roomRoutes);
+
+// Mount Auth routes
+app.route('/api/auth', authRoutes);
 
 // 404 handler
 app.notFound((c) => {
@@ -89,6 +99,10 @@ async function startServer() {
     // 2. Inicializar índices de rooms
     await initializeRoomsIndexes();
     console.log('✅ Índices de rooms creados');
+
+    // 2.5 Inicializar índices de users
+    await initializeUsersIndexes();
+    console.log('✅ Índices de users creados');
 
     // 3. Importar datos desde PokeAPI si no existen
     await importAllData();

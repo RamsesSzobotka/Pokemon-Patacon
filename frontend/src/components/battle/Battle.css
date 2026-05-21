@@ -32,8 +32,7 @@
   position: relative;
   width: 100%;
   height: 100vh;
-  /* Sin fondo para ver el GIF */
-  background: transparent;
+  background: url('/assets/background/batleBack.png') center/cover no-repeat;
   display: flex;
   flex-direction: column;
   font-family: var(--font-pixel);
@@ -63,10 +62,6 @@
   display: flex;
   justify-content: space-between;
   padding: 16px 32px;
-  background: linear-gradient(180deg, rgba(13, 24, 50, 0.9) 0%, rgba(10, 31, 61, 0.95) 100%);
-  border: 3px solid var(--ruby-border);
-  margin: 8px;
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
   z-index: 1;
 }
 

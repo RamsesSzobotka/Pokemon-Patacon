@@ -354,6 +354,13 @@
   animation: shake 0.3s steps(2);
 }
 
+.bw-input[readonly] {
+  border-color: var(--ruby-gold);
+  opacity: 0.85;
+  cursor: default;
+  background-color: var(--ruby-panel);
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-3px); }
