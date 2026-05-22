@@ -1,0 +1,55 @@
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: pokemon-patacon-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_DATABASE: pokemon-patacon
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - mongo-data:/data/db
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pokemon-patacon-backend
+    depends_on:
+      - mongo
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/pokemon-patacon
+      MONGODB_DB_NAME: pokemon-patacon
+      CORS_ORIGIN: http://localhost:5173
+      BUN_ENV: development
+      PORT: 3000
+    ports:
+      - '3000:3000'
+    command: bun run src/index.ts
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pokemon-patacon-frontend
+    depends_on:
+      - backend
+    env_file:
+      - ./frontend/.env
+    environment:
+      VITE_API_BASE_URL: http://backend:3000
+    ports:
+      - '5173:5173'
+    command: bun run dev -- --host 0.0.0.0 --port 5173
+
+volumes:
+  mongo-data:
+    name: pokemon-patacon-mongo-data

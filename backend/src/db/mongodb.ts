@@ -11,29 +11,43 @@ export async function connectDB(): Promise<Db> {
     return db;
   }
 
-  try {
-    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
-    const dbName = process.env.MONGODB_DB_NAME || 'pokemon-patacon';
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+  const dbName = process.env.MONGODB_DB_NAME || 'pokemon-patacon';
+  const maxRetries = 10;
+  const retryDelayMs = 2000;
+  let attempt = 0;
 
-    console.log(`🔌 Conectando a MongoDB: ${mongoUri}`);
+  while (attempt < maxRetries) {
+    try {
+      console.log(`🔌 Conectando a MongoDB: ${mongoUri} (intento ${attempt + 1}/${maxRetries})`);
 
-    client = new MongoClient(mongoUri);
-    await client.connect();
+      client = new MongoClient(mongoUri);
+      await client.connect();
 
-    db = client.db(dbName);
+      db = client.db(dbName);
 
-    // Verificar conexión
-    await db.admin().ping();
-    console.log('✅ MongoDB conectada correctamente');
+      // Verificar conexión
+      await db.admin().ping();
+      console.log('✅ MongoDB conectada correctamente');
 
-    // Crear índices
-    await initializeIndexes();
+      // Crear índices
+      await initializeIndexes();
 
-    return db;
-  } catch (error) {
-    console.error('❌ Error conectando a MongoDB:', error);
-    throw error;
+      return db;
+    } catch (error) {
+      attempt += 1;
+      console.error(`❌ Error conectando a MongoDB (intento ${attempt}/${maxRetries}):`, error);
+
+      if (attempt >= maxRetries) {
+        throw error;
+      }
+
+      console.log(`⏳ Reintentando en ${retryDelayMs / 1000}s...`);
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
   }
+
+  throw new Error('No se pudo conectar a MongoDB después de varios intentos');
 }
 
 export async function disconnectDB(): Promise<void> {

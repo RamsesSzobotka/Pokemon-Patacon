@@ -7,8 +7,6 @@ interface Props {
   onClose: () => void;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
-
 export default function StoreModal({ sessionId, onClose }: Props) {
   const { getToken } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -24,7 +22,7 @@ export default function StoreModal({ sessionId, onClose }: Props) {
       }
       try {
         const token = await getToken();
-        const resp = await fetch(`${API_BASE}/api/auth/profile`, {
+        const resp = await fetch(`/api/auth/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -49,7 +47,7 @@ export default function StoreModal({ sessionId, onClose }: Props) {
     setLoading(true);
     try {
       const token = await getToken();
-      const resp = await fetch(`${API_BASE}/api/store/checkout`, {
+      const resp = await fetch(`/api/store/checkout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
