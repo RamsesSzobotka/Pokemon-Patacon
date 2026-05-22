@@ -563,6 +563,92 @@
 }
 
 /* ============================================
+   BATTLE RESULT OVERLAY
+   ============================================ */
+
+.battle-result-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 10, 20, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 320;
+  animation: battle-result-fade-in 0.25s ease-out;
+}
+
+.battle-result-card {
+  width: min(92vw, 520px);
+  background: linear-gradient(180deg, #2A1520 0%, #1A0D12 100%);
+  border: 4px solid var(--ruby-gold);
+  box-shadow: 0 0 0 3px #000, 8px 8px 0 rgba(0, 0, 0, 0.6);
+  padding: 22px 20px;
+  text-align: center;
+}
+
+.battle-result-label {
+  margin: 0 0 12px;
+  font-size: 8px;
+  color: var(--ruby-text-light);
+  text-transform: uppercase;
+}
+
+.battle-result-title {
+  margin: 0;
+  font-size: clamp(20px, 4vw, 30px);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.battle-result-subtitle {
+  margin: 14px 0 0;
+  font-size: 9px;
+  color: var(--ruby-white);
+  line-height: 1.6;
+}
+
+.battle-result-menu-hint {
+  margin: 16px 0 0;
+  font-size: 8px;
+  color: var(--ruby-gold);
+  text-transform: uppercase;
+  animation: battle-result-blink 0.9s steps(2) infinite;
+}
+
+.battle-result-overlay.win .battle-result-title {
+  color: #4CD964;
+}
+
+.battle-result-overlay.lose .battle-result-title {
+  color: #FF4D4D;
+}
+
+.battle-result-overlay.draw .battle-result-title {
+  color: #FFD700;
+}
+
+@keyframes battle-result-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes battle-result-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ============================================
    POKEMON SELECTOR (CHANGE POKEMON)
    ============================================ */
 
@@ -1162,5 +1248,13 @@
 
   .moves-grid {
     grid-template-columns: 1fr;
+  }
+
+  .battle-result-card {
+    padding: 18px 14px;
+  }
+
+  .battle-result-title {
+    letter-spacing: 1px;
   }
 }

@@ -95,6 +95,12 @@ interface BattleMessage {
   data?: any;
 }
 
+interface BattleResultOverlay {
+  result: 'win' | 'lose' | 'draw';
+  title: string;
+  subtitle: string;
+}
+
 // ============================================
 // COMPONENTES
 // ============================================
@@ -1144,6 +1150,7 @@ export default function Battle({ roomCode }: BattleProps) {
   // Estado para animación de coinflip
   const [showCoinFlip, setShowCoinFlip] = useState(false);
   const [coinFlipWinner, setCoinFlipWinner] = useState<'player1' | 'player2' | null>(null);
+  const [battleResultOverlay, setBattleResultOverlay] = useState<BattleResultOverlay | null>(null);
   const lastAutoExecuteKeyRef = useRef<string | null>(null);
 
   // Ref para evitar loops infinitos en useEffect
@@ -1205,6 +1212,7 @@ export default function Battle({ roomCode }: BattleProps) {
         player1: message.data.player1,
         player2: message.data.player2
       });
+      setBattleResultOverlay(null);
       setLoadingCountdown(null);
       setLastBattleMessage('¡La batalla está por comenzar!');
       setIsMyTurn(message.data.phase === 'selecting');
@@ -1230,6 +1238,7 @@ export default function Battle({ roomCode }: BattleProps) {
           player1: message.data.player1,
           player2: message.data.player2
         });
+        setBattleResultOverlay(null);
         setLastBattleMessage('¡La batalla está por comenzar!');
         setIsMyTurn(true); // Habilitar selección de acciones al inicio de la batalla
         break;
@@ -1507,15 +1516,39 @@ export default function Battle({ roomCode }: BattleProps) {
           phase: 'ended'
         } : null);
         setLastBattleMessage(message.data.message);
+
+        const amIPlayer1 = playerNumberRef.current === 1 || playerNumberRef.current === 0;
+        const myPlayerId = amIPlayer1 ? 'player1' : 'player2';
+        const winner = message.data?.winner as 'player1' | 'player2' | null;
+
+        if (!winner) {
+          setBattleResultOverlay({
+            result: 'draw',
+            title: 'EMPATE',
+            subtitle: 'Nadie ganó esta batalla.'
+          });
+        } else if (winner === myPlayerId) {
+          setBattleResultOverlay({
+            result: 'win',
+            title: 'VICTORIA',
+            subtitle: '¡Has ganado la batalla!'
+          });
+        } else {
+          setBattleResultOverlay({
+            result: 'lose',
+            title: 'DERROTA',
+            subtitle: 'Has perdido la batalla.'
+          });
+        }
         
-        // Navegar al menú después de 2.5 segundos (dar tiempo a ver el mensaje de victoria)
+        // Navegar al menú después de 4 segundos para mostrar el resultado visual
         if (returnToMenuTimeoutRef.current) {
           clearTimeout(returnToMenuTimeoutRef.current);
         }
         returnToMenuTimeoutRef.current = setTimeout(() => {
           sessionStorage.removeItem('patacon_room_code');
           window.location.assign('/');
-        }, 2500);
+        }, 4000);
         break;
         
       case 'battle:action-selected': {
@@ -1765,6 +1798,24 @@ export default function Battle({ roomCode }: BattleProps) {
           onCancel={() => setShowPokemonSelector(false)}
           currentPokemonId={myPokemon?.id || 0}
         />
+      )}
+
+      {/* Resultado final antes de volver al menú */}
+      {battleResultOverlay && (
+        <div className={`battle-result-overlay ${battleResultOverlay.result}`}>
+          <div className="battle-result-card">
+            <p className="battle-result-label">
+              {battleResultOverlay.result === 'win'
+                ? '¡Felicidades, Entrenador!'
+                : battleResultOverlay.result === 'lose'
+                  ? 'La batalla ha terminado'
+                  : 'Combate cerrado'}
+            </p>
+            <h2 className="battle-result-title">{battleResultOverlay.title}</h2>
+            <p className="battle-result-subtitle">{battleResultOverlay.subtitle}</p>
+            <p className="battle-result-menu-hint">Regresando al menú...</p>
+          </div>
+        </div>
       )}
     </div>
   );
