@@ -30,6 +30,8 @@ interface WSEventMap {
   'draft:picked': (data: any) => void;
   'draft:picks': (data: any) => void;
   'draft:state': (data: any) => void;
+  'draft:countdown': (data: any) => void;
+  'draft:waiting': (data: any) => void;
   'draft:completed': (data: any) => void;
   'draft:error': (data: any) => void;
   'battle:starting': (data: any) => void;

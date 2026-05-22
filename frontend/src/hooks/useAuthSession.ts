@@ -9,6 +9,7 @@ export interface UseAuthSessionReturn {
   isSyncing: boolean;
   sessionId: string | null;
   playerName: string | null;
+  shinyPack: boolean;
 }
 
 export function useAuthSession(): UseAuthSessionReturn {
@@ -17,6 +18,7 @@ export function useAuthSession(): UseAuthSessionReturn {
   const [isSyncing, setIsSyncing] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(socket.getSessionId());
   const [playerName, setPlayerName] = useState<string | null>(null);
+  const [shinyPack, setShinyPack] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -80,12 +82,14 @@ export function useAuthSession(): UseAuthSessionReturn {
             if (!cancelled && postData?.user?.player_name) {
               setPlayerName(postData.user.player_name);
               persistPlayerName(postData.user.player_name);
+                setShinyPack(!!postData.user.shiny_pack);
             }
           } else {
             // Si no hay player_name nuevo pero el GET devolvió uno, usarlo
             if (!cancelled && getData?.user?.player_name) {
               setPlayerName(getData.user.player_name);
               persistPlayerName(getData.user.player_name);
+              setShinyPack(!!getData.user.shiny_pack);
             }
           }
           socket.setSessionId(getData.session_id);
@@ -113,6 +117,7 @@ export function useAuthSession(): UseAuthSessionReturn {
           if (!cancelled && postData?.user?.player_name) {
             setPlayerName(postData.user.player_name);
             persistPlayerName(postData.user.player_name);
+            setShinyPack(!!postData.user.shiny_pack);
           }
           if (!cancelled) {
             setSessionId(currentSessionId);
@@ -141,5 +146,6 @@ export function useAuthSession(): UseAuthSessionReturn {
     isSyncing,
     sessionId,
     playerName,
+    shinyPack,
   };
 }

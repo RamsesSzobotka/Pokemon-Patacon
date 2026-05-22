@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { resolveFrontSprite } from '../../utils/spriteResolver';
 import './PokemonSlotAnimation.css';
 
 interface PokemonTeamMember {
@@ -117,6 +118,16 @@ export const PokemonSlotAnimation: React.FC<PokemonSlotAnimationProps> = ({
   const getSpriteUrl = (pokeapiId: number) => 
     `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokeapiId}.png`;
 
+  const getRenderedSprite = (id: number, teamMember: any) => {
+    // If we have a team member object with sprites, prefer resolving with owner flags
+    if (teamMember && teamMember.sprites) {
+      const ownerShiny = teamMember.owner_shiny ?? teamMember.owner?.shiny_pack ?? false;
+      const resolved = resolveFrontSprite(teamMember.sprites, ownerShiny, teamMember.pokeapi_id || id);
+      if (resolved) return resolved;
+    }
+    return getSpriteUrl(id);
+  };
+
   return (
     <div className="slot-animation-overlay">
       <div className="slot-machine-container">
@@ -137,7 +148,7 @@ export const PokemonSlotAnimation: React.FC<PokemonSlotAnimationProps> = ({
                   className={`slot-item ${slot.stopped ? 'stopped' : 'spinning'}`}
                 >
                   <img 
-                    src={getSpriteUrl(slot.id)} 
+                    src={slot.stopped ? getRenderedSprite(slot.id, myTeam[index]) : getSpriteUrl(slot.id)} 
                     alt={`slot-${index}`}
                     className="slot-sprite"
                   />
@@ -160,7 +171,7 @@ export const PokemonSlotAnimation: React.FC<PokemonSlotAnimationProps> = ({
                   className={`slot-item ${slot.stopped ? 'stopped' : 'spinning'}`}
                 >
                   <img 
-                    src={getSpriteUrl(slot.id)} 
+                    src={slot.stopped ? getRenderedSprite(slot.id, opponentTeam[index]) : getSpriteUrl(slot.id)} 
                     alt={`slot-${index}`}
                     className="slot-sprite"
                   />

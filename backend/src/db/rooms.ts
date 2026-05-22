@@ -8,6 +8,13 @@ export interface TeamMember {
   selected_moves: number[];
   is_legendary?: boolean;
   name?: string;
+  // Owner metadata attached by server for clients
+  owner_shiny?: boolean;
+  owner?: {
+    session_id?: string | null;
+    clerk_user_id?: string | null;
+    shiny_pack?: boolean;
+  };
 }
 
 export interface DraftState {

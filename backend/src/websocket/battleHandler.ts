@@ -7,6 +7,7 @@
 import { broadcast, sendTo, getConnection, getRoomPlayers } from './roomManager.js';
 import { createBattleState, createPlayerBattleState, determineExecutionOrder, executeMove, executeSwitch, checkBattleEnd, canActWithAilments, applyEndOfTurnAilmentDamage, decrementAilmentTurns, resetFatigueState } from '../services/battleService.js';
 import { getMovesByIds, getPokemonById } from '../db/mongodb.js';
+import { getUserBySessionId } from '../db/users';
 import type { BattleState, PokemonInBattle, BattleMove, PlayerAction, PlayerBattleState } from '../types/battle.js';
 import type { Room } from '../db/rooms.js';
 
@@ -96,9 +97,9 @@ export async function startBattle(roomCode: string, room: Room): Promise<BattleS
     return null;
   }
   
-  // Cargar movimientos para cada Pokémon
-  const team1WithMoves = await loadTeamMoves(team1);
-  const team2WithMoves = await loadTeamMoves(team2);
+  // Cargar movimientos para cada Pokémon (pasando session ids para owner metadata)
+  const team1WithMoves = await loadTeamMoves(team1, room.players.player1.session_id);
+  const team2WithMoves = await loadTeamMoves(team2, room.players.player2.session_id);
   
   // Crear estados de jugadores
   const player1 = createPlayerBattleState(
@@ -167,7 +168,7 @@ export function sendBattleStart(roomCode: string): void {
 /**
  * Carga los movimientos de un equipo desde la base de datos
  */
-async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
+async function loadTeamMoves(team: any[], ownerSessionId?: string | null): Promise<PokemonInBattle[]> {
   const result: PokemonInBattle[] = [];
   
   for (const teamMember of team) {
@@ -231,6 +232,17 @@ async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
       }))
       : [];
     
+    // Determinar metadata del owner (shiny_pack) si está disponible
+    let ownerMeta: any = null;
+    if (ownerSessionId) {
+      try {
+        const user = await getUserBySessionId(ownerSessionId);
+        if (user) ownerMeta = { session_id: ownerSessionId, clerk_user_id: user.clerk_user_id, shiny_pack: !!user.shiny_pack };
+      } catch (e) {
+        console.warn('[BATTLE] No se pudo obtener user meta para ownerSessionId', ownerSessionId, e);
+      }
+    }
+
     result.push({
       id: teamMember.pokeapi_id,
       pokeapiId: teamMember.pokeapi_id,
@@ -258,7 +270,10 @@ async function loadTeamMoves(team: any[]): Promise<PokemonInBattle[]> {
       isFatigued: false,
       fatigueSource: null,
       isEvasivelyCharging: false,
-      evasiveChargeMove: null
+      evasiveChargeMove: null,
+      // Owner metadata for frontend to decide shiny rendering
+      owner_shiny: ownerMeta ? !!ownerMeta.shiny_pack : undefined,
+      owner: ownerMeta
     });
   }
   
@@ -325,6 +340,11 @@ function serializePokemon(pokemon: PokemonInBattle, includeMoves: boolean = true
           maxPp: m.maxPp || 0
         }))
       })
+      ,
+      // Incluir metadata del owner SIEMPRE (para decidir sprites shiny)
+      // owner_shiny depende ÚNICAMENTE del dueño del Pokémon, NO del viewer
+      owner_shiny: pokemon.owner_shiny === true,
+      ...(pokemon.owner ? { owner: pokemon.owner } : {})
     };
     
     console.log(`[BATTLE] serializePokemon: ${pokemon.name} serializado correctamente`);

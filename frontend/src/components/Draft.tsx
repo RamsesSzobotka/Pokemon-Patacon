@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useAuthSession } from '../hooks/useAuthSession';
+import { resolveFrontSprite } from '../utils/spriteResolver';
+import { BackgroundMusic } from './BackgroundMusic';
 import { useParams, useRouter } from '@tanstack/react-router';
 import { socket, connect, isConnected, leaveRoom as wsLeaveRoom } from '../websocket';
 import { PokemonType, MoveType } from '../types/game';
@@ -9,9 +12,13 @@ interface PokemonSprite {
   name?: string;
   is_legendary?: boolean;
   selected_moves?: MoveType[];
+  sprites?: PokemonType['sprites'];
+  owner_shiny?: boolean;
+  owner?: { session_id?: string; clerk_user_id?: string; shiny_pack?: boolean };
 }
 
 interface DraftProps {
+  roomCode?: string;
   onExit?: () => void;
   onBattleStart?: () => void;
 }
@@ -24,7 +31,7 @@ const TYPE_COLORS: Record<string, string> = {
   fairy: '#EE99AC'
 };
 
-const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: () => void }> = ({ roomCode: propRoomCode }) => {
+const Draft: React.FC<DraftProps> = ({ roomCode: propRoomCode, onExit, onBattleStart }) => {
   const params = useParams({ from: '/draft/$roomCode' });
   const roomCode = propRoomCode || params.roomCode;
   const router = useRouter();
@@ -35,8 +42,14 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
   const playerNumberRef = useRef(0);
   const myPicksRef = useRef<PokemonSprite[]>([]);
   const opponentPicksRef = useRef<PokemonSprite[]>([]);
+  const countdownRef = useRef<number | null>(null);
 
   const [pokemonList, setPokemonList] = useState<PokemonType[]>([]);
+  const { shinyPack } = useAuthSession();
+
+  const getOwnerShiny = (pokemonObj: any, isLocalOwner: boolean) => {
+    return (pokemonObj?.owner_shiny ?? pokemonObj?.owner?.shiny_pack ?? (isLocalOwner ? shinyPack : false)) as boolean;
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonType | null>(null);
   const [selectedPokemonMoves, setSelectedPokemonMoves] = useState<MoveType[]>([]);
@@ -61,6 +74,15 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
     if (!turn || number === 0) return false;
     return turn === (number === 1 ? 'player1' : 'player2');
   };
+
+  // Reload page once on draft entry
+  useEffect(() => {
+    const reloadFlag = sessionStorage.getItem(`draft-reload-${roomCode}`);
+    if (!reloadFlag) {
+      sessionStorage.setItem(`draft-reload-${roomCode}`, 'true');
+      window.location.reload();
+    }
+  }, [roomCode]);
 
   useEffect(() => {
     setIsMyTurn(isCurrentTurnMine(currentTurn, playerNumber));
@@ -177,7 +199,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
         sessionStorage.removeItem('patacon_room_code');
         // Mostrar mensaje y redirigir al menú
         alert('El host abandonó la sala');
-        router.navigate('/');
+        router.navigate({ to: '/' });
       }
     }));
 
@@ -241,6 +263,31 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
         // Sincronizar refs
         myPicksRef.current = myPicksData || [];
         opponentPicksRef.current = oppPicksData || [];
+        // Fallback local: si ambos tienen 6 pokémon y no hay countdown, iniciar cuenta regresiva local
+        const myLen = (myPicksData || []).length;
+        const oppLen = (oppPicksData || []).length;
+        if (myLen === 6 && oppLen === 6 && countdownRef.current === null && !battleStarting) {
+          console.log('[Draft] Fallback: ambos equipos tienen 6 — iniciando contador local de 5s');
+          const seconds = 5;
+          setCountdown(seconds);
+          const intervalId = window.setInterval(() => {
+            setCountdown(prev => {
+              if (prev === null || prev <= 1) {
+                clearInterval(intervalId);
+                countdownRef.current = null;
+                setBattleStarting(true);
+                if (onBattleStart) {
+                  onBattleStart();
+                } else {
+                  router.navigate({ to: '/battle/$roomCode', params: { roomCode } });
+                }
+                return null;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+          countdownRef.current = intervalId;
+        }
       }
       if (data.current_turn) {
         console.log('[Draft] Actualizando currentTurn desde draft:picks:', data.current_turn);
@@ -273,18 +320,29 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
     unsubscribes.push(socket.on('draft:countdown', (data) => {
       console.log('[Draft] Countdown:', data);
       const seconds = data?.seconds || 5;
+      // Evitar iniciar si ya hay un contador en curso
+      if (countdownRef.current !== null) return;
       setCountdown(seconds);
-      
+
       // Decrementar el contador cada segundo
-      const interval = setInterval(() => {
+      const intervalId = window.setInterval(() => {
         setCountdown(prev => {
           if (prev === null || prev <= 1) {
-            clearInterval(interval);
+            clearInterval(intervalId);
+            countdownRef.current = null;
+            // Después del conteo, navegar a la batalla
+            setBattleStarting(true);
+            if (onBattleStart) {
+              onBattleStart();
+            } else {
+              router.navigate({ to: '/battle/$roomCode', params: { roomCode } });
+            }
             return null;
           }
           return prev - 1;
         });
       }, 1000);
+      countdownRef.current = intervalId;
     }));
 
     // Esperar a que el oponente seleccione 6 Pokémon
@@ -303,13 +361,17 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
       if (onBattleStart) {
         onBattleStart();
       } else {
-        router.navigate('/battle/' + roomCode);
+        router.navigate({ to: '/battle/$roomCode', params: { roomCode } });
       }
     }));
 
     // Cleanup
     return () => {
       unsubscribes.forEach(unsub => unsub());
+      if (countdownRef.current !== null) {
+        clearInterval(countdownRef.current as number);
+        countdownRef.current = null;
+      }
     };
   }, [roomCode]);
 
@@ -329,7 +391,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
     if (onExit) {
       onExit();
     } else {
-      router.navigate('/');
+      router.navigate({ to: '/' });
     }
   };
 
@@ -384,7 +446,10 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
       pokeapi_id: selectedPokemon.pokeapi_id,
       name: selectedPokemon.name,
       is_legendary: selectedPokemon.is_legendary,
-      selected_moves: selectedMoves
+      selected_moves: selectedMoves,
+      sprites: selectedPokemon.sprites,
+      owner_shiny: shinyPack,
+      owner: shinyPack ? { shiny_pack: true } : undefined
     };
 
     // === OPTIMISTIC UPDATE: actualizar UI inmediatamente ===
@@ -450,15 +515,6 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
     setSelectedMoves(selectedMoves.filter(m => m.move_id !== moveId));
   };
 
-  /**
-   * Confirmar equipo completo (YA NO SE USA - se hace automático)
-   * Mantenido por compatibilidad
-   */
-  const confirmTeam = () => {
-    // Ya no se usa - el sistema detecta automáticamente cuando ambos tienen 6
-    console.log('[Draft] confirmTeam ya no se usa - se hace automático');
-  };
-
   // Resetear página cuando cambia la búsqueda
   useEffect(() => {
     setCurrentPage(1);
@@ -507,6 +563,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
 
   return (
     <div className="draft-container">
+      <BackgroundMusic src="/assets/music/DraftMusic.mp3" volume={0.3} />
       <div className="draft-header">
         <h1>SELECCIÓN DE EQUIPO</h1>
         {countdown !== null ? (
@@ -535,7 +592,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
               <div key={i} className="pokemon-slot">
                 {myPicks[i] ? (
                   <img
-                    src={getSpriteUrl(myPicks[i].pokeapi_id)}
+                    src={resolveFrontSprite(myPicks[i].sprites, myPicks[i].owner_shiny ?? shinyPack, myPicks[i].pokeapi_id) || getSpriteUrl(myPicks[i].pokeapi_id)}
                     alt={myPicks[i].name}
                     className="pokemon-sprite"
                     onError={(e) => {
@@ -559,7 +616,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
               <div className="selected-preview-top">
                 <div className="selected-preview-visual">
                   <img
-                    src={selectedPokemon.sprites.front_default || getSpriteUrl(selectedPokemon.pokeapi_id)}
+                    src={resolveFrontSprite(selectedPokemon.sprites, getOwnerShiny(selectedPokemon, false) || shinyPack, selectedPokemon.pokeapi_id) || getSpriteUrl(selectedPokemon.pokeapi_id)}
                     alt={selectedPokemon.name}
                     className="preview-sprite"
                     onError={(e) => {
@@ -723,7 +780,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
                       disabled={isDisabled}
                     >
                       <img
-                        src={pokemon.sprites.front_default || getSpriteUrl(pokemon.pokeapi_id)}
+                        src={resolveFrontSprite(pokemon.sprites, getOwnerShiny(pokemon, false) || shinyPack, pokemon.pokeapi_id) || getSpriteUrl(pokemon.pokeapi_id)}
                         alt={pokemon.name}
                         className="card-sprite"
                         onError={(e) => {
@@ -790,7 +847,7 @@ const Draft: React.FC<{ roomCode?: string; onExit?: () => void; onBattleStart?: 
               <div key={i} className="pokemon-slot">
                 {opponentPicks[i] ? (
                   <img
-                    src={getSpriteUrl(opponentPicks[i].pokeapi_id)}
+                    src={resolveFrontSprite(opponentPicks[i].sprites, opponentPicks[i].owner_shiny ?? false, opponentPicks[i].pokeapi_id) || getSpriteUrl(opponentPicks[i].pokeapi_id)}
                     alt={opponentPicks[i].name}
                     className="pokemon-sprite"
                     onError={(e) => {

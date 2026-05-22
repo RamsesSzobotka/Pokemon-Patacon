@@ -52,6 +52,7 @@ authRoutes.post('/session', async (c) => {
         player_name: updatedUser?.player_name || user?.player_name || 'Jugador',
         games_played: updatedUser?.games_played || 0,
         wins: updatedUser?.wins || 0,
+        shiny_pack: updatedUser?.shiny_pack || false,
       },
     });
   } catch (error) {
@@ -81,6 +82,7 @@ authRoutes.get('/session', async (c) => {
         player_name: user.player_name,
         games_played: user.games_played,
         wins: user.wins,
+        shiny_pack: user.shiny_pack || false,
       } : null,
     });
   } catch (error) {
@@ -113,6 +115,7 @@ authRoutes.get('/profile', async (c) => {
         email: user.email,
         games_played: user.games_played,
         wins: user.wins,
+        shiny_pack: user.shiny_pack || false,
         created_at: user.created_at,
         last_login_at: user.last_login_at,
       },

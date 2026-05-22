@@ -69,7 +69,7 @@
 .enemy-position {
   position: absolute;
   top: 24px;
-  right: 32px;
+  right: clamp(56px, 10vw, 160px);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -80,7 +80,7 @@
 .player-position {
   position: absolute;
   bottom: 24px;
-  left: 32px;
+  left: clamp(56px, 10vw, 160px);
   display: flex;
   flex-direction: row;
   align-items: flex-end;
@@ -92,9 +92,37 @@
    ============================================ */
 
 .pokemon-sprite {
+  position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
+  overflow: visible;
+  z-index: 1;
+}
+
+.pokemon-base {
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  transform: translateX(-50%);
+  width: 150%;
+  height: 62%;
+  background-image: url('/assets/background/base.png');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.pokemon-sprite.player .pokemon-base {
+  width: 165%;
+  height: 64%;
+}
+
+.pokemon-sprite.enemy .pokemon-base {
+  width: 145%;
+  height: 58%;
 }
 
 .pokemon-sprite.player {
@@ -108,8 +136,11 @@
 }
 
 .pokemon-sprite img {
-  width: 100%;
-  height: 100%;
+  position: relative;
+  z-index: 2;
+  width: 92%;
+  height: 92%;
+  margin-bottom: 8px;
   object-fit: contain;
   image-rendering: pixelated;
   filter: drop-shadow(2px 3px 0px rgba(0, 0, 0, 0.5));
@@ -210,6 +241,8 @@
    ============================================ */
 
 .pokemon-info-panel {
+  position: relative;
+  z-index: 3;
   background: var(--ruby-panel);
   border: 3px solid var(--ruby-border-light);
   padding: 10px 12px;
@@ -1001,31 +1034,79 @@
    ============================================ */
 
 .battle-loading {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100vh;
+  background: #000000;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  background: var(--ruby-bg);
+  z-index: 1000;
+  animation: slide-out 0.6s ease-in-out forwards;
+  animation-delay: 1.5s;
 }
 
-.battle-loading h2 {
+.loading-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 40px;
+  animation: fade-in-reverse 1.5s ease-in-out forwards;
+}
+
+.pokeball-spinner {
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle at 30% 30%, var(--ruby-red) 0%, var(--ruby-red) 50%, #000 50%, #000 100%),
+              radial-gradient(circle at 30% 70%, #FFFFFF 0%, #FFFFFF 50%, #000 50%, #000 100%),
+              radial-gradient(circle at 50% 50%, #000 0%, #000 10%, transparent 10%);
+  border-radius: 50%;
+  box-shadow: 0 0 20px rgba(227, 28, 43, 0.5);
+  animation: pokeball-spin 1.2s linear infinite;
+}
+
+.loading-text {
   font-family: var(--font-pixel);
   font-size: 14px;
   color: var(--ruby-gold);
-  margin-bottom: 24px;
   text-transform: uppercase;
-  letter-spacing: 2px;
-  animation: blink 1s steps(2) infinite;
+  letter-spacing: 3px;
+  text-shadow: 2px 2px 0px rgba(227, 28, 43, 0.5);
+  margin: 0;
+  animation: pulse-loading 1.5s ease-in-out infinite;
 }
 
-.loading-countdown {
-  font-family: 'Courier New', monospace;
-  font-size: 72px;
-  font-weight: bold;
-  color: var(--ruby-red);
-  text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
-  animation: countdown-pulse 0.8s steps(2) infinite;
+@keyframes pokeball-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes pulse-loading {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes fade-in-reverse {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+
+@keyframes slide-out {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100vw); }
+}
+
+/* Battle container transition */
+.battle-container.battle-active {
+  animation: slide-in-battle 0.6s ease-in-out forwards;
+  animation-delay: 1.5s;
+}
+
+@keyframes slide-in-battle {
+  0% { transform: translateX(100vw); }
+  100% { transform: translateX(0); }
 }
 
 /* ============================================

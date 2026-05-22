@@ -15,6 +15,7 @@ import {
   getPlayerRoom,
   registerConnection
 } from './roomManager';
+import { getUserBySessionId } from '../db/users';
 import { getRoom, setReady, leaveRoom as leaveRoomService, draftPick } from '../services/roomService';
 import { getRoomByCode } from '../db/rooms';
 import type { Room, TeamMember } from '../db/rooms';
@@ -604,11 +605,23 @@ async function handleDraftPick(
   }
 
   console.log(`[DRAFT:PICK] Broadcasting draft:picked...`);
+  // Adjuntar owner metadata al pokemon antes de broadcast
+  let pokemonWithOwner = { ...pokemon };
+  try {
+    const user = await getUserBySessionId(sessionId);
+    if (user) {
+      pokemonWithOwner.owner_shiny = !!user.shiny_pack;
+      pokemonWithOwner.owner = { session_id: sessionId, clerk_user_id: user.clerk_user_id, shiny_pack: !!user.shiny_pack };
+    }
+  } catch (e) {
+    console.warn('[DRAFT] No se pudo obtener user meta para draft pick', e);
+  }
+
   broadcast(roomCode, {
     type: 'draft:picked',
     data: {
       player_number: playerNumber,
-      pokemon: pokemon,
+      pokemon: pokemonWithOwner,
       current_turn: room.draft_state?.current_turn,
       picks_remaining: room.draft_state?.picks_remaining,
       draft_completed: result.draft_completed
@@ -684,12 +697,30 @@ async function handleDraftPicks(sessionId: string, roomCode: string): Promise<vo
     sendTo(sessionId, { type: 'error', message: 'Sala no encontrada' });
     return;
   }
+  // Inyectar metadata owner en cada pick para el cliente
+  const p1Session = room.players.player1.session_id;
+  const p2Session = room.players.player2.session_id;
+
+  const mapWithOwner = async (arr: any[], ownerSession?: string | null) => {
+    if (!arr || arr.length === 0) return [];
+    const user = ownerSession ? await getUserBySessionId(ownerSession) : null;
+    return arr.map(p => ({
+      ...p,
+      owner_shiny: user ? !!user.shiny_pack : undefined,
+      owner: user ? { session_id: ownerSession, clerk_user_id: user.clerk_user_id, shiny_pack: !!user.shiny_pack } : undefined
+    }));
+  };
+
+  const [player1WithOwner, player2WithOwner] = await Promise.all([
+    mapWithOwner(room.draft_picks.player1 || [], p1Session),
+    mapWithOwner(room.draft_picks.player2 || [], p2Session)
+  ]);
 
   sendTo(sessionId, {
     type: 'draft:picks',
     data: {
-      player1: room.draft_picks.player1,
-      player2: room.draft_picks.player2,
+      player1: player1WithOwner,
+      player2: player2WithOwner,
       current_turn: room.draft_state?.current_turn
     }
   });
@@ -917,12 +948,30 @@ async function handleStartRandomMode(sessionId: string, roomCode: string): Promi
   const { setRandomTeams } = await import('../services/roomService');
   await setRandomTeams(roomCode, player1Team, player2Team);
 
+  // Adjuntar owner metadata a los equipos antes de enviar
+  const p1Session = room.players.player1.session_id;
+  const p2Session = room.players.player2.session_id;
+
+  const attachOwnerToTeam = async (team: any[], ownerSession?: string | null) => {
+    const user = ownerSession ? await getUserBySessionId(ownerSession) : null;
+    return team.map(p => ({
+      ...p,
+      owner_shiny: user ? !!user.shiny_pack : undefined,
+      owner: user ? { session_id: ownerSession, clerk_user_id: user.clerk_user_id, shiny_pack: !!user.shiny_pack } : undefined
+    }));
+  };
+
+  const [player1WithOwner, player2WithOwner] = await Promise.all([
+    attachOwnerToTeam(player1Team, p1Session),
+    attachOwnerToTeam(player2Team, p2Session)
+  ]);
+
   // Enviar los equipos a ambos jugadores
   broadcast(roomCode, {
     type: 'random:teams_generated',
     data: {
-      player1_team: player1Team,
-      player2_team: player2Team
+      player1_team: player1WithOwner,
+      player2_team: player2WithOwner
     }
   });
 

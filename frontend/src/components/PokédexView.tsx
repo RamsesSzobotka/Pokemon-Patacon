@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useAuthSession } from '../hooks/useAuthSession';
+import { resolveFrontSprite } from '../utils/spriteResolver';
 import { useRouter } from '@tanstack/react-router';
 import { PokemonType, MoveType, POKEMON_TYPES, TYPE_COLORS, GENERATIONS } from '../types/game';
 import '../styles/Pokedex.css';
@@ -26,6 +28,11 @@ interface MovesResponse {
 const PokédexView: React.FC = () => {
   const router = useRouter();
   const [pokemon, setPokemon] = useState<PokemonType[]>([]);
+  const { shinyPack } = useAuthSession();
+
+  const getOwnerShiny = (pokemonObj: any) => {
+    return (pokemonObj?.owner_shiny ?? pokemonObj?.owner?.shiny_pack ?? false) as boolean;
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonType | null>(null);
@@ -340,7 +347,7 @@ const PokédexView: React.FC = () => {
               >
                 <div className="pokemon-sprite">
                   <img
-                    src={poke.sprites.front_default || ''}
+                    src={resolveFrontSprite(poke.sprites, getOwnerShiny(poke) || shinyPack, poke.pokeapi_id)}
                     alt={poke.name}
                     className="sprite-img"
                     onError={(e) => {
@@ -436,7 +443,7 @@ const PokédexView: React.FC = () => {
               {/* Sprite grande */}
               <div className="detail-sprite">
                 <img
-                  src={selectedPokemon.sprites.front_default || ''}
+                  src={resolveFrontSprite(selectedPokemon.sprites, getOwnerShiny(selectedPokemon) || shinyPack, selectedPokemon.pokeapi_id)}
                   alt={selectedPokemon.name}
                   onError={(e) => {
                     const img = e.target as HTMLImageElement;

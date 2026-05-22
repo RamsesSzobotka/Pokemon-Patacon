@@ -163,6 +163,13 @@ export interface PokemonInBattle {
   
   // HP guardado para cambios (se preserva al salir)
   savedHp: number;
+  // Owner metadata: opcional, usada por frontend para decidir sprites (shiny)
+  owner_shiny?: boolean;
+  owner?: {
+    session_id?: string | null;
+    clerk_user_id?: string | null;
+    shiny_pack?: boolean;
+  };
 }
 
 /**

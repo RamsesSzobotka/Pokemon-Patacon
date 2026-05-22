@@ -11,6 +11,7 @@ export interface UserDocument {
   last_login_at: Date;
   games_played: number;
   wins: number;
+  shiny_pack?: boolean;
 }
 
 let usersCollection: Collection<UserDocument> | null = null;
@@ -41,6 +42,11 @@ export async function getUserByClerkId(clerkUserId: string): Promise<UserDocumen
   return await collection.findOne({ clerk_user_id: clerkUserId });
 }
 
+export async function getUserBySessionId(sessionId: string): Promise<UserDocument | null> {
+  const collection = getUsersCollection();
+  return await collection.findOne({ session_id: sessionId });
+}
+
 export async function createUser(clerkUserId: string, email: string, playerName: string): Promise<UserDocument> {
   const collection = getUsersCollection();
 
@@ -55,6 +61,7 @@ export async function createUser(clerkUserId: string, email: string, playerName:
     last_login_at: now,
     games_played: 0,
     wins: 0,
+    shiny_pack: false,
   };
 
   const result = await collection.insertOne(user);

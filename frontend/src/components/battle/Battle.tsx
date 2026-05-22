@@ -14,6 +14,9 @@ import { useWebSocket } from '../../hooks/useWebSocket';
 import { joinRoom } from '../../websocket';
 import { CoinFlipAnimation } from './CoinFlipAnimation';
 import './Battle.css';
+import { useAuthSession } from '../../hooks/useAuthSession';
+import { resolveFrontSprite, resolveBackSprite } from '../../utils/spriteResolver';
+import { BackgroundMusic } from '../BackgroundMusic';
 
 // ============================================
 // INTERFACES
@@ -60,6 +63,13 @@ interface BattlePokemon {
   isFatigued?: boolean;
   fatigueSource?: 'recharge' | 'exhaustion' | null;
   isEvasivelyCharging?: boolean;
+  // Owner metadata for shiny rendering
+  owner_shiny?: boolean;
+  owner?: {
+    session_id?: string;
+    clerk_user_id?: string;
+    shiny_pack?: boolean;
+  };
 }
 
 interface BattleState {
@@ -70,11 +80,13 @@ interface BattleState {
     name: string;
     activePokemon: BattlePokemon;
     team: BattlePokemon[];
+    shiny_pack?: boolean;
   };
   player2: {
     name: string;
     activePokemon: BattlePokemon;
     team: BattlePokemon[];
+    shiny_pack?: boolean;
   };
 }
 
@@ -82,10 +94,6 @@ interface BattleMessage {
   type: string;
   data?: any;
 }
-
-// ============================================
-// COMPONENTES
-// ============================================
 
 // ============================================
 // COMPONENTES
@@ -315,6 +323,27 @@ function PokemonInfoPanel({
 }
 
 /**
+ * Obtiene el sprite correcto para un Pokémon en batalla
+ * Determina si usar shiny basado en owner_shiny del Pokémon
+ * @param pokemon - El Pokémon en batalla
+ * @param isBackSprite - true para back sprite, false para front sprite
+ * @returns URL del sprite o string vacío
+ */
+function getBattleSprite(pokemon: BattlePokemon | null, isBackSprite: boolean): string {
+  if (!pokemon) return '';
+
+  // Determinar si usar shiny basándose en el dueño del Pokémon
+  // owner_shiny es enviado por el backend basándose en si el dueño tiene shiny_pack
+  const useShiny = pokemon.owner_shiny === true;
+  
+  if (isBackSprite) {
+    return resolveBackSprite(pokemon.sprites as any, useShiny, pokemon.pokeapiId);
+  } else {
+    return resolveFrontSprite(pokemon.sprites as any, useShiny, pokemon.pokeapiId);
+  }
+}
+
+/**
  * Sprite del Pokémon en el campo de batalla
  * V3: Con soporte para carga, evasión y fatiga
  */
@@ -346,9 +375,11 @@ function PokemonSprite({
 
   if (!pokemon) return <div className="pokemon-sprite-placeholder" />;
 
+  // Usar sprite front para oponente, back para jugador
+  // El sprite depende ÚNICAMENTE de owner_shiny del Pokémon
   const sprite = isPlayer
-    ? pokemon.sprites.back_default || pokemon.sprites.front_default
-    : pokemon.sprites.front_default;
+    ? getBattleSprite(pokemon, true)  // back sprite para jugador
+    : getBattleSprite(pokemon, false); // front sprite para oponente
 
   // Determinar la clase de animación según el estado
   let spriteClass = '';
@@ -371,6 +402,7 @@ function PokemonSprite({
 
   return (
     <div className={`pokemon-sprite ${isPlayer ? 'player' : 'enemy'} ${isAttacking ? 'attacking' : ''} ${isHit ? 'hit' : ''} ${pokemon.isChargingTwoTurn ? 'v3-charging' : ''} ${pokemon.isEvasivelyCharging ? 'v3-evasive' : ''} ${pokemon.isFatigued ? 'v3-fatigued' : ''}`}>
+      <div className="pokemon-base" aria-hidden="true" />
       {sprite ? (
         <img
           src={sprite}
@@ -739,6 +771,7 @@ function PokemonDetailModal({
   onClose: () => void;
   onSelect: (pokemonId: number) => void;
 }) {
+  const { shinyPack } = useAuthSession();
   const [selectedMove, setSelectedMove] = useState<any>(null);
 
   const getTypeColor = (type: string): string => {
@@ -780,7 +813,7 @@ function PokemonDetailModal({
           {/* Sprite a la izquierda */}
           <div className="detail-sprite-container-horizontal">
             <img
-              src={pokemon.sprites.front_default || pokemon.sprites.front_shiny || ''}
+              src={resolveFrontSprite(pokemon.sprites as any, pokemon.owner_shiny === true, pokemon.pokeapiId)}
               alt={pokemon.name}
               className="detail-sprite-large"
             />
@@ -895,6 +928,7 @@ function PokemonSelector({
   onCancel: () => void;
   currentPokemonId: number;
 }) {
+  const { shinyPack } = useAuthSession();
   const [selectedPokemonForDetails, setSelectedPokemonForDetails] = useState<BattlePokemon | null>(null);
 
   return (
@@ -912,7 +946,7 @@ function PokemonSelector({
                 disabled={pokemon.isFainted || pokemon.id === currentPokemonId}
               >
                 <img
-                  src={pokemon.sprites.front_default || ''}
+                  src={resolveFrontSprite(pokemon.sprites as any, pokemon.owner_shiny === true, pokemon.pokeapiId)}
                   alt={pokemon.name}
                   className="team-sprite"
                 />
@@ -1010,6 +1044,7 @@ interface BattleProps {
 export default function Battle({ roomCode }: BattleProps) {
   const { sendMessage, lastMessage } = useWebSocket();
   const returnToMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const battleStateRequestedRef = useRef(false);
   
   // Unirse a la sala al montar el componente
   useEffect(() => {
@@ -1026,11 +1061,17 @@ export default function Battle({ roomCode }: BattleProps) {
     
     const message = lastMessage;
     
-    // Capturar player_number de room:created o room:joined
-    if (message.type === 'room:created' || message.type === 'room:joined') {
+    // Capturar player_number de room:created, room:joined o room:reconnected
+    if (message.type === 'room:created' || message.type === 'room:joined' || message.type === 'room:reconnected') {
       if (message.data?.player_number) {
         console.log('[Battle] Player number:', message.data.player_number);
         setPlayerNumber(message.data.player_number);
+      }
+
+      // Pedir el estado actual de batalla como respaldo si se perdió battle:start
+      if (!battleStateRequestedRef.current) {
+        battleStateRequestedRef.current = true;
+        sendMessage({ type: 'battle:state' });
       }
     }
   }, [lastMessage]);
@@ -1054,6 +1095,29 @@ export default function Battle({ roomCode }: BattleProps) {
   // Función para procesar un mensaje individual (sin secuencia)
   const showSingleNarration = useCallback((message: string) => {
     setLastBattleMessage(message);
+  }, []);
+
+  // Control para que la animación slide-in solo ocurra 1 vez
+  const slideInPlayedRef = useRef(false);
+
+  // Audio de ataque
+  const attackAudioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    const audio = new Audio('/assets/music/SUPER SMASH BROS ULTIMATE - Sound Effect.mp3');
+    audio.volume = 0.5;
+    attackAudioRef.current = audio;
+    return () => {
+      audio.pause();
+      audio.src = '';
+    };
+  }, []);
+
+  const playAttackSound = useCallback(() => {
+    const audio = attackAudioRef.current;
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+    }
   }, []);
   
   const [showPokemonSelector, setShowPokemonSelector] = useState(false);
@@ -1130,6 +1194,20 @@ export default function Battle({ roomCode }: BattleProps) {
     // También escuchar battle:starting para iniciar el contador
     if (message.type === 'battle:starting') {
       setLoadingCountdown(5);
+      return;
+    }
+
+    if (message.type === 'battle:state') {
+      setBattleState({
+        roomCode: roomCode || message.data.roomCode,
+        turn: message.data.turn,
+        phase: message.data.phase,
+        player1: message.data.player1,
+        player2: message.data.player2
+      });
+      setLoadingCountdown(null);
+      setLastBattleMessage('¡La batalla está por comenzar!');
+      setIsMyTurn(message.data.phase === 'selecting');
       return;
     }
 
@@ -1234,6 +1312,7 @@ export default function Battle({ roomCode }: BattleProps) {
           const justFainted = defenderPreviousHp && defenderPreviousHp > 0 && defenderHp <= 0;
 
           // Animación de ataque
+          playAttackSound();
           setAttackingPlayer(message.data.playerId as 'player1' | 'player2');
           setTimeout(() => setAttackingPlayer(null), 400);
 
@@ -1552,23 +1631,23 @@ export default function Battle({ roomCode }: BattleProps) {
   if (!battleState) {
     return (
       <div className="battle-loading">
-        <div className="loading-pokeball">
-          <div className="pokeball" />
+        <div className="loading-content">
+          <div className="pokeball-spinner"></div>
+          <p className="loading-text">Cargando</p>
         </div>
-        {loadingCountdown !== null ? (
-          <div className="loading-countdown">
-            <span className="countdown-number">{loadingCountdown}</span>
-            <p>Cargando datos de batalla...</p>
-          </div>
-        ) : (
-          <p>Cargando batalla...</p>
-        )}
       </div>
     );
   }
   
+  // Marcamos que el slide-in ya se disparó en la PRIMERA renderización con battleState
+  const isFirstBattleRender = battleState && !slideInPlayedRef.current;
+  if (isFirstBattleRender) {
+    slideInPlayedRef.current = true;
+  }
+
   return (
-    <div className="battle-container">
+    <div className={`battle-container${isFirstBattleRender ? ' battle-active' : ''}`}>
+      <BackgroundMusic src="/assets/music/BatleMusic.mp3" volume={0.3} />
       {/* Campo de batalla */}
       <div className="battle-field">
         {/* 

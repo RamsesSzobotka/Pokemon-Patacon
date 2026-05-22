@@ -2,7 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from '@tanstack/react-router';
 import { socket, connect, getSessionId, isConnected, getCurrentRoom } from '../websocket';
 import { useAuthSession } from '../hooks/useAuthSession';
+import { useAuth } from '@clerk/clerk-react';
+import StoreModal from './StoreModal';
 import { PokemonSlotAnimation } from './battle/PokemonSlotAnimation';
+import { resolveFrontSprite } from '../utils/spriteResolver';
 import '../styles/MainMenu.css';
 import '../components/battle/PokemonSlotAnimation.css';
 
@@ -31,7 +34,8 @@ const MainMenu: React.FC = () => {
   const [roomCode, setRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
 const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
-  const { playerName: authPlayerName, isAuthenticated } = useAuthSession();
+  const { playerName: authPlayerName, isAuthenticated, shinyPack } = useAuthSession();
+  const { getToken } = useAuth();
 
   // Cuando auth sincroniza, actualiza localStorage + estado local
   useEffect(() => {
@@ -276,6 +280,8 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
   // ==================== ACTIONS ====================
 
+  const [showStore, setShowStore] = useState(false);
+
   const handleCreateRoom = async () => {
     if (!isAuthenticated && !playerName.trim()) {
       alert('Por favor ingresa tu nombre');
@@ -407,6 +413,47 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
     }
   };
 
+  // Detectar regreso desde Stripe Checkout y confirmar pago
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutSessionId = params.get('checkout_session_id');
+    if (!checkoutSessionId) return;
+
+    let cancelled = false;
+
+    async function confirmPurchase() {
+      try {
+        const token = await getToken();
+        const resp = await fetch('/api/store/confirm', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ checkout_session_id: checkoutSessionId }),
+        });
+        const data = await resp.json();
+        if (!cancelled) {
+          if (data.success) {
+            alert('✅ Compra verificada: Shiny Pack desbloqueado');
+          } else {
+            alert('⚠️ Compra no verificada: ' + (data.message || data.error || ''));
+          }
+          // Limpiar querystring
+          const url = new URL(window.location.href);
+          url.searchParams.delete('checkout_session_id');
+          window.history.replaceState({}, '', url.toString());
+        }
+      } catch (err) {
+        console.error('Error confirming purchase:', err);
+      }
+    }
+
+    confirmPurchase();
+
+    return () => { cancelled = true; };
+  }, [getToken]);
+
   const handleLeaveRoom = async () => {
     // Salir de la sala usando WebSocket (NO cerrar conexión)
     socket.leaveRoom();
@@ -456,7 +503,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
                 {(myTeam || []).slice(0, 6).map((pokemon: any, index: number) => (
                   <div key={index} className="pokemon-preview">
                     <img 
-                      src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.pokeapi_id}.png`} 
+                      src={resolveFrontSprite(pokemon.sprites, pokemon.owner_shiny ?? shinyPack, pokemon.pokeapi_id) || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.pokeapi_id}.png`}
                       alt={String(pokemon.pokeapi_id)}
                     />
                   </div>
@@ -470,7 +517,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
                 {(opponentTeam || []).slice(0, 6).map((pokemon: any, index: number) => (
                   <div key={index} className="pokemon-preview">
                     <img 
-                      src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.pokeapi_id}.png`} 
+                      src={resolveFrontSprite(pokemon.sprites, pokemon.owner_shiny ?? false, pokemon.pokeapi_id) || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.pokeapi_id}.png`}
                       alt={String(pokemon.pokeapi_id)}
                     />
                   </div>
@@ -546,8 +593,16 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
                 📖 VER POKÉDEX
                 <span className="btn-hint">649 Pokémon disponibles</span>
               </button>
+              <button className="btn btn-store btn-float" onClick={() => setShowStore(true)}>
+                💎 TIENDA
+                <span className="btn-hint">Paquetes premium</span>
+              </button>
             </div>
           </>
+        )}
+
+        {showStore && (
+          <StoreModal sessionId={sessionId} onClose={() => setShowStore(false)} />
         )}
 
         {screen === 'create' && (
@@ -767,7 +822,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
         <div className="footer">
           <div className="footer-info">
-            <p className="version">🎮 Pokémon Patacon v2.0 (WebSocket Persistente)</p>
+            <p className="version">-------------🎮 Pokémon Patacon v3.0-------------</p>
           </div>
         </div>
       </div>

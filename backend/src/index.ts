@@ -9,6 +9,7 @@ import { initializeUsersIndexes } from './db/users';
 import pokemonRoutes from './routes/pokemon';
 import roomRoutes from './routes/rooms';
 import authRoutes from './routes/auth';
+import storeRoutes from './routes/store';
 import { clerkAuth } from './middleware/auth';
 import { handleMessage, handleClose, handleMessageFromSession } from './websocket/handler';
 import { cleanup as cleanupWebSocket, registerConnection, removeConnection } from './websocket/roomManager';
@@ -50,6 +51,9 @@ app.route('/api/rooms', roomRoutes);
 
 // Mount Auth routes
 app.route('/api/auth', authRoutes);
+
+// Mount Store / Payments routes
+app.route('/api/store', storeRoutes);
 
 // 404 handler
 app.notFound((c) => {

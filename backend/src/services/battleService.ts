@@ -1470,14 +1470,12 @@ export function createPlayerBattleState(
     spDefense: pokemon.stats?.sp_defense || 50,
     sprites: pokemon.sprites || { front_default: null, back_default: null, front_shiny: null, back_shiny: null },
     moveIds: pokemon.move_ids || pokemon.moveIds || [],
-    moves: pokemon.moves || [], // ← Agregar movimientos del equipo
+    moves: pokemon.moves || [],
     ailments: [],
     isCharging: false,
     chargingMoveId: undefined,
     cannotActNextTurn: false,
     hasFlinched: false,
-    // V2: Estados
-    // (ya inicializados arriba)
     // V3: Movimientos de 2 turnos
     isChargingTwoTurn: false,
     currentTwoTurnMove: null,
@@ -1490,7 +1488,10 @@ export function createPlayerBattleState(
     evasiveChargeMove: null,
     // Otros
     isFainted: false,
-    savedHp: pokemon.stats?.hp || 100
+    savedHp: pokemon.stats?.hp || 100,
+    // Preservar owner metadata del draft/battleHandler (shiny sprites)
+    owner_shiny: pokemon.owner_shiny,
+    owner: pokemon.owner
   }));
   
   return {

@@ -1,0 +1,347 @@
+/* ============================================
+   🛒 POKÉMON PATACON - STORE MODAL
+   Estilo Pixel Art - Pokémon Ruby (GBA)
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  /* Paleta Ruby/GBA - Rojo Principal */
+  --ruby-bg: #0A1F3D;
+  --ruby-red: #E31C2B;
+  --ruby-red-dark: #8B1428;
+  --ruby-red-light: #FF2D3B;
+  --ruby-gold: #FFD700;
+  --ruby-white: #FFFFFF;
+  --ruby-text-light: #B0C8E0;
+  --ruby-panel: #2A1520;
+  --ruby-panel-dark: #1A0D12;
+  --ruby-border: #4A2530;
+  --ruby-border-light: #6A3550;
+  --hp-green: #48D048;
+  --hp-yellow: #F8D048;
+  --hp-red: #F83030;
+  --font-pixel: 'Press Start 2P', 'Courier New', monospace;
+}
+
+/* ============================================
+   STORE MODAL OVERLAY & CONTAINER
+   ============================================ */
+
+.store-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 31, 61, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  backdrop-filter: blur(3px);
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; backdrop-filter: blur(0px); }
+  to { opacity: 1; backdrop-filter: blur(3px); }
+}
+
+.store-modal-card {
+  background: linear-gradient(135deg, rgba(42, 21, 32, 0.95) 0%, rgba(26, 13, 18, 0.95) 100%);
+  border: 4px solid var(--ruby-border-light);
+  border-radius: 0;
+  padding: 32px;
+  box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(227, 28, 43, 0.1);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  animation: slide-down 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scrollbar styling */
+.store-modal-card::-webkit-scrollbar {
+  width: 8px;
+}
+
+.store-modal-card::-webkit-scrollbar-track {
+  background: var(--ruby-panel-dark);
+  border: 2px solid var(--ruby-border);
+}
+
+.store-modal-card::-webkit-scrollbar-thumb {
+  background: var(--ruby-red);
+  border: 1px solid var(--ruby-border-light);
+}
+
+.store-modal-card::-webkit-scrollbar-thumb:hover {
+  background: var(--ruby-red-light);
+}
+
+/* ============================================
+   HEADER & TITLE
+   ============================================ */
+
+.store-modal-card h2 {
+  font-family: var(--font-pixel);
+  font-size: 24px;
+  color: var(--ruby-gold);
+  text-align: center;
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
+}
+
+.store-sub {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--ruby-text-light);
+  text-align: center;
+  margin: 0 0 24px 0;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* ============================================
+   CLOSE BUTTON
+   ============================================ */
+
+.store-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-family: var(--font-pixel);
+  font-size: 20px;
+  background: transparent;
+  color: var(--ruby-white);
+  border: 2px solid var(--ruby-border);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s steps(2);
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.4);
+}
+
+.store-close:hover {
+  background: var(--ruby-red);
+  border-color: var(--ruby-red-light);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.4);
+}
+
+.store-close:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.4);
+}
+
+/* ============================================
+   PRODUCT CARDS
+   ============================================ */
+
+.product-card {
+  background: linear-gradient(180deg, rgba(26, 13, 18, 0.8) 0%, rgba(10, 7, 12, 0.8) 100%);
+  border: 3px solid var(--ruby-border);
+  border-radius: 0;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(227, 28, 43, 0.08);
+  transition: all 0.2s steps(2);
+  position: relative;
+  overflow: hidden;
+}
+
+.product-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--ruby-gold), transparent);
+  opacity: 0.5;
+}
+
+.product-card:hover {
+  border-color: var(--ruby-gold);
+  box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(227, 28, 43, 0.12);
+  transform: translate(-2px, -2px);
+}
+
+.product-card h3 {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--ruby-white);
+  margin: 0 0 10px 0;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+}
+
+.product-card p {
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  color: var(--ruby-text-light);
+  margin: 0 0 16px 0;
+  line-height: 1.6;
+  text-align: left;
+}
+
+/* ============================================
+   PRODUCT FOOTER (PRICE & BUTTON)
+   ============================================ */
+
+.product-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 2px solid var(--ruby-border);
+}
+
+.product-footer strong {
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--ruby-gold);
+  text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+
+.btn {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  padding: 10px 16px;
+  border: 3px solid var(--ruby-border);
+  border-radius: 0;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.1s steps(2);
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.4);
+  letter-spacing: 1px;
+}
+
+.btn-primary {
+  background: var(--ruby-red);
+  color: var(--ruby-white);
+  border-color: var(--ruby-red-dark);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--ruby-red-light);
+  border-color: var(--ruby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.4);
+}
+
+.btn-secondary {
+  background: var(--ruby-border);
+  color: var(--ruby-text-light);
+  border-color: var(--ruby-border-light);
+  cursor: default;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   STATUS INDICATORS
+   ============================================ */
+
+.product-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 8px;
+  color: var(--ruby-gold);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 8px;
+}
+
+.status-icon {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid currentColor;
+  background: currentColor;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+
+@media (max-width: 600px) {
+  .store-modal-card {
+    padding: 24px;
+    max-width: 95%;
+  }
+
+  .store-modal-card h2 {
+    font-size: 18px;
+  }
+
+  .product-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .product-footer strong {
+    text-align: center;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 12px;
+  }
+
+  .store-close {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 400px) {
+  .store-modal-card {
+    padding: 16px;
+  }
+
+  .store-modal-card h2 {
+    font-size: 14px;
+  }
+
+  .product-card {
+    padding: 16px;
+  }
+
+  .btn {
+    font-size: 9px;
+    padding: 8px 12px;
+  }
+}

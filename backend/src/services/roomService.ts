@@ -1,4 +1,5 @@
 import * as roomsDB from '../db/rooms';
+import { getUserBySessionId } from '../db/users';
 import type { Room, TeamMember, DraftState } from '../db/rooms';
 
 /**
@@ -609,9 +610,32 @@ export async function getDraftPicks(code: string): Promise<{ success: boolean; p
     const room = await roomsDB.getRoomByCode(upperCode);
     if (!room) return { success: false, message: 'Sala no encontrada' };
 
+    // Inyectar owner metadata en cada pick
+    const p1Session = room.players.player1.session_id;
+    const p2Session = room.players.player2.session_id;
+
+    const attachOwner = async (arr: TeamMember[] | undefined, ownerSession?: string | null) => {
+      if (!arr) return [];
+      const user = ownerSession ? await getUserBySessionId(ownerSession) : null;
+      return arr.map(p => ({
+        ...p,
+        // owner_shiny/owner serán undefined si no hay usuario
+        owner_shiny: user ? !!user.shiny_pack : undefined,
+        owner: user ? { session_id: ownerSession, clerk_user_id: user.clerk_user_id, shiny_pack: !!user.shiny_pack } : undefined
+      }));
+    };
+
+    const [player1WithOwner, player2WithOwner] = await Promise.all([
+      attachOwner(room.draft_picks.player1 || [], p1Session),
+      attachOwner(room.draft_picks.player2 || [], p2Session)
+    ]);
+
     return {
       success: true,
-      picks: room.draft_picks
+      picks: {
+        player1: player1WithOwner as TeamMember[],
+        player2: player2WithOwner as TeamMember[]
+      }
     };
   } catch (error) {
     console.error('Error obteniendo picks:', error);
