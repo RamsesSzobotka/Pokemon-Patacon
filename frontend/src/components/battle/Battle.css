@@ -649,6 +649,101 @@
 }
 
 /* ============================================
+   SURRENDER CONFIRMATION MODAL
+   ============================================ */
+
+.surrender-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 10, 20, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 350;
+  animation: surrender-fade-in 0.2s ease-out;
+}
+
+@keyframes surrender-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.surrender-modal {
+  width: min(88vw, 380px);
+  background: linear-gradient(180deg, #2A1520 0%, #1A0D12 100%);
+  border: 4px solid var(--ruby-red);
+  box-shadow: 0 0 0 3px #000, 8px 8px 0 rgba(0, 0, 0, 0.6);
+  padding: 28px 24px;
+  text-align: center;
+}
+
+.surrender-title {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--ruby-red);
+  margin: 0 0 14px;
+  letter-spacing: 2px;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.surrender-text {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--ruby-text-light);
+  margin: 0 0 24px;
+  line-height: 1.6;
+}
+
+.surrender-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.surrender-btn {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  padding: 12px 28px;
+  border: 3px solid;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.1s steps(2);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+.surrender-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.5);
+}
+
+.surrender-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.surrender-btn-yes {
+  background: var(--ruby-red);
+  color: var(--ruby-white);
+  border-color: #8B1428;
+}
+
+.surrender-btn-yes:hover {
+  background: #FF2D3B;
+}
+
+.surrender-btn-no {
+  background: var(--ruby-panel);
+  color: var(--ruby-white);
+  border-color: var(--ruby-border);
+}
+
+.surrender-btn-no:hover {
+  background: var(--ruby-border);
+  border-color: var(--ruby-border-light);
+}
+
+/* ============================================
    POKEMON SELECTOR (CHANGE POKEMON)
    ============================================ */
 

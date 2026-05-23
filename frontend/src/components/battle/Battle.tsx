@@ -16,7 +16,6 @@ import { CoinFlipAnimation } from './CoinFlipAnimation';
 import './Battle.css';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import { resolveFrontSprite, resolveBackSprite } from '../../utils/spriteResolver';
-import { BackgroundMusic } from '../BackgroundMusic';
 
 // ============================================
 // INTERFACES
@@ -588,11 +587,7 @@ function CommandPanel({
           <button
             className="command-btn run"
             disabled={disabled}
-            onClick={() => {
-              if (onSurrender && confirm('¿Estás seguro de que quieres rendirte?')) {
-                onSurrender();
-              }
-            }}
+            onClick={() => onSurrender?.()}
           >
             RENDIRSE
           </button>
@@ -1109,6 +1104,9 @@ export default function Battle({ roomCode }: BattleProps) {
   // Audio de ataque
   const attackAudioRef = useRef<HTMLAudioElement | null>(null);
   const victoryAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lowHealthAudioRef = useRef<HTMLAudioElement | null>(null);
+  const battleIntroAudioRef = useRef<HTMLAudioElement | null>(null);
+  const battleLoopAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const attackAudio = new Audio('/assets/music/SUPER SMASH BROS ULTIMATE - Sound Effect.mp3');
@@ -1119,11 +1117,38 @@ export default function Battle({ roomCode }: BattleProps) {
     victoryAudio.volume = 0.7;
     victoryAudioRef.current = victoryAudio;
 
+    const lowHealthAudio = new Audio('/assets/sounds/LowHealth.mp3');
+    lowHealthAudio.volume = 0.4;
+    lowHealthAudio.loop = true;
+    lowHealthAudioRef.current = lowHealthAudio;
+
+    const battleIntro = new Audio('/assets/music/IntroBatle.mp3');
+    battleIntro.volume = 0.3;
+    battleIntroAudioRef.current = battleIntro;
+
+    const battleLoop = new Audio('/assets/music/BatleMusic.mp3');
+    battleLoop.volume = 0.3;
+    battleLoop.loop = true;
+    battleLoopAudioRef.current = battleLoop;
+
+    const onIntroEnd = () => {
+      battleLoop.play().catch(() => {});
+    };
+    battleIntro.addEventListener('ended', onIntroEnd);
+    battleIntro.play().catch(() => {});
+
     return () => {
       attackAudio.pause();
       attackAudio.src = '';
       victoryAudio.pause();
       victoryAudio.src = '';
+      lowHealthAudio.pause();
+      lowHealthAudio.src = '';
+      battleIntro.removeEventListener('ended', onIntroEnd);
+      battleIntro.pause();
+      battleIntro.src = '';
+      battleLoop.pause();
+      battleLoop.src = '';
     };
   }, []);
 
@@ -1169,6 +1194,9 @@ export default function Battle({ roomCode }: BattleProps) {
   const [coinFlipWinner, setCoinFlipWinner] = useState<'player1' | 'player2' | null>(null);
   const [battleResultOverlay, setBattleResultOverlay] = useState<BattleResultOverlay | null>(null);
   const lastAutoExecuteKeyRef = useRef<string | null>(null);
+
+  // Estado para modal de confirmación de rendición
+  const [showSurrenderModal, setShowSurrenderModal] = useState(false);
 
   // Ref para evitar loops infinitos en useEffect
   const playerNumberRef = useRef(playerNumber);
@@ -1635,6 +1663,19 @@ export default function Battle({ roomCode }: BattleProps) {
     sessionStorage.removeItem('patacon_room_code');
   }, [sendMessage]);
 
+  const showSurrenderConfirm = useCallback(() => {
+    setShowSurrenderModal(true);
+  }, []);
+
+  const confirmSurrender = useCallback(() => {
+    setShowSurrenderModal(false);
+    handleSurrender();
+  }, [handleSurrender]);
+
+  const cancelSurrender = useCallback(() => {
+    setShowSurrenderModal(false);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (returnToMenuTimeoutRef.current) {
@@ -1683,7 +1724,36 @@ export default function Battle({ roomCode }: BattleProps) {
     lastAutoExecuteKeyRef.current = autoExecuteKey;
     handleAttack(currentTwoTurnMove.moveId);
   }, [battleState?.turn, myPokemon?.id, myPokemon?.isChargingTwoTurn, myPokemon?.chargePhase, myPokemon?.currentTwoTurnMove, isMyTurn, handleAttack]);
-  
+
+  // Sonido de vida baja - se reproduce en bucle cuando el Pokémon activo tiene ≤15% HP
+  useEffect(() => {
+    const audio = lowHealthAudioRef.current;
+    if (!audio) return;
+
+    if (!myPokemon || myPokemon.maxHp <= 0) {
+      if (!audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+      return;
+    }
+
+    const hpPercent = (myPokemon.hp / myPokemon.maxHp) * 100;
+    const isCritical = hpPercent <= 15;
+
+    if (isCritical) {
+      if (audio.paused) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      }
+    } else {
+      if (!audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+    }
+  }, [myPokemon?.hp, myPokemon?.maxHp, myPokemon?.id]);
+
   if (!battleState) {
     return (
       <div className="battle-loading">
@@ -1703,7 +1773,6 @@ export default function Battle({ roomCode }: BattleProps) {
 
   return (
     <div className={`battle-container${isFirstBattleRender ? ' battle-active' : ''}`}>
-      <BackgroundMusic src="/assets/music/BatleMusic.mp3" volume={0.3} />
       {/* Campo de batalla */}
       <div className="battle-field">
         {/* 
@@ -1788,7 +1857,7 @@ export default function Battle({ roomCode }: BattleProps) {
         <CommandPanel 
           onAttack={(moveId: number) => handleAttack(moveId)}
           onChange={handleOpenChange}
-          onSurrender={handleSurrender}
+          onSurrender={showSurrenderConfirm}
           moves={moves}
           disabled={!isMyTurn || battleState.phase === 'ended' || hasSelectedAction}
           // V3: Pasar información sobre carga y fatiga
@@ -1813,6 +1882,24 @@ export default function Battle({ roomCode }: BattleProps) {
         />
       )}
       
+      {/* Modal de confirmación de rendición */}
+      {showSurrenderModal && (
+        <div className="surrender-overlay">
+          <div className="surrender-modal">
+            <p className="surrender-title">¿RENDIRSE?</p>
+            <p className="surrender-text">¿Estás seguro de que quieres rendirte?</p>
+            <div className="surrender-actions">
+              <button className="surrender-btn surrender-btn-yes" onClick={confirmSurrender}>
+                SÍ
+              </button>
+              <button className="surrender-btn surrender-btn-no" onClick={cancelSurrender}>
+                NO
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Selector de Pokémon */}
       {showPokemonSelector && (
         <PokemonSelector

@@ -291,6 +291,57 @@
   text-transform: uppercase;
 }
 
+.menu-header {
+  margin-bottom: 0;
+}
+
+.menu-user-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-user-section .cl-userButtonTrigger {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.menu-user-name {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--ruby-text-light);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.menu-icon-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  color: var(--ruby-text-light);
+  border: none;
+  padding: 0;
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  cursor: pointer;
+  transition: all 0.1s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.menu-icon-btn:hover {
+  color: var(--ruby-gold);
+  transform: translateX(2px);
+}
+
+.menu-icon-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
 .back-btn {
   background: transparent;
   color: var(--ruby-text-light);

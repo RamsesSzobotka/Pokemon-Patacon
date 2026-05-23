@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from '@tanstack/react-router';
 import { socket, connect, getSessionId, isConnected, getCurrentRoom } from '../websocket';
 import { useAuthSession } from '../hooks/useAuthSession';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth, useUser, UserButton } from '@clerk/clerk-react';
+import { AuthModal } from './AuthModal';
 import StoreModal from './StoreModal';
 import { useNotification } from './NotificationProvider';
 import { PokemonSlotAnimation } from './battle/PokemonSlotAnimation';
@@ -37,7 +38,7 @@ const MainMenu: React.FC = () => {
   const [loading, setLoading] = useState(false);
 const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
   const { playerName: authPlayerName, isAuthenticated, shinyPack } = useAuthSession();
-  const { getToken } = useAuth();
+  const { getToken, isSignedIn } = useAuth();
 
   // Cuando auth sincroniza, actualiza localStorage + estado local
   useEffect(() => {
@@ -282,6 +283,8 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
   // ==================== ACTIONS ====================
 
   const [showStore, setShowStore] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const { user } = useUser();
 
   const handleCreateRoom = async () => {
     if (!isAuthenticated && !playerName.trim()) {
@@ -567,6 +570,25 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
         {screen === 'menu' && (
           <>
+            <div className="header-bar menu-header">
+              <button className="back-btn" onClick={() => router.navigate({ to: '/splash' })}>
+                ◀ VOLVER
+              </button>
+              <span></span>
+              {isSignedIn ? (
+                <div className="menu-user-section">
+                  <UserButton afterSignOutUrl="/menu" />
+                  <span className="menu-user-name">{user?.firstName || 'Cuenta'}</span>
+                </div>
+              ) : (
+                <button className="menu-icon-btn" onClick={() => setShowAuthModal(true)}>
+                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                  </svg>
+                  <span>CUENTA</span>
+                </button>
+              )}
+            </div>
             <div className="divider"></div>
             <div className="button-group">
               <button
@@ -604,6 +626,10 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
         {showStore && (
           <StoreModal sessionId={sessionId} onClose={() => setShowStore(false)} />
+        )}
+
+        {showAuthModal && (
+          <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
         )}
 
         {screen === 'create' && (
