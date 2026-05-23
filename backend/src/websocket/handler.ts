@@ -973,6 +973,9 @@ async function handleStartRandomMode(sessionId: string, roomCode: string): Promi
     attachOwnerToTeam(player2Team, p2Session)
   ]);
 
+  // Persistir equipos con owner metadata para que la batalla use shiny sprites
+  await setRandomTeams(roomCode, player1WithOwner, player2WithOwner);
+
   // Enviar los equipos a ambos jugadores
   broadcast(roomCode, {
     type: 'random:teams_generated',

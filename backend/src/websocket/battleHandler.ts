@@ -272,8 +272,11 @@ async function loadTeamMoves(team: any[], ownerSessionId?: string | null): Promi
       isEvasivelyCharging: false,
       evasiveChargeMove: null,
       // Owner metadata for frontend to decide shiny rendering
-      // Respetar owner_shiny del teamMember (elegido en draft), validando que tenga el paquete
-      owner_shiny: teamMember.owner_shiny === true ? (ownerMeta ? !!ownerMeta.shiny_pack : false) : false,
+      // Si el usuario eligió explícitamente no-shiny (draft toggle OFF), respetarlo
+      // Si no hay preferencia explícita (random mode o draft sin toggle), usar el shiny_pack del owner
+      owner_shiny: teamMember.owner_shiny === false
+        ? false
+        : (ownerMeta ? !!ownerMeta.shiny_pack : false),
       owner: ownerMeta
     });
   }
