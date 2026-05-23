@@ -233,19 +233,28 @@ function PokemonInfoPanel({
   pokemon: BattlePokemon | null;
   isPlayer: boolean;
 }) {
-  const [prevHp, setPrevHp] = useState<number>(pokemon?.hp || 0);
   const [isDamaged, setIsDamaged] = useState(false);
+  const [isHealed, setIsHealed] = useState(false);
+  const hpRef = useRef(pokemon?.hp || 0);
 
-  // Detectar cuando el HP baja para activar animación
+  // Detectar cuando el HP cambia para activar animaciones
   useEffect(() => {
-    if (pokemon && prevHp > pokemon.hp) {
+    if (!pokemon) return;
+    const currentHp = pokemon.hp;
+    const previousHp = hpRef.current;
+    hpRef.current = currentHp;
+
+    if (previousHp > currentHp) {
       setIsDamaged(true);
-      // Remover la clase después de la animación
       const timer = setTimeout(() => setIsDamaged(false), 800);
       return () => clearTimeout(timer);
     }
-    setPrevHp(pokemon?.hp || 0);
-  }, [pokemon?.hp, prevHp, pokemon]);
+    if (previousHp < currentHp) {
+      setIsHealed(true);
+      const timer = setTimeout(() => setIsHealed(false), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [pokemon?.hp, pokemon]);
 
   if (!pokemon) return null;
 
@@ -312,7 +321,7 @@ function PokemonInfoPanel({
         <div className="hp-label">HP</div>
         <div className="hp-bar-bg">
           <div
-            className={`hp-bar-fill ${isDamaged ? 'damaged' : ''}`}
+            className={`hp-bar-fill ${isDamaged ? 'damaged' : ''} ${isHealed ? 'healed' : ''}`}
             style={{
               width: `${hpPercent}%`,
               backgroundColor: hpColor
@@ -1107,6 +1116,7 @@ export default function Battle({ roomCode }: BattleProps) {
   const lowHealthAudioRef = useRef<HTMLAudioElement | null>(null);
   const battleIntroAudioRef = useRef<HTMLAudioElement | null>(null);
   const battleLoopAudioRef = useRef<HTMLAudioElement | null>(null);
+  const healAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const attackAudio = new Audio('/assets/music/SUPER SMASH BROS ULTIMATE - Sound Effect.mp3');
@@ -1121,6 +1131,10 @@ export default function Battle({ roomCode }: BattleProps) {
     lowHealthAudio.volume = 0.4;
     lowHealthAudio.loop = true;
     lowHealthAudioRef.current = lowHealthAudio;
+
+    const healAudio = new Audio('/assets/sounds/Curar.mp3');
+    healAudio.volume = 0.5;
+    healAudioRef.current = healAudio;
 
     const battleIntro = new Audio('/assets/music/IntroBatle.mp3');
     battleIntro.volume = 0.3;
@@ -1144,6 +1158,8 @@ export default function Battle({ roomCode }: BattleProps) {
       victoryAudio.src = '';
       lowHealthAudio.pause();
       lowHealthAudio.src = '';
+      healAudio.pause();
+      healAudio.src = '';
       battleIntro.removeEventListener('ended', onIntroEnd);
       battleIntro.pause();
       battleIntro.src = '';
@@ -1162,6 +1178,14 @@ export default function Battle({ roomCode }: BattleProps) {
 
   const playVictorySound = useCallback(() => {
     const audio = victoryAudioRef.current;
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+    }
+  }, []);
+
+  const playHealSound = useCallback(() => {
+    const audio = healAudioRef.current;
     if (audio) {
       audio.currentTime = 0;
       audio.play().catch(() => {});
@@ -1367,6 +1391,15 @@ export default function Battle({ roomCode }: BattleProps) {
 
           // Animación de ataque
           playAttackSound();
+
+          // Detectar si el atacante recuperó HP (drenaje o movimiento curativo)
+          const attackerPreviousHp = isP1Action
+            ? battleState?.player1.activePokemon.hp
+            : battleState?.player2.activePokemon.hp;
+          if ((message.data.attackerHp ?? 0) > (attackerPreviousHp ?? 0)) {
+            playHealSound();
+          }
+
           setAttackingPlayer(message.data.playerId as 'player1' | 'player2');
           setTimeout(() => setAttackingPlayer(null), 400);
 

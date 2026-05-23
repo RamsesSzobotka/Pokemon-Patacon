@@ -342,6 +342,15 @@
   animation: hp-flash 0.3s steps(3);
 }
 
+.hp-bar-fill.healed {
+  animation: hp-heal-glow 0.4s steps(3);
+}
+
+@keyframes hp-heal-glow {
+  0%, 100% { opacity: 1; filter: brightness(1); }
+  50% { opacity: 1; filter: brightness(1.6) drop-shadow(0 0 4px #48D048); }
+}
+
 @keyframes hp-flash {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
