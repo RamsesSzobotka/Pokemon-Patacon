@@ -16,35 +16,62 @@ export const CoinFlipAnimation: React.FC<CoinFlipAnimationProps> = ({
 }) => {
   const [phase, setPhase] = useState<'flipping' | 'result' | 'done'>('flipping');
   const [showResult, setShowResult] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    // Fase 1: Animación de lanzamiento (2 segundos)
-    const flipTimer = setTimeout(() => {
+    const audio = new Audio('/assets/sounds/CoinFlip.mp3');
+    audio.volume = 0.8;
+    audioRef.current = audio;
+    // play but ignore errors (autoplay may be blocked)
+    audio.play().catch(() => {});
+
+    // no-ended handling: we announce based on time after video starts
+
+    const videoTimer = setTimeout(() => {
+      setShowVideo(true);
+    }, 300);
+
+    // Fallback: if autoplay blocked or something goes wrong, announce after 5s
+    const safetyTimer = setTimeout(() => {
+      setShowVideo(true);
       setPhase('result');
       setShowResult(true);
-    }, 2000);
+    }, 5000);
 
-    return () => clearTimeout(flipTimer);
+    return () => {
+      clearTimeout(videoTimer);
+      clearTimeout(safetyTimer);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
     if (phase === 'result') {
-      // Fase 2: Mostrar resultado (2 segundos)
+      // Fase 2: Mostrar resultado (800ms)
       const resultTimer = setTimeout(() => {
         setPhase('done');
         onAnimationComplete();
-      }, 2000);
+      }, 800);
 
       return () => clearTimeout(resultTimer);
     }
   }, [phase, onAnimationComplete]);
 
-  const handleVideoEnded = () => {
-    // Cuando el video termina, mostrar la imagen estática
-    setPhase('result');
-    setShowResult(true);
-  };
+  // Cuando el video empieza a mostrarse, esperar 2s y anunciar
+  useEffect(() => {
+    if (!showVideo) return;
+    const announceTimer = setTimeout(() => {
+      setPhase('result');
+      setShowResult(true);
+    }, 2000);
+    return () => clearTimeout(announceTimer);
+  }, [showVideo]);
 
   const firstPlayerName = firstPlayerId === 'player1' ? player1Name : player2Name;
 
@@ -54,14 +81,21 @@ export const CoinFlipAnimation: React.FC<CoinFlipAnimationProps> = ({
         {/* Moneda - video o imagen según fase */}
         <div className="coin">
           {phase === 'flipping' ? (
-            <video
-              ref={videoRef}
-              src={firstPlayerId === 'player1' ? '/assets/items/CoinJ1.mp4' : '/assets/items/CoinJ2.mp4'}
-              autoPlay
-              muted
-              onEnded={handleVideoEnded}
-              className="coin-video"
-            />
+            showVideo ? (
+              <video
+                ref={videoRef}
+                src={firstPlayerId === 'player1' ? '/assets/items/CoinJ1.mp4' : '/assets/items/CoinJ2.mp4'}
+                autoPlay
+                muted
+                className="coin-video"
+              />
+            ) : (
+              <img
+                src="/assets/items/coin.png"
+                alt="Coin"
+                className="coin-image"
+              />
+            )
           ) : (
             <img 
               src="/assets/items/coin.png" 

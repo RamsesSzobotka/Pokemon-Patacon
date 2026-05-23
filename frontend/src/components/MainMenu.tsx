@@ -4,6 +4,7 @@ import { socket, connect, getSessionId, isConnected, getCurrentRoom } from '../w
 import { useAuthSession } from '../hooks/useAuthSession';
 import { useAuth } from '@clerk/clerk-react';
 import StoreModal from './StoreModal';
+import { useNotification } from './NotificationProvider';
 import { PokemonSlotAnimation } from './battle/PokemonSlotAnimation';
 import { resolveFrontSprite } from '../utils/spriteResolver';
 import '../styles/MainMenu.css';
@@ -24,6 +25,7 @@ const getRandomBackground = () => {
 
 const MainMenu: React.FC = () => {
   const router = useRouter();
+  const { notify } = useNotification();
   const [backgroundImage] = useState<string>(() => getRandomBackground());
   const [screen, setScreen] = useState<'menu' | 'create' | 'join'>('menu');
   // Inicializar playerName desde localStorage (persiste entre sesiones y
@@ -266,9 +268,8 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
     // Error del servidor
     unsubscribes.push(socket.on('error', (data) => {
       console.error('[MainMenu] Server error:', data);
-      // El mensaje puede ser un string o un objeto con propiedad message
       const errorMessage = typeof data === 'string' ? data : (data?.message || 'Error del servidor');
-      alert(`❌ ${errorMessage}`);
+      notify(`❌ ${errorMessage}`, 'error');
       setLoading(false);
     }));
 
@@ -284,7 +285,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
   const handleCreateRoom = async () => {
     if (!isAuthenticated && !playerName.trim()) {
-      alert('Por favor ingresa tu nombre');
+      notify('Por favor ingresa tu nombre', 'error');
       return;
     }
 
@@ -312,7 +313,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
       if (!response.ok || !data.success) {
         console.error('[CreateRoom] Error response:', data);
-        alert(`❌ ${data.error || 'Error al crear la sala'}`);
+        notify(`❌ ${data.error || 'Error al crear la sala'}`, 'error');
         setLoading(false);
         return;
       }
@@ -329,18 +330,18 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
 
     } catch (error) {
       console.error('Error creating room:', error);
-      alert('❌ Error al crear la sala');
+      notify('❌ Error al crear la sala', 'error');
       setLoading(false);
     }
   };
 
   const handleJoinRoom = async () => {
     if (!isAuthenticated && !playerName.trim()) {
-      alert('Por favor ingresa tu nombre');
+      notify('Por favor ingresa tu nombre', 'error');
       return;
     }
     if (roomCode.length !== 6) {
-      alert('El código debe tener 6 caracteres');
+      notify('El código debe tener 6 caracteres', 'warning');
       return;
     }
 
@@ -365,7 +366,7 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
       const data = await response.json();
 
       if (!data.success) {
-        alert(`❌ ${data.error || 'Sala no encontrada o llena'}`);
+        notify(`❌ ${data.error || 'Sala no encontrada o llena'}`, 'error');
         setLoading(false);
         return;
       }
@@ -380,27 +381,27 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
       setIsHost(false);
       setPlayerNumber(data.player_number || 2);
 
-      alert(`✅ Te uniste a la sala ${data.code} como Jugador ${data.player_number}`);
+      notify(`✅ Te uniste a la sala ${data.code} como Jugador ${data.player_number}`, 'success');
 
     } catch (error) {
       console.error('Error joining room:', error);
-      alert('❌ Error al unirse a la sala');
+      notify('❌ Error al unirse a la sala', 'error');
       setLoading(false);
     }
   };
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(createdRoomCode);
-    alert('✅ Código copiado al portapapeles');
+    notify('✅ Código copiado al portapapeles', 'success');
   };
 
   const handleStartDraft = async () => {
     if (!opponentConnected) {
-      alert('❌ Necesitas un oponente conectado para iniciar');
+      notify('❌ Necesitas un oponente conectado para iniciar', 'warning');
       return;
     }
     if (!isConnected()) {
-      alert('❌ La conexión con la sala no está lista');
+      notify('❌ La conexión con la sala no está lista', 'error');
       return;
     }
 
@@ -435,9 +436,9 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
         const data = await resp.json();
         if (!cancelled) {
           if (data.success) {
-            alert('✅ Compra verificada: Shiny Pack desbloqueado');
+            notify('✅ Compra verificada: Shiny Pack desbloqueado', 'success');
           } else {
-            alert('⚠️ Compra no verificada: ' + (data.message || data.error || ''));
+            notify('⚠️ Compra no verificada: ' + (data.message || data.error || ''), 'warning');
           }
           // Limpiar querystring
           const url = new URL(window.location.href);

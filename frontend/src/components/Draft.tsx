@@ -4,6 +4,7 @@ import { resolveFrontSprite } from '../utils/spriteResolver';
 import { BackgroundMusic } from './BackgroundMusic';
 import { useParams, useRouter } from '@tanstack/react-router';
 import { socket, connect, isConnected, leaveRoom as wsLeaveRoom } from '../websocket';
+import { useNotification } from './NotificationProvider';
 import { PokemonType, MoveType } from '../types/game';
 import '../styles/Draft.css';
 
@@ -35,6 +36,7 @@ const Draft: React.FC<DraftProps> = ({ roomCode: propRoomCode, onExit, onBattleS
   const params = useParams({ from: '/draft/$roomCode' });
   const roomCode = propRoomCode || params.roomCode;
   const router = useRouter();
+  const { notify } = useNotification();
 
   // Estado para playerNumber e isHost (vienen del WebSocket)
   const [playerNumber, setPlayerNumber] = useState<number>(0);
@@ -198,7 +200,7 @@ const Draft: React.FC<DraftProps> = ({ roomCode: propRoomCode, onExit, onBattleS
         // Limpiar estado de sala
         sessionStorage.removeItem('patacon_room_code');
         // Mostrar mensaje y redirigir al menú
-        alert('El host abandonó la sala');
+        notify('El host abandonó la sala', 'warning');
         router.navigate({ to: '/' });
       }
     }));

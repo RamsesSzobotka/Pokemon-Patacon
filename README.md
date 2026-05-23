@@ -29,7 +29,7 @@ Pokémon Patacon es un videojuego de batallas Pokémon 1v1 en tiempo real basado
 
 3. **Espera a que los servicios se inicialicen:**
    - MongoDB se inicia primero
-   - Backend importa datos de PokeAPI (puede tomar 1-2 minutos la primera vez)
+   - Backend importa datos de PokeAPI (puede tomar 1-2 horas la primera vez dado a que se obtienen datos de 649 Pokémon y sus movimientos y se filtran para solo incluir los movimientos válidos)
    - Frontend se conecta automáticamente
 
 4. **Accede a la aplicación:**

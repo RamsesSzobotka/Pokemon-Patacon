@@ -1108,18 +1108,35 @@ export default function Battle({ roomCode }: BattleProps) {
 
   // Audio de ataque
   const attackAudioRef = useRef<HTMLAudioElement | null>(null);
+  const victoryAudioRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
-    const audio = new Audio('/assets/music/SUPER SMASH BROS ULTIMATE - Sound Effect.mp3');
-    audio.volume = 0.5;
-    attackAudioRef.current = audio;
+    const attackAudio = new Audio('/assets/music/SUPER SMASH BROS ULTIMATE - Sound Effect.mp3');
+    attackAudio.volume = 0.5;
+    attackAudioRef.current = attackAudio;
+
+    const victoryAudio = new Audio('/assets/sounds/Victory.mp3');
+    victoryAudio.volume = 0.7;
+    victoryAudioRef.current = victoryAudio;
+
     return () => {
-      audio.pause();
-      audio.src = '';
+      attackAudio.pause();
+      attackAudio.src = '';
+      victoryAudio.pause();
+      victoryAudio.src = '';
     };
   }, []);
 
   const playAttackSound = useCallback(() => {
     const audio = attackAudioRef.current;
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+    }
+  }, []);
+
+  const playVictorySound = useCallback(() => {
+    const audio = victoryAudioRef.current;
     if (audio) {
       audio.currentTime = 0;
       audio.play().catch(() => {});
@@ -1572,6 +1589,12 @@ export default function Battle({ roomCode }: BattleProps) {
       }
     }
   }, [lastMessage]);
+
+  useEffect(() => {
+    if (battleResultOverlay && battleResultOverlay.result !== 'draw') {
+      playVictorySound();
+    }
+  }, [battleResultOverlay, playVictorySound]);
   
   // Handlers
   const handleAttack = useCallback((moveId: number) => {

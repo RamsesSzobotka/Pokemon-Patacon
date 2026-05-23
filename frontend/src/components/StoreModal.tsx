@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import '../styles/Store.css';
+import { useNotification } from './NotificationProvider';
 
 interface Props {
   sessionId: string;
@@ -9,6 +10,7 @@ interface Props {
 
 export default function StoreModal({ sessionId, onClose }: Props) {
   const { getToken } = useAuth();
+  const { notify } = useNotification();
   const [loading, setLoading] = useState(false);
   const [owned, setOwned] = useState<boolean | null>(null);
   const { isSignedIn } = useAuth();
@@ -58,7 +60,7 @@ export default function StoreModal({ sessionId, onClose }: Props) {
 
       const data = await resp.json();
       if (!resp.ok || !data.url) {
-        alert('Error creating checkout session');
+        notify('Error creating checkout session', 'error');
         setLoading(false);
         return;
       }
@@ -67,7 +69,7 @@ export default function StoreModal({ sessionId, onClose }: Props) {
       window.location.href = data.url;
     } catch (err) {
       console.error('Store error:', err);
-      alert('Error iniciando compra');
+      notify('Error iniciando compra', 'error');
       setLoading(false);
     }
   };
