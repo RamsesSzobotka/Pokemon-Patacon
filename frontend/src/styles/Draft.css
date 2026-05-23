@@ -121,6 +121,50 @@
   50% { opacity: 0.5; }
 }
 
+.shiny-toggle-btn {
+  background: var(--ruby-panel-dark);
+  border: 2px solid var(--ruby-border);
+  border-radius: 0;
+  width: 32px;
+  height: 32px;
+  padding: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s steps(2);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+.shiny-toggle-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--ruby-text-light);
+  transition: all 0.15s steps(2);
+}
+
+.shiny-toggle-btn:hover {
+  border-color: var(--ruby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+.shiny-toggle-btn.active {
+  border-color: var(--ruby-gold);
+  background: rgba(255, 215, 0, 0.15);
+  animation: draft-shiny-pulse 1.5s ease-in-out infinite;
+}
+
+.shiny-toggle-btn.active svg {
+  fill: var(--ruby-gold);
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
+}
+
+@keyframes draft-shiny-pulse {
+  0%, 100% { box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4), 0 0 6px rgba(255, 215, 0, 0.2); }
+  50% { box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4), 0 0 12px rgba(255, 215, 0, 0.4); }
+}
+
 .exit-btn {
   background: var(--ruby-red);
   color: var(--ruby-white);
@@ -388,11 +432,58 @@
   min-height: 0;
 }
 
+.preview-sprite-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
 .preview-sprite {
   width: 110px;
   height: 110px;
   image-rendering: pixelated;
   object-fit: contain;
+}
+
+.preview-shiny-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--ruby-panel-dark);
+  border: 2px solid var(--ruby-border);
+  border-radius: 0;
+  width: 26px;
+  height: 26px;
+  padding: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s steps(2);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+  z-index: 2;
+}
+
+.preview-shiny-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: var(--ruby-text-light);
+  transition: all 0.15s steps(2);
+}
+
+.preview-shiny-btn:hover {
+  border-color: var(--ruby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+.preview-shiny-btn.active {
+  border-color: var(--ruby-gold);
+  background: rgba(255, 215, 0, 0.15);
+}
+
+.preview-shiny-btn.active svg {
+  fill: var(--ruby-gold);
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
 }
 
 .selected-preview-visual h3 {

@@ -92,6 +92,52 @@
   text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
 }
 
+/* Shiny toggle button */
+.shiny-toggle-btn {
+  background: var(--ruby-panel-dark);
+  border: 2px solid var(--ruby-border);
+  border-radius: 0;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s steps(2);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+  margin-left: auto;
+}
+
+.shiny-toggle-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--ruby-text-light);
+  transition: all 0.15s steps(2);
+}
+
+.shiny-toggle-btn:hover {
+  border-color: var(--ruby-gold);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+.shiny-toggle-btn.active {
+  border-color: var(--ruby-gold);
+  background: rgba(255, 215, 0, 0.15);
+  animation: shiny-pulse 1.5s ease-in-out infinite;
+}
+
+.shiny-toggle-btn.active svg {
+  fill: var(--ruby-gold);
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
+}
+
+@keyframes shiny-pulse {
+  0%, 100% { box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4), 0 0 6px rgba(255, 215, 0, 0.2); }
+  50% { box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4), 0 0 12px rgba(255, 215, 0, 0.4); }
+}
+
 /* Filters Panel */
 .filters-panel {
   background: var(--ruby-panel);

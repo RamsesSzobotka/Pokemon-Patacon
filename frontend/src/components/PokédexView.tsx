@@ -30,6 +30,8 @@ const PokédexView: React.FC = () => {
   const [pokemon, setPokemon] = useState<PokemonType[]>([]);
   const { shinyPack } = useAuthSession();
 
+  const [showShiny, setShowShiny] = useState(false);
+
   const getOwnerShiny = (pokemonObj: any) => {
     return (pokemonObj?.owner_shiny ?? pokemonObj?.owner?.shiny_pack ?? false) as boolean;
   };
@@ -181,6 +183,17 @@ const PokédexView: React.FC = () => {
               ◀
             </button>
             <span className="filters-title">POKÉDEX</span>
+            {shinyPack && (
+              <button
+                className={`shiny-toggle-btn ${showShiny ? 'active' : ''}`}
+                onClick={() => setShowShiny(!showShiny)}
+                title={showShiny ? 'Mostrar normal' : 'Mostrar shiny'}
+              >
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+              </button>
+            )}
           </div>
 
         {/* Búsqueda */}
@@ -347,7 +360,7 @@ const PokédexView: React.FC = () => {
               >
                 <div className="pokemon-sprite">
                   <img
-                    src={resolveFrontSprite(poke.sprites, getOwnerShiny(poke) || shinyPack, poke.pokeapi_id)}
+                    src={resolveFrontSprite(poke.sprites, getOwnerShiny(poke) || (shinyPack && showShiny), poke.pokeapi_id)}
                     alt={poke.name}
                     className="sprite-img"
                     onError={(e) => {
@@ -443,7 +456,7 @@ const PokédexView: React.FC = () => {
               {/* Sprite grande */}
               <div className="detail-sprite">
                 <img
-                  src={resolveFrontSprite(selectedPokemon.sprites, getOwnerShiny(selectedPokemon) || shinyPack, selectedPokemon.pokeapi_id)}
+                  src={resolveFrontSprite(selectedPokemon.sprites, getOwnerShiny(selectedPokemon) || (shinyPack && showShiny), selectedPokemon.pokeapi_id)}
                   alt={selectedPokemon.name}
                   onError={(e) => {
                     const img = e.target as HTMLImageElement;

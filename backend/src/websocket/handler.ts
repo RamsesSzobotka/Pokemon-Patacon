@@ -610,7 +610,9 @@ async function handleDraftPick(
   try {
     const user = await getUserBySessionId(sessionId);
     if (user) {
-      pokemonWithOwner.owner_shiny = !!user.shiny_pack;
+      // Respetar la elección del cliente (owner_shiny), pero validar que tenga el paquete
+      const clientShiny = pokemon.owner_shiny;
+      pokemonWithOwner.owner_shiny = clientShiny === true ? !!user.shiny_pack : false;
       pokemonWithOwner.owner = { session_id: sessionId, clerk_user_id: user.clerk_user_id, shiny_pack: !!user.shiny_pack };
     }
   } catch (e) {
@@ -704,11 +706,16 @@ async function handleDraftPicks(sessionId: string, roomCode: string): Promise<vo
   const mapWithOwner = async (arr: any[], ownerSession?: string | null) => {
     if (!arr || arr.length === 0) return [];
     const user = ownerSession ? await getUserBySessionId(ownerSession) : null;
-    return arr.map(p => ({
-      ...p,
-      owner_shiny: user ? !!user.shiny_pack : undefined,
-      owner: user ? { session_id: ownerSession, clerk_user_id: user.clerk_user_id, shiny_pack: !!user.shiny_pack } : undefined
-    }));
+    const hasShinyPack = user ? !!user.shiny_pack : false;
+    return arr.map(p => {
+      // Respetar stored owner_shiny, pero validar que tenga el paquete
+      const storedShiny = p.owner_shiny;
+      return {
+        ...p,
+        owner_shiny: storedShiny === true ? hasShinyPack : false,
+        owner: user ? { session_id: ownerSession, clerk_user_id: user.clerk_user_id, shiny_pack: hasShinyPack } : undefined
+      };
+    });
   };
 
   const [player1WithOwner, player2WithOwner] = await Promise.all([

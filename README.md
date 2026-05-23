@@ -1,10 +1,10 @@
-# 🎮 Pokémon Patacon - Battle Arena
+# 🎮 Pokémon Patacon - Liga Patacon
 
 [![Status](https://img.shields.io/badge/Status-En%20Desarrollo-yellow)](https://github.com)
-[![Version](https://img.shields.io/badge/Version-1.1-blue)](https://github.com)
+[![Version](https://img.shields.io/badge/Version-4.0-blue)](https://github.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-Pokémon Patacon es un videojuego de batallas Pokémon 1v1 en tiempo real basado en la **Generación V (Black/White)** con los **649 Pokémon** de Generaciones I-V. Diseñado para experiencia competitiva fluida con un sistema de batallas basado en prioridad de movimientos sin dependencia de velocidad.
+**Pokémon Patacon — Liga Patacon** es un videojuego de batallas Pokémon 1v1 en tiempo real basado en la **Generación V (Black/White)** con los **649 Pokémon** de Generaciones I-V. La **Liga Patacon** es una liga de combates Pokémon donde dos entrenadores se enfrentan en un sistema de draft competitivo para armar su equipo de 6 Pokémon y luego batallan hasta que uno de los dos se queda sin Pokémon. Diseñado para experiencia competitiva fluida con un sistema de batallas basado en prioridad de movimientos, estados alterados, movimientos de carga, fatiga y cambios de estadísticas.
 
 ---
 
@@ -19,7 +19,7 @@ Pokémon Patacon es un videojuego de batallas Pokémon 1v1 en tiempo real basado
 
 1. **Navega a la raíz del proyecto:**
    ```bash
-   cd "c:\Users\ramse\Documents\Universidad\Des_Software IX\Pokemon-Patacon"
+   cd "ruta de carpetas/Pokemon-Patacon"
    ```
 
 2. **Construye e inicia los contenedores:**
@@ -72,10 +72,17 @@ Pokémon Patacon permite que dos jugadores compitan en batallas **1v1 simultáne
 - Máximo 1 legendario por equipo
 - Sin Pokémon duplicados en equipo
 
-✅ **Batallas Basadas en Prioridad**
-- No usa estadística de velocidad
-- Sistema de prioridad de movimientos
-- CoinFlip para casos de empate
+✅ **Batallas Tácticas por Prioridad**
+- Sistema de prioridad de movimientos + CoinFlip para desempates
+- Estados alterados (quemadura, envenenamiento, parálisis, sueño, congelación, confusión)
+- Movimientos de 2 turnos (Solar Beam, Hyper Beam, etc.) y sistema de fatiga
+- Cambios de estadísticas (buffs/debuffs)
+- Más de **400 movimientos** implementados
+
+✅ **Personalización**
+- Sprites Shiny para usuarios con Shiny Pack (Pokédex, Draft, Batalla)
+- Tienda integrada con Shiny Pack
+- Autenticación con Clerk (Google OAuth, email)
 
 ---
 
@@ -165,54 +172,48 @@ Daño = (((2×55 + 0.2) / 100) × 90 × 2.0 + 2) × 1.0 = ~200 daño
 
 | Versión | Descripción | Estado |
 |---------|------------|--------|
-| **V1 (Core)** | Cálculo de daño y tipo. Movimientos de todo tipo disponibles pero muchos solo hacen daño | ✅ Implementado |
-| **V2 (Estados)** | Estados (quemadura, envenenamiento, parálisis, sueño, congelación, confusión) | 🔄 En desarrollo |
-| **V3 (2 Turnos)** | Movimientos de carga (Solar Beam, Hyper Beam) y fatiga | 🔄 En desarrollo |
-| **V4 (Stats)** | Cambios de estadísticas (buffs/debuffs) | ⏳ Pendiente |
+| **V1 (Core)** | Cálculo de daño y tipo. Movimientos de todo tipo disponibles | ✅ Implementado |
+| **V2 (Estados)** | Estados (quemadura, envenenamiento, parálisis, sueño, congelación, confusión) con daño por estado al final del turno | ✅ Implementado |
+| **V3 (2 Turnos)** | Movimientos de carga (Solar Beam, Hyper Beam, Fly, Dig) y sistema de fatiga | ✅ Implementado |
+| **V4 (Stats)** | Cambios de estadísticas (buffs/debuffs) con movimientos como Swords Dance, Dragon Dance | ✅ Implementado |
 
 ---
 
 ## 📊 Fuente de Datos
 
+### Pokémon Liga Patacon
+
+**Pokémon Patacon** simula una **Liga Pokémon** donde dos entrenadores compiten para demostrar quién es el mejor. El nombre "Patacon" hace referencia a un plato típico latinoamericano, dando un toque divertido y único al proyecto.
+
+#### Datos del Juego
+
+| Dato | Valor |
+|------|-------|
+| **Pokémon disponibles** | 649 (Generaciones I-V, IDs 1-649) |
+| **Tipos soportados** | 18 (Normal, Fuego, Agua, Eléctrico, Planta, Hielo, Lucha, Veneno, Tierra, Volador, Psíquico, Bicho, Roca, Fantasma, Dragón, Siniestro, Acero, Hada) |
+| **Movimientos totales** | +400 movimientos con efectos implementados |
+| **Movimientos por Pokémon** | Pool válido de 4+ movimientos cada uno |
+| **Estadísticas por Pokémon** | HP, Ataque, Defensa, Ataque Especial, Defensa Especial, Velocidad |
+| **Pokémon Legendarios** | ~48 validados (Mew, Rayquaza, Dialga, etc.) — máximo 1 por equipo |
+| **Sprites** | Animados .gif de Black/White |
+| **Estados alterados** | Quemadura, envenenamiento, parálisis, sueño, congelación, confusión |
+
+
 ### PokeAPI v2
-El proyecto obtiene todos los datos de Pokémon de **[PokeAPI v2](https://pokeapi.co/)** - una API pública y gratuita que proporciona datos completos de Pokémon:
+El proyecto obtiene todos los datos de Pokémon de **[PokeAPI v2](https://pokeapi.co/)** - una API pública y gratuita que proporciona datos completos de Pokémon.
 
-- **649 Pokémon** (Generaciones I-V, IDs 1-649)
-- **Estadísticas:** HP, Ataque, Defensa, Ataque Especial, Defensa Especial, Velocidad
-- **Tipos:** Primario y secundario (18 tipos totales)
-- **Movimientos:** Pool válido de 4+ movimientos por Pokémon
-- **Sprites Animados:** .gif de Black/White para cada Pokémon
-- **Habilidades:** Habilidad normal e (opcional) habilidad oculta
-
-### Importación de Datos
-
-```typescript
-// Backend inicializa datos automáticamente al arrancar
-// src/services/dataImportService.ts
-├─ Verifica si MongoDB tiene datos
-├─ Si está vacío, importa de PokeAPI
-├─ Cachea datos localmente para mejor rendimiento
-└─ Valida tipos, movimientos y legitimidad de Pokémon
-```
-
-**Pokémon Legendarios:**
-- ~48 legendarios validados (Mew, Raikou, Rayquaza, Dialga, Palkia, Reshiram, Zekrom, Kyurem, etc.)
-- **Límite:** Máximo 1 legendario por equipo
-- Ver `docs/Pokedex/LEGENDARIOS.md` para lista completa
+Los datos se importan automáticamente al arrancar por primera vez (puede tomar 1-2 horas por los 649 Pokémon y sus movimientos) y se cachean en MongoDB(Sprites tomados de la Api no se guardan Sprites).
 
 ---
 
 ## 🔒 Limitaciones Conocidas
 
-### Batalla (V1)
+### Batalla
 
-⚠️ **NO IMPLEMENTADO EN V1:**
+⚠️ **NO IMPLEMENTADO:**
 - Estadísticas de velocidad: Se usa prioridad de movimiento + CoinFlip
-- Estados (quemadura, envenenamiento, etc.): Pendiente V2
-- Movimientos de carga: Pendiente V3
-- Cambios de estadísticas (buffs/debuffs): Pendiente V4
-- Habilidades activas: Solo se muestran, no tienen efecto (pendiente)
-- Ítem de sostén: No implementado
+- Habilidades pasivas por pokemon: No implementadas
+- Ítems de bolsa: No implementado
 - Tasa de crítico: Todos los ataques tienen tasa crítica 0%
 
 ### Sprites y Visuales
@@ -222,24 +223,16 @@ El proyecto obtiene todos los datos de Pokémon de **[PokeAPI v2](https://pokeap
 - Fallback automático a sprite PNG estático
 - Algunos sprites pueden tener diferencias visuales vs. juegos originales
 
-### Performance
-
-⚠️ **Limitaciones de Escala:**
-- MongoDB no está optimizada con índices para salas
-- Búsqueda lineal de salas por código (OK para MVP, requiere índice en producción)
-- Sin caché de sesiones en Redis
-
 ### Red y Conexión
 
 ⚠️ **Limitaciones de Conectividad:**
 - Sin reconexión automática en frontend (recarga manual si pierde conexión)
-- Timeout de sala: 30 minutos de inactividad
+- Timeout de sala: 30 segundos de inactividad(si un jugador se desconecta, la sala se cierra después de 30 segundos)
 - Sin persistencia de datos de batalla si el servidor cae
 
 ### Arquitectura
 
 ⚠️ **Limitaciones Técnicas:**
-- Sin autenticación de usuario (acceso anónimo total)
 - Sin historial de batallas persistido
 - Sin sistema de rating/ELO
 - Sin matchmaking automático
@@ -265,7 +258,7 @@ Pokemon-Patacon/
 │   ├── package.json           # Dependencias
 │   └── env.example            # Variables de entorno
 │
-├── frontend/                   # React + Vite
+├── frontend/                   # TanStackStart + React + Vite
 │   ├── src/
 │   │   ├── main.tsx           # Entry point
 │   │   ├── App.tsx            # Root component
@@ -290,7 +283,7 @@ Pokemon-Patacon/
 │
 ├── docker-compose.yml         # Orquestación de contenedores
 ├── README.md                  # Este archivo
-└── AGENT.md                   # Configuración de agentes
+└── AGENT.md                   # PRD y detalles de desarrollo
 ```
 
 ---
@@ -371,11 +364,17 @@ Ver `docs/architecture/WEBSOCKET_PROTOCOL.md` para protocolo completo.
 
 ## 🐛 Conocidos y Reportados
 
-### V1
-- ✅ Sistema de batalla core funcional
+### V4 Actual
+- ✅ Sistema de batalla core funcional (V1-V4)
+- ✅ Estados alterados (quemadura, envenenamiento, parálisis, sueño, congelación, confusión)
+- ✅ Movimientos de 2 turnos y fatiga
+- ✅ Cambios de estadísticas (buffs/debuffs)
 - ✅ Draft alternado funcional
 - ✅ Sincronización WebSocket en tiempo real
 - ✅ Importación de datos PokeAPI
+- ✅ Autenticación con Clerk
+- ✅ Tienda y Shiny Pack
+- ✅ Sprites Shiny en Pokédex, Draft y Batalla
 - ⚠️ Algunos sprites sin animación (fallback a PNG)
 
 Ver `docs/Error/ERRORES_DESARROLLO.md` para historial completo de bugs encontrados y solucionados.
@@ -419,47 +418,27 @@ MONGODB_DB_NAME=pokemon-patacon
 CORS_ORIGIN=http://localhost:5173
 POKEAPI_BASE_URL=https://pokeapi.co/api/v2
 POKEAPI_TIMEOUT=10000
-CLERK_SECRET_KEY=sk_test_xxxxx
-CLERK_JWT_ISSUER=https://xxxxx.clerk.accounts.dev
+CLERK_SECRET_KEY=xxxxxxxxxx
+CLERK_JWT_ISSUER=xxxxxxxxxxx
 ```
 
 ### Frontend (`frontend/.env`)
 ```env
 VITE_API_BASE_URL=http://localhost:3000
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxxxx
+VITE_CLERK_PUBLISHABLE_KEY=xxxxxxxxxxxx
 ```
 
 ---
 
 ## 🎯 Roadmap Futuro
 
-### Fase 2 (V2 - Estados)
-- [ ] Sistema de estados (quemadura, envenenamiento, etc.)
-- [ ] Daño por estado al final del turno
-- [ ] Movimientos que aplican estado
-
-### Fase 3 (V3 - Movimientos de Carga)
-- [ ] Movimientos de 2 turnos (Solar Beam, Hyper Beam)
-- [ ] Sistema de fatiga
-- [ ] Movimientos con preparación
-
-### Fase 4 (V4 - Estadísticas)
-- [ ] Cambios de stats (buffs/debuffs)
-- [ ] Movimientos de solo stats (Swords Dance, Dragon Dance)
-- [ ] Habilidades activas
-
-### Fase 5+ (Futuro)
+### Próximas Versiones
+- [ ] Ítems de bolsa
+- [ ] Sistema de críticos
 - [ ] Sistema de rating/ELO
 - [ ] Matchmaking automático
 - [ ] Historial de batallas
-- [ ] Chat en vivo
-- [ ] Campeonatos
-
----
-
-## 📄 Licencia
-
-Este proyecto está bajo licencia MIT. Ver `LICENSE` para más detalles.
+- [ ] Modo espectador
 
 ---
 
@@ -470,17 +449,9 @@ Este proyecto está bajo licencia MIT. Ver `LICENSE` para más detalles.
 - **Framework Backend:** [Hono](https://hono.dev/)
 - **Framework Frontend:** [React](https://react.dev/) + [TanStack](https://tanstack.com/)
 - **Runtime:** [Bun](https://bun.sh/)
-
----
-
-## 📞 Soporte
-
-Para reportar bugs o sugerir features:
-1. Abre un issue en el repositorio
-2. Describe el problema con pasos para reproducir
-3. Incluye logs del navegador y servidor si aplica
+- **Creador del Proyecto:** [Ramses Szobotka]
 
 ---
 
 **Última actualización:** 22 de mayo de 2026  
-**Estado:** En desarrollo activo - Fase 1 MVP
+**Estado:** En desarrollo activo — Core completo (V1-V4 implementado) V5+ en planificación.

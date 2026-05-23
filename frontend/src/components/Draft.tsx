@@ -48,9 +48,10 @@ const Draft: React.FC<DraftProps> = ({ roomCode: propRoomCode, onExit, onBattleS
 
   const [pokemonList, setPokemonList] = useState<PokemonType[]>([]);
   const { shinyPack } = useAuthSession();
+  const [selectedShiny, setSelectedShiny] = useState(false);
 
   const getOwnerShiny = (pokemonObj: any, isLocalOwner: boolean) => {
-    return (pokemonObj?.owner_shiny ?? pokemonObj?.owner?.shiny_pack ?? (isLocalOwner ? shinyPack : false)) as boolean;
+    return (pokemonObj?.owner_shiny ?? pokemonObj?.owner?.shiny_pack ?? (isLocalOwner ? selectedShiny : false)) as boolean;
   };
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonType | null>(null);
@@ -424,6 +425,7 @@ const Draft: React.FC<DraftProps> = ({ roomCode: propRoomCode, onExit, onBattleS
     }
 
     setSelectedPokemon(pokemon);
+    setSelectedShiny(shinyPack);
   };
 
   /**
@@ -450,7 +452,7 @@ const Draft: React.FC<DraftProps> = ({ roomCode: propRoomCode, onExit, onBattleS
       is_legendary: selectedPokemon.is_legendary,
       selected_moves: selectedMoves,
       sprites: selectedPokemon.sprites,
-      owner_shiny: shinyPack,
+      owner_shiny: selectedShiny,
       owner: shinyPack ? { shiny_pack: true } : undefined
     };
 
@@ -617,15 +619,28 @@ const Draft: React.FC<DraftProps> = ({ roomCode: propRoomCode, onExit, onBattleS
             <div className="selected-preview">
               <div className="selected-preview-top">
                 <div className="selected-preview-visual">
-                  <img
-                    src={resolveFrontSprite(selectedPokemon.sprites, getOwnerShiny(selectedPokemon, false) || shinyPack, selectedPokemon.pokeapi_id) || getSpriteUrl(selectedPokemon.pokeapi_id)}
-                    alt={selectedPokemon.name}
-                    className="preview-sprite"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = selectedPokemon.sprites.static_front_default || getSpriteUrl(selectedPokemon.pokeapi_id);
-                    }}
-                  />
+                  <div className="preview-sprite-wrapper">
+                    <img
+                      src={resolveFrontSprite(selectedPokemon.sprites, getOwnerShiny(selectedPokemon, false) || selectedShiny, selectedPokemon.pokeapi_id) || getSpriteUrl(selectedPokemon.pokeapi_id)}
+                      alt={selectedPokemon.name}
+                      className="preview-sprite"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = selectedPokemon.sprites.static_front_default || getSpriteUrl(selectedPokemon.pokeapi_id);
+                      }}
+                    />
+                    {shinyPack && (
+                      <button
+                        className={`preview-shiny-btn ${selectedShiny ? 'active' : ''}`}
+                        onClick={() => setSelectedShiny(!selectedShiny)}
+                        title={selectedShiny ? 'Usar sprite normal' : 'Usar sprite shiny'}
+                      >
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                   <h3>{selectedPokemon.name}</h3>
                   <span className={`legendary-badge ${selectedPokemon.is_legendary ? 'show' : ''}`}>
                     {selectedPokemon.is_legendary ? 'Legendario' : ''}
