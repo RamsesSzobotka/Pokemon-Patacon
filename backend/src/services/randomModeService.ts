@@ -25,7 +25,6 @@ interface PokemonData {
 export async function generateRandomTeam(): Promise<TeamMember[]> {
   const team: TeamMember[] = [];
   const usedPokemonIds = new Set<number>();
-  const legendaryIds = [144, 145, 146, 150, 243, 244, 245, 249, 250, 377, 378, 379, 380, 381, 382, 383, 384, 385, 386, 480, 481, 482, 483, 484, 485, 486, 487, 488, 491, 492];
   let legendaryUsed = false;
 
   const pokemonCollection = getPokemonCollection();
@@ -47,7 +46,7 @@ export async function generateRandomTeam(): Promise<TeamMember[]> {
     }
 
     // Verificar límite de legendarios (máximo 1)
-    if (legendaryIds.includes(randomId)) {
+    if (pokemon.is_legendary || pokemon.is_mythical) {
       if (legendaryUsed) continue;
       legendaryUsed = true;
     }

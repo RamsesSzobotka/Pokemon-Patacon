@@ -73,37 +73,10 @@ interface Pokemon {
 let movesCache: Map<number, Move> = new Map();
 
 const POKEAPI_BASE = process.env.POKEAPI_BASE_URL || 'https://pokeapi.co/api/v2';
+const POKEAPI_ASSETS = process.env.POKEAPI_ASSETS_URL || 'https://raw.githubusercontent.com/PokeAPI/sprites/master';
 
 // Pokémon válidos: Gen I-V (1-649) - Todas las generaciones
 const VALID_POKEMON_IDS = Array.from({ length: 649 }, (_, i) => i + 1);
-
-// 35 legendarios
-const LEGENDARY_IDS = [
-  144, 145, 146, // Birds (Gen I)
-  150, // Mewtwo (Gen I)
-  243, 244, 245, // Beasts (Gen II)
-  249, 250, // Lugia/Ho-Oh (Gen II)
-  377, 378, 379, // Titans (Gen III)
-  380, 381, // Lati@s (Gen III)
-  382, 383, 384, // Weather trio (Gen III)
-  385, 386, // Jirachi/Deoxys (Gen III)
-  480, 481, 482, // Lake guardians (Gen IV)
-  483, 484, // Dialga/Palkia (Gen IV)
-  485, 486, // Heatran/Regigigas (Gen IV)
-  487, 488, // Giratina/Cresselia (Gen IV)
-  491, 492 // Darkrai/Shaymin (Gen IV)
-];
-
-// 13 míticos
-const MYTHICAL_IDS = [
-  151, // Mew (Gen I)
-  251, // Celebi (Gen II)
-  385, // Jirachi (Gen III) - also legendary
-  386, // Deoxys (Gen III) - also legendary
-  489, 490, // Phione/Manaphy (Gen IV)
-  491, 492, // Darkrai/Shaymin (Gen IV) - also in legendary
-  493 // Arceus (Gen IV)
-];
 
 export class PokemonService {
   private inMemoryCache: Map<number, Pokemon> = new Map();
@@ -410,14 +383,14 @@ export class PokemonService {
       });
 
       const data = response.data;
-      const isLegendary = LEGENDARY_IDS.includes(id);
-      const isMythical = MYTHICAL_IDS.includes(id);
 
       // Obtener generación desde especies
       const speciesResponse = await axios.get(data.species.url, {
         timeout: 10000
       });
       const generation = this.extractGenerationNumber(speciesResponse.data.generation.url);
+      const isLegendary = speciesResponse.data.is_legendary === true;
+      const isMythical = speciesResponse.data.is_mythical === true;
 
       // Obtener movimientos (devuelve move_ids)
       const moveIds = await this.getValidMoves(data.moves);
@@ -440,8 +413,8 @@ export class PokemonService {
         is_mythical: isMythical,
         move_ids: moveIds,
         sprites: {
-          animated_gif: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif`,
-          static_png: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`
+          animated_gif: `${POKEAPI_ASSETS}/sprites/pokemon/versions/generation-v/black-white/animated/${id}.gif`,
+          static_png: `${POKEAPI_ASSETS}/sprites/pokemon/${id}.png`
         },
         height_dm: data.height,
         weight_hg: data.weight,

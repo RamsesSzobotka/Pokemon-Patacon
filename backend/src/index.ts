@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { connectDB, disconnectDB } from './db/mongodb';
+import { connectDB, disconnectDB, ensureTypeEffectivenessCache } from './db/mongodb';
 import { pokemonService } from './services/pokemonService';
 import { importAllData } from './services/dataImportService';
 import { initializeRoomsIndexes } from './db/rooms';
@@ -110,6 +110,9 @@ async function startServer() {
 
     // 3. Importar datos desde PokeAPI si no existen
     await importAllData();
+
+    // 3.5 Cargar cache de efectividad de tipos desde MongoDB
+    await ensureTypeEffectivenessCache();
 
     // 4. Inicializar servicio de Pokémon
     await pokemonService.initialize();

@@ -22,23 +22,14 @@ import {
   insertMovesBatch
 } from '../db/mongodb';
 
-const POKEAPI_BASE = 'https://pokeapi.co/api/v2';
+const POKEAPI_BASE = process.env.POKEAPI_BASE_URL || 'https://pokeapi.co/api/v2';
+const POKEAPI_ASSETS = process.env.POKEAPI_ASSETS_URL || 'https://raw.githubusercontent.com/PokeAPI/sprites/master';
 
 // IDs de tipos en PokeAPI (Gen V + Fairy)
 const TYPE_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 
 // Pokémons válidos: Gen I-V (1-649)
 const POKEMON_IDS = Array.from({ length: 649 }, (_, i) => i + 1);
-
-// 35 legendarios
-const LEGENDARY_IDS = [
-  144, 145, 146, 150, 243, 244, 245, 249, 250,
-  377, 378, 379, 380, 381, 382, 383, 384, 385, 386,
-  480, 481, 482, 483, 484, 485, 486, 487, 488, 491, 492
-];
-
-// 13 míticos
-const MYTHICAL_IDS = [151, 251, 385, 386, 489, 490, 491, 492, 493];
 
 interface ImportStats {
   types: { existing: number; imported: number };
@@ -238,8 +229,8 @@ async function importPokemonIfNeeded(): Promise<void> {
           cleaned += (moveIds.length - cleanMoveIds.length);
         }
 
-        const isLegendary = LEGENDARY_IDS.includes(pokeId);
-        const isMythical = MYTHICAL_IDS.includes(pokeId);
+        const isLegendary = speciesData.is_legendary === true;
+        const isMythical = speciesData.is_mythical === true;
 
         // Obtener sprites (incluir icons)
         const sprites = extractSprites(pokemonData.sprites, pokeId);
@@ -306,7 +297,7 @@ function extractSprites(sprites: any, pokeId: number): any {
     back_shiny_female: null,
     static_front_default: sprites.front_default || null,
     static_back_default: sprites.back_default || null,
-    icon: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokeId}.png`
+    icon: `${POKEAPI_ASSETS}/sprites/pokemon/${pokeId}.png`
   };
 }
 
