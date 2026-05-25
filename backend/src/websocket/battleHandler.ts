@@ -258,6 +258,7 @@ async function loadTeamMoves(team: any[], ownerSessionId?: string | null): Promi
       moveIds: moveIds,
       moves: battleMoves,
       ailments: [],
+      statStages: { attack: 0, defense: 0, spAttack: 0, spDefense: 0 },
       isCharging: false,
       cannotActNextTurn: false,
       hasFlinched: false,
@@ -319,6 +320,13 @@ function serializePokemon(pokemon: PokemonInBattle, includeMoves: boolean = true
       sprites: sprites,
       isFainted: pokemon.isFainted || false,
       ailments: ailments,
+      // Stat stages for buff/debuff indicators
+      statStages: pokemon.statStages ? {
+        attack: pokemon.statStages.attack,
+        defense: pokemon.statStages.defense,
+        spAttack: pokemon.statStages.spAttack,
+        spDefense: pokemon.statStages.spDefense
+      } : { attack: 0, defense: 0, spAttack: 0, spDefense: 0 },
       // V3: 2-Turn Moves and Fatigue state
       isChargingTwoTurn: pokemon.isChargingTwoTurn || false,
       chargePhase: pokemon.chargePhase || null,
@@ -813,6 +821,14 @@ async function executeTurn(roomCode: string, battle: BattleState): Promise<void>
       defenderName: result.defenderName,
       moveName: result.moveName
     };
+
+    // Incluir statChanges (with wasCapped) and statStages snapshot for frontend buff/debuff
+    if (result.statChanges && result.statChanges.length > 0) {
+      resultData.statChanges = result.statChanges;
+    }
+    if (result.statStages) {
+      resultData.statStages = result.statStages;
+    }
 
     // Agregar newPokemon si la acción es un cambio
     if (action.type === 'change' && result.newPokemon) {

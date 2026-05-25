@@ -503,7 +503,12 @@
 }
 
 .move-type {
-  font-size: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.move-type-icon {
+  image-rendering: pixelated;
 }
 
 .move-power {
@@ -1117,7 +1122,12 @@
 }
 
 .move-detail-type-icon {
-  font-size: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.move-detail-type-icon-img {
+  image-rendering: pixelated;
 }
 
 .move-detail-name {
@@ -1297,6 +1307,346 @@
 @keyframes slide-in-battle {
   0% { transform: translateX(100vw); }
   100% { transform: translateX(0); }
+}
+
+/* ============================================
+   STAT CHANGE ANIMATION (Buff/Debuff)
+   ============================================ */
+
+/* Buff animation - ascending particles, glow */
+@keyframes stat-buff-rise {
+  0% { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1); }
+  50% { opacity: 1; transform: translateY(-20px) scale(1.2); filter: brightness(1.5); }
+  100% { opacity: 0; transform: translateY(-40px) scale(0.8); filter: brightness(2); }
+}
+
+/* Debuff animation - descending particles, shake */
+@keyframes stat-debuff-fall {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  30% { transform: translateX(-4px); }
+  60% { transform: translateX(4px); }
+  100% { opacity: 0; transform: translateY(20px) scale(0.9); }
+}
+
+/* Particle floating animation */
+@keyframes stat-particle-float-up {
+  0% { opacity: 0.9; transform: translate(0, 0) scale(1); }
+  50% { opacity: 0.7; }
+  100% { opacity: 0; transform: translate(var(--particle-angle), calc(var(--particle-distance) * -1)) scale(0); }
+}
+
+@keyframes stat-particle-float-down {
+  0% { opacity: 0.9; transform: translate(0, 0) scale(1); }
+  50% { opacity: 0.7; }
+  100% { opacity: 0; transform: translate(var(--particle-angle), var(--particle-distance)) scale(0); }
+}
+
+/* Pulsing glow for active buffs */
+@keyframes stat-glow-pulse {
+  0%, 100% { box-shadow: 0 0 5px var(--stat-color, currentColor); }
+  50% { box-shadow: 0 0 20px var(--stat-color, currentColor), 0 0 30px var(--stat-color, currentColor); }
+}
+
+/* Arrow bounce for new changes */
+@keyframes stat-arrow-bounce {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Shake for debuffs */
+@keyframes debuff-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  50% { transform: translateX(5px); }
+  75% { transform: translateX(-3px); }
+}
+
+/* Stat Change Animation Container */
+.stat-change-animation {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+  overflow: visible;
+}
+
+.stat-change-animation.player {
+  /* Positioned relative to player sprite */
+}
+
+.stat-change-animation.enemy {
+  /* Positioned relative to enemy sprite */
+}
+
+/* Each stat change item (icon + arrow + sign) */
+.stat-change-item {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  animation: stat-arrow-bounce 0.4s ease-out forwards;
+  opacity: 0;
+  z-index: 22;
+  font-family: var(--font-pixel);
+}
+
+.stat-change-item.stat-buff {
+  animation-name: stat-buff-rise;
+  animation-duration: 1.2s;
+  animation-fill-mode: forwards;
+  color: var(--stat-color, #60CFFF);
+  text-shadow: 0 0 8px var(--stat-color, #60CFFF), 0 0 16px var(--stat-color, #60CFFF);
+}
+
+.stat-change-item.stat-debuff {
+  animation-name: stat-debuff-fall;
+  animation-duration: 1.2s;
+  animation-fill-mode: forwards;
+  color: var(--stat-color, #FF6040);
+}
+
+/* Position items differently based on sport position */
+.stat-change-animation.player .stat-change-item {
+  right: -10px;
+  top: 10%;
+}
+
+.stat-change-animation.enemy .stat-change-item {
+  left: -10px;
+  top: 10%;
+}
+
+.stat-change-item:nth-child(2) {
+  top: 40%;
+}
+
+.stat-change-item:nth-child(3) {
+  top: 70%;
+}
+
+/* Stat change icon (sword, shield, etc) */
+.stat-change-icon {
+  font-size: 16px;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+/* Arrow indicator (↑, ↑↑, ↓↓↓) */
+.stat-change-arrow {
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 1;
+  animation: stat-arrow-bounce 0.3s ease-out 0.1s both;
+}
+
+.stat-change-arrow.arrow-buff {
+  color: #60CFFF;
+}
+
+.stat-change-arrow.arrow-debuff {
+  color: #FF6040;
+}
+
+.stat-change-sign {
+  font-size: 8px;
+  opacity: 0.8;
+  line-height: 1;
+}
+
+/* Particles */
+.stat-change-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  opacity: 0;
+  z-index: 21;
+  pointer-events: none;
+}
+
+.stat-change-particle.buff-particle {
+  animation: stat-particle-float-up 0.8s ease-out forwards;
+  box-shadow: 0 0 4px currentColor;
+}
+
+.stat-change-particle.debuff-particle {
+  animation: stat-particle-float-down 0.8s ease-out forwards;
+}
+
+/* Glow overlay for buffs */
+.stat-buff-glow-overlay {
+  position: absolute;
+  inset: -20px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(96, 207, 255, 0.15) 0%, transparent 70%);
+  animation: stat-glow-pulse 0.6s ease-in-out 3;
+  pointer-events: none;
+  z-index: 19;
+}
+
+/* Shake overlay for debuffs */
+.stat-debuff-shake-overlay {
+  position: absolute;
+  inset: 0;
+  animation: debuff-shake 0.4s ease-in-out;
+  pointer-events: none;
+  z-index: 19;
+}
+
+/* Stronger animations for magnitude >= 3 */
+.stat-change-animation.magnitude-strong .stat-change-item {
+  animation-duration: 1.5s;
+}
+
+.stat-change-animation.magnitude-strong .stat-change-particle {
+  width: 8px;
+  height: 8px;
+}
+
+.stat-change-animation.magnitude-strong .stat-buff-glow-overlay {
+  background: radial-gradient(circle, rgba(96, 207, 255, 0.25) 0%, transparent 70%);
+}
+
+/* Static flash for prefers-reduced-motion */
+.stat-change-static-flash {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-change-animation * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .stat-change-animation .stat-change-item {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .stat-change-static-flash {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 60%);
+    animation: none;
+    pointer-events: none;
+    z-index: 25;
+  }
+
+  .stat-buff-glow-overlay,
+  .stat-debuff-shake-overlay {
+    display: none !important;
+  }
+
+  .stat-change-particle {
+    display: none !important;
+  }
+}
+
+/* ============================================
+   STAT INDICATORS
+   ============================================ */
+
+/* ============================================
+   STAT INDICATORS (side panel layout)
+   Vertical column beside the HP panel, each
+   pointing toward center of the battle screen.
+   ============================================ */
+
+/* Slide-in animation */
+@keyframes stat-tab-slide {
+  0% { transform: translateY(4px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+/* Info wrappers - hold panel + side indicators in a row */
+.player-info-wrapper,
+.enemy-info-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+}
+
+/* Side container: vertical column */
+.stat-indicators-container.side-left,
+.stat-indicators-container.side-right {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 3px;
+  z-index: 5;
+}
+
+/* Each indicator item */
+.stat-indicators-container.side-left .stat-indicator-item,
+.stat-indicators-container.side-right .stat-indicator-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  font-size: 7px;
+  line-height: 1.2;
+  background: var(--ruby-panel);
+  border: 1.5px solid var(--ruby-border-light);
+  border-radius: 3px;
+  white-space: nowrap;
+  animation: stat-tab-slide 0.25s ease-out both;
+}
+
+.stat-indicator-buff {
+  color: #60CFFF;
+}
+
+.stat-indicator-debuff {
+  color: #FF6040;
+}
+
+.stat-indicator-icon {
+  font-size: 8px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.stat-indicator-arrows {
+  display: flex;
+  align-items: center;
+  margin-left: 1px;
+}
+
+.stat-indicator-arrows svg {
+  display: block;
+}
+
+.stat-indicator-value {
+  font-size: 6px;
+  font-weight: bold;
+  margin-left: 1px;
+  opacity: 0.9;
+}
+
+/* Stat-specific colors */
+.stat-indicator-attack { color: #ff6666; }
+.stat-indicator-attack.stat-indicator-debuff { color: #cc4444; }
+.stat-indicator-defense { color: #66aaff; }
+.stat-indicator-defense.stat-indicator-debuff { color: #4488cc; }
+.stat-indicator-spAttack { color: #cc66ff; }
+.stat-indicator-spAttack.stat-indicator-debuff { color: #9944cc; }
+.stat-indicator-spDefense { color: #66eeff; }
+.stat-indicator-spDefense.stat-indicator-debuff { color: #44bbcc; }
+
+/* Enemy: indicators left, panel right (pointing right → center) */
+.enemy-info-wrapper {
+  flex-direction: row;
+}
+
+/* Player: panel left, indicators right (pointing left → center) */
+.player-info-wrapper {
+  flex-direction: row;
 }
 
 /* ============================================

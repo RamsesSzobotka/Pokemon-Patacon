@@ -243,6 +243,7 @@ interface TypeDocument {
 }
 
 let typesCollection: Collection<TypeDocument> | null = null;
+let typeEffectivenessCache: Record<string, Record<string, number>> | null = null;
 
 export function getTypesCollection(): Collection<TypeDocument> {
   if (!typesCollection) {
@@ -265,6 +266,44 @@ export async function getTypeById(typeId: number): Promise<TypeDocument | null> 
 export async function getAllTypes(): Promise<TypeDocument[]> {
   const collection = getTypesCollection();
   return await collection.find({}).sort({ type_id: 1 }).toArray();
+}
+
+export async function loadTypeEffectivenessCache(): Promise<void> {
+  try {
+    const types = await getAllTypes();
+    const cache: Record<string, Record<string, number>> = {};
+
+    for (const type of types) {
+      const attackName = type.name.toLowerCase();
+      const relations: Record<string, number> = {};
+
+      for (const defender of type.damage_relations.to.double) {
+        relations[defender.toLowerCase()] = 2;
+      }
+      for (const defender of type.damage_relations.to.half) {
+        relations[defender.toLowerCase()] = 0.5;
+      }
+      for (const defender of type.damage_relations.to.immune) {
+        relations[defender.toLowerCase()] = 0;
+      }
+
+      cache[attackName] = relations;
+    }
+
+    typeEffectivenessCache = cache;
+    console.log(`✅ Cache de efectividad de tipos cargado (${Object.keys(cache).length} tipos)`);
+  } catch (error) {
+    console.error('❌ Error cargando cache de efectividad de tipos:', error);
+    typeEffectivenessCache = null;
+  }
+}
+
+export async function ensureTypeEffectivenessCache(): Promise<void> {
+  if (!typeEffectivenessCache) {
+    await loadTypeEffectivenessCache();
+  } else {
+    console.log('✅ Cache de efectividad de tipos ya cargado');
+  }
 }
 
 /**
@@ -317,6 +356,24 @@ function getEffectivenessFromCache(
   defenderTypes: string[]
 ): number {
   const attack = attackType.toLowerCase();
+
+  // Try DB-backed cache first
+  if (typeEffectivenessCache) {
+    const attackMap = typeEffectivenessCache[attack];
+    if (attackMap) {
+      let effectiveness = 1.0;
+      for (const defender of defenderTypes) {
+        const defenderName = defender.toLowerCase();
+        const modifier = attackMap[defenderName] ?? 1.0;
+        effectiveness *= modifier;
+      }
+      return effectiveness;
+    }
+    console.warn(`⚠️ Tipo de ataque desconocido en cache: ${attackType}`);
+    return 1.0;
+  }
+
+  // Fallback to hardcoded map when cache is not loaded
   const attackMap = TYPE_EFFECTIVENESS_MAP[attack];
   
   if (!attackMap) {

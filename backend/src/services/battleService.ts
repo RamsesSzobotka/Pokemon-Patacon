@@ -664,9 +664,9 @@ export function handleTwoTurnMove(
       attacker.evasiveChargeMove = move;
     }
     
-    // Verificar si es Skull Bash para aplicar +1 defensa temporal
+    // Verificar si es Skull Bash para aplicar +1 stage de defensa temporal
     if (move.moveId === 37) {  // Skull Bash moveId
-      attacker.defense += Math.floor(attacker.defense * 0.25); // +25% defensa
+      attacker.statStages.defense = Math.min(6, attacker.statStages.defense + 1);
     }
     
     // Construir mensaje de carga
@@ -791,9 +791,9 @@ export function handleTwoTurnMove(
   attacker.isEvasivelyCharging = false;
   attacker.evasiveChargeMove = null;
   
-  // Si era Skull Bash, restaurar defensa
+  // Si era Skull Bash, restaurar stage de defensa
   if (move.moveId === 37) {  // Skull Bash moveId
-    attacker.defense = Math.floor(attacker.defense / 1.25); // Revertir +25%
+    attacker.statStages.defense = Math.max(-6, attacker.statStages.defense - 1);
   }
   
   return {
@@ -885,16 +885,16 @@ export function calculateDamage(
   const level = BATTLE_CONFIG.LEVEL;
   const power = move.power;
   
-  // Determinar Attack y Defense según tipo de movimiento
+  // Determinar Attack y Defense según tipo de movimiento (con etapas de stats)
   let attack: number;
   let defense: number;
   
   if (move.damageClass === 'physical') {
-    attack = attacker.attack;
-    defense = defender.defense;
+    attack = getEffectiveStat(attacker.attack, attacker.statStages.attack);
+    defense = getEffectiveStat(defender.defense, defender.statStages.defense);
   } else {
-    attack = attacker.spAttack;
-    defense = defender.spDefense;
+    attack = getEffectiveStat(attacker.spAttack, attacker.statStages.spAttack);
+    defense = getEffectiveStat(defender.spDefense, defender.statStages.spDefense);
   }
   
   // Calcular STAB (Same Type Attack Bonus)
@@ -966,11 +966,17 @@ function getStatLabel(stat: BattleStatKey): string {
   }
 }
 
-function applyStatChange(pokemon: PokemonInBattle, stat: BattleStatKey, change: number): number {
-  const currentValue = pokemon[stat];
-  const nextValue = Math.max(1, currentValue + change);
-  pokemon[stat] = nextValue;
-  return nextValue - currentValue;
+function getEffectiveStat(baseStat: number, stage: number): number {
+  if (stage >= 0) return Math.floor(baseStat * (2 + stage) / 2);
+  return Math.floor(baseStat * 2 / (2 - stage));
+}
+
+function applyStatChange(pokemon: PokemonInBattle, stat: BattleStatKey, change: number): { applied: number; wasCapped: boolean } {
+  const currentStage = pokemon.statStages[stat];
+  const newStage = Math.max(-6, Math.min(6, currentStage + change));
+  pokemon.statStages[stat] = newStage;
+  const applied = newStage - currentStage;
+  return { applied, wasCapped: applied !== change };
 }
 
 function applyMoveStatChanges(
@@ -978,8 +984,8 @@ function applyMoveStatChanges(
   attacker: PokemonInBattle,
   defender: PokemonInBattle,
   defenderFainted: boolean
-): Array<{ stat: BattleStatKey; change: number; target: StatChangeTarget }> {
-  const results: Array<{ stat: BattleStatKey; change: number; target: StatChangeTarget }> = [];
+): Array<{ stat: BattleStatKey; change: number; target: StatChangeTarget; wasCapped: boolean }> {
+  const results: Array<{ stat: BattleStatKey; change: number; target: StatChangeTarget; wasCapped: boolean }> = [];
   const statChanges = move.meta?.statChanges || [];
 
   for (const change of statChanges) {
@@ -994,17 +1000,16 @@ function applyMoveStatChanges(
     }
 
     const targetPokemon = target === 'attacker' ? attacker : defender;
-    const appliedChange = applyStatChange(targetPokemon, mappedStat, change.change);
+    const result = applyStatChange(targetPokemon, mappedStat, change.change);
 
-    if (appliedChange === 0) {
-      continue;
+    if (result.applied !== 0 || result.wasCapped) {
+      results.push({
+        stat: mappedStat,
+        change: result.applied,
+        target,
+        wasCapped: result.wasCapped
+      });
     }
-
-    results.push({
-      stat: mappedStat,
-      change: appliedChange,
-      target
-    });
   }
 
   return results;
@@ -1154,8 +1159,14 @@ export function executeMove(
       statChanges: statChangeResults.map(change => ({
         stat: change.stat,
         change: change.change,
-        target: change.target
+        target: change.target,
+        wasCapped: change.wasCapped
       })),
+      // Full stat stages snapshot for frontend buff/debuff indicators
+      statStages: {
+        attacker: { ...attacker.statStages },
+        defender: { ...defender.statStages }
+      },
       attackerName: attacker.name,
       defenderName: defender.name,
       moveName: move.name
@@ -1312,8 +1323,14 @@ export function executeMove(
     statChanges: statChangeResults.map(change => ({
       stat: change.stat,
       change: change.change,
-      target: change.target
+      target: change.target,
+      wasCapped: change.wasCapped
     })),
+    // Full stat stages snapshot for frontend buff/debuff indicators
+    statStages: {
+      attacker: { ...attacker.statStages },
+      defender: { ...defender.statStages }
+    },
     // Información adicional para el frontend
     attackerName: attacker.name,
     defenderName: defender.name,
@@ -1468,6 +1485,12 @@ export function createPlayerBattleState(
     defense: pokemon.stats?.defense || 50,
     spAttack: pokemon.stats?.sp_attack || 50,
     spDefense: pokemon.stats?.sp_defense || 50,
+    statStages: {
+      attack: 0,
+      defense: 0,
+      spAttack: 0,
+      spDefense: 0,
+    },
     sprites: pokemon.sprites || { front_default: null, back_default: null, front_shiny: null, back_shiny: null },
     moveIds: pokemon.move_ids || pokemon.moveIds || [],
     moves: pokemon.moves || [],

@@ -118,12 +118,21 @@ export interface PokemonInBattle {
   spAttack: number;
   spDefense: number;
   
+  // Stat stages for buff/debuff system (-6 to +6)
+  statStages: {
+    attack: number;
+    defense: number;
+    spAttack: number;
+    spDefense: number;
+  };
+  
   // Sprites para visualización
   sprites: {
     front_default: string | null;
     back_default: string | null;
     front_shiny: string | null;
     back_shiny: string | null;
+    icon: string | null;
   };
   
   // Movimientos disponibles
@@ -210,7 +219,14 @@ export interface ActionResult {
     stat: string; 
     change: number; 
     target: 'attacker' | 'defender';
+    wasCapped?: boolean;
   }>;
+  
+  // Full stat stages snapshot after stat changes (for frontend buff/debuff indicators)
+  statStages?: {
+    attacker?: { attack: number; defense: number; spAttack: number; spDefense: number };
+    defender?: { attack: number; defense: number; spAttack: number; spDefense: number };
+  };
   
   // Fallo
   failed?: boolean;

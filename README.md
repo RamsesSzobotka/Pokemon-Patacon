@@ -449,6 +449,7 @@ VITE_CLERK_PUBLISHABLE_KEY=xxxxxxxxxxxx
 - **Framework Backend:** [Hono](https://hono.dev/)
 - **Framework Frontend:** [React](https://react.dev/) + [TanStack](https://tanstack.com/)
 - **Runtime:** [Bun](https://bun.sh/)
+- **TypeIcons:** https://github.com/partywhale/pokemon-type-icons/tree/main
 - **Creador del Proyecto:** [Ramses Szobotka]
 
 ---

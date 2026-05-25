@@ -13,6 +13,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { joinRoom } from '../../websocket';
 import { CoinFlipAnimation } from './CoinFlipAnimation';
+import { StatIndicators } from './StatIndicators';
+import { StatChangeAnimation } from './StatChangeAnimation';
 import './Battle.css';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import { resolveFrontSprite, resolveBackSprite } from '../../utils/spriteResolver';
@@ -62,6 +64,13 @@ interface BattlePokemon {
   isFatigued?: boolean;
   fatigueSource?: 'recharge' | 'exhaustion' | null;
   isEvasivelyCharging?: boolean;
+  // Stat stages for buff/debuff system (-6 to +6)
+  statStages: {
+    attack: number;
+    defense: number;
+    spAttack: number;
+    spDefense: number;
+  };
   // Owner metadata for shiny rendering
   owner_shiny?: boolean;
   owner?: {
@@ -98,6 +107,18 @@ interface BattleResultOverlay {
   result: 'win' | 'lose' | 'draw';
   title: string;
   subtitle: string;
+}
+
+type StatKey = 'attack' | 'defense' | 'spAttack' | 'spDefense';
+
+interface StatChangeAnimationState {
+  id: string;
+  pokemonPosition: 'player' | 'enemy';
+  stat: StatKey;
+  change: number;
+  totalStage: number;
+  isBuff: boolean;
+  timestamp: number;
 }
 
 // ============================================
@@ -471,15 +492,18 @@ function CommandPanel({
     return name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  // Función para obtener el tipo del movimiento
-  const getTypeIcon = (type: string | undefined): string => {
-    const typeIcons: Record<string, string> = {
-      normal: '⚪', fire: '🔥', water: '💧', electric: '⚡', grass: '🌿',
-      ice: '❄️', fighting: '👊', poison: '☠️', ground: '🪨', flying: '🐦',
-      psychic: '🔮', bug: '🐛', rock: '🪨', ghost: '👻', dragon: '🐉',
-      dark: '🌑', steel: '⚙️', fairy: '✨'
-    };
-    return typeIcons[type?.toLowerCase() || ''] || '⚪';
+  // Función para obtener el icono SVG del tipo
+  const getTypeIcon = (type: string | undefined): React.ReactNode => {
+    const t = type?.toLowerCase() || '';
+    return (
+      <img
+        src={`/assets/icons/${t}.svg`}
+        alt={t}
+        className="move-type-icon"
+        style={{ width: 14, height: 14, display: 'inline-block', verticalAlign: 'middle' }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
   };
 
   // Colores de tipos (semi-transparentes, igual que en la Pokédex)
@@ -712,14 +736,17 @@ function MoveDetailModal({
     return name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  const getTypeIcon = (type: string): string => {
-    const typeIcons: Record<string, string> = {
-      normal: '⚪', fire: '🔥', water: '💧', electric: '⚡', grass: '🌿',
-      ice: '❄️', fighting: '👊', poison: '☠️', ground: '🪨', flying: '🐦',
-      psychic: '🔮', bug: '🐛', rock: '🪨', ghost: '👻', dragon: '🐉',
-      dark: '🌑', steel: '⚙️', fairy: '✨'
-    };
-    return typeIcons[type?.toLowerCase()] || '⚪';
+  const getTypeIcon = (type: string): React.ReactNode => {
+    const t = type?.toLowerCase() || '';
+    return (
+      <img
+        src={`/assets/icons/${t}.svg`}
+        alt={t}
+        className="move-detail-type-icon-img"
+        style={{ width: 20, height: 20, display: 'inline-block', verticalAlign: 'middle' }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
   };
 
   return (
@@ -1219,6 +1246,9 @@ export default function Battle({ roomCode }: BattleProps) {
   const [battleResultOverlay, setBattleResultOverlay] = useState<BattleResultOverlay | null>(null);
   const lastAutoExecuteKeyRef = useRef<string | null>(null);
 
+  // Estado para animaciones de cambio de estadísticas
+  const [statAnimations, setStatAnimations] = useState<StatChangeAnimationState[]>([]);
+
   // Estado para modal de confirmación de rendición
   const [showSurrenderModal, setShowSurrenderModal] = useState(false);
 
@@ -1422,6 +1452,15 @@ export default function Battle({ roomCode }: BattleProps) {
             }, 400);
           }
 
+          // Track current statStages for animation triggering
+          const currentAttackerStages = { ...((isP1Action ? battleState.player1 : battleState.player2).activePokemon.statStages || { attack: 0, defense: 0, spAttack: 0, spDefense: 0 }) };
+          const currentDefenderStages = { ...((isP1Action ? battleState.player2 : battleState.player1).activePokemon.statStages || { attack: 0, defense: 0, spAttack: 0, spDefense: 0 }) };
+
+          // Update statStages from result snapshot if available
+          const resultStatStages = message.data.result?.statStages;
+          const newAttackerStages = resultStatStages?.attacker || currentAttackerStages;
+          const newDefenderStages = resultStatStages?.defender || currentDefenderStages;
+
           setBattleState(prev => {
             if (!prev) return null;
             return {
@@ -1430,7 +1469,8 @@ export default function Battle({ roomCode }: BattleProps) {
                 ...prev[isP1Action ? 'player1' : 'player2'],
                 activePokemon: {
                   ...(isP1Action ? prev.player1.activePokemon : prev.player2.activePokemon),
-                  hp: message.data.attackerHp
+                  hp: message.data.attackerHp,
+                  statStages: newAttackerStages
                 }
               },
               [defenderPlayerId]: {
@@ -1438,11 +1478,53 @@ export default function Battle({ roomCode }: BattleProps) {
                 activePokemon: {
                   ...prev[defenderPlayerId].activePokemon,
                   hp: defenderHp,
-                  isFainted: defenderHp <= 0
+                  isFainted: defenderHp <= 0,
+                  statStages: newDefenderStages
                 }
               }
             };
           });
+
+          // --- Trigger stat change animations ---
+          const incomingStatChanges = message.data.result?.statChanges;
+          if (Array.isArray(incomingStatChanges) && incomingStatChanges.length > 0) {
+            const newAnimations: StatChangeAnimationState[] = [];
+            const now = Date.now();
+
+            for (const sc of incomingStatChanges) {
+              if (!sc || sc.wasCapped) continue; // Skip capped changes for animation
+              const statKey = sc.stat as StatKey;
+              const isBuff = sc.change > 0;
+              // Determine target position
+              const targetPosition: 'player' | 'enemy' = sc.target === 'attacker'
+                ? (attackerPlayerId === 'player1' ? 'player' : 'enemy')
+                : (defenderPlayerId === 'player1' ? 'player' : 'enemy');
+
+              // Get the totalStage from the snapshot
+              const whoStages = sc.target === 'attacker' ? newAttackerStages : newDefenderStages;
+              const totalStage = (whoStages as any)?.[statKey] ?? Math.abs(sc.change);
+
+              newAnimations.push({
+                id: `stat-anim-${now}-${sc.stat}-${sc.target}`,
+                pokemonPosition: targetPosition,
+                stat: statKey,
+                change: sc.change,
+                totalStage,
+                isBuff,
+                timestamp: now,
+              });
+            }
+
+            if (newAnimations.length > 0) {
+              setStatAnimations(prev => [...prev, ...newAnimations]);
+              // Auto-remove after animation duration
+              const maxMag = Math.max(...newAnimations.map(a => Math.abs(a.change)), 1);
+              const duration = maxMag >= 3 ? 1700 : 1300;
+              setTimeout(() => {
+                setStatAnimations(prev => prev.filter(a => a.timestamp !== now));
+              }, duration);
+            }
+          }
 
           // Mostrar mensaje de resultado del ataque con secuencia narrativa
           const result = message.data.result;
@@ -1817,10 +1899,16 @@ export default function Battle({ roomCode }: BattleProps) {
           <>
             {/* Player 1: oponente arriba (de frente), jugador abajo (de espalda) */}
             <div className="enemy-position">
-              <PokemonInfoPanel
-                pokemon={opponentPokemon || null}
-                isPlayer={false}
-              />
+              <div className="enemy-info-wrapper">
+                <StatIndicators
+                  statStages={opponentPokemon?.statStages || { attack: 0, defense: 0, spAttack: 0, spDefense: 0 }}
+                  position="side-left"
+                />
+                <PokemonInfoPanel
+                  pokemon={opponentPokemon || null}
+                  isPlayer={false}
+                />
+              </div>
               <PokemonSprite
                 pokemon={opponentPokemon || null}
                 isPlayer={false}
@@ -1828,6 +1916,12 @@ export default function Battle({ roomCode }: BattleProps) {
                 showSprite={showPlayer2Sprite}
                 isAttacking={attackingPlayer === 'player2'}
                 isHit={hitPlayer === 'player2'}
+              />
+              <StatChangeAnimation
+                statChanges={statAnimations
+                  .filter(a => a.pokemonPosition === 'enemy')
+                  .map(a => ({ stat: a.stat, change: a.change, totalStage: a.totalStage, isBuff: a.isBuff }))}
+                position="enemy"
               />
             </div>
 
@@ -1840,9 +1934,21 @@ export default function Battle({ roomCode }: BattleProps) {
                 isAttacking={attackingPlayer === 'player1'}
                 isHit={hitPlayer === 'player1'}
               />
-              <PokemonInfoPanel
-                pokemon={myPokemon || null}
-                isPlayer={true}
+              <div className="player-info-wrapper">
+                <PokemonInfoPanel
+                  pokemon={myPokemon || null}
+                  isPlayer={true}
+                />
+                <StatIndicators
+                  statStages={myPokemon?.statStages || { attack: 0, defense: 0, spAttack: 0, spDefense: 0 }}
+                  position="side-right"
+                />
+              </div>
+              <StatChangeAnimation
+                statChanges={statAnimations
+                  .filter(a => a.pokemonPosition === 'player')
+                  .map(a => ({ stat: a.stat, change: a.change, totalStage: a.totalStage, isBuff: a.isBuff }))}
+                position="player"
               />
             </div>
           </>
@@ -1850,10 +1956,16 @@ export default function Battle({ roomCode }: BattleProps) {
           <>
             {/* Player 2: oponente arriba (de frente), jugador abajo (de espalda) - INVERTIDO */}
             <div className="enemy-position">
-              <PokemonInfoPanel
-                pokemon={opponentPokemon || null}
-                isPlayer={false}
-              />
+              <div className="enemy-info-wrapper">
+                <StatIndicators
+                  statStages={opponentPokemon?.statStages || { attack: 0, defense: 0, spAttack: 0, spDefense: 0 }}
+                  position="side-left"
+                />
+                <PokemonInfoPanel
+                  pokemon={opponentPokemon || null}
+                  isPlayer={false}
+                />
+              </div>
               <PokemonSprite
                 pokemon={opponentPokemon || null}
                 isPlayer={false}
@@ -1861,6 +1973,12 @@ export default function Battle({ roomCode }: BattleProps) {
                 showSprite={showPlayer1Sprite}
                 isAttacking={attackingPlayer === 'player1'}
                 isHit={hitPlayer === 'player1'}
+              />
+              <StatChangeAnimation
+                statChanges={statAnimations
+                  .filter(a => a.pokemonPosition === 'enemy')
+                  .map(a => ({ stat: a.stat, change: a.change, totalStage: a.totalStage, isBuff: a.isBuff }))}
+                position="enemy"
               />
             </div>
 
@@ -1873,9 +1991,21 @@ export default function Battle({ roomCode }: BattleProps) {
                 isAttacking={attackingPlayer === 'player2'}
                 isHit={hitPlayer === 'player2'}
               />
-              <PokemonInfoPanel
-                pokemon={myPokemon || null}
-                isPlayer={true}
+              <div className="player-info-wrapper">
+                <PokemonInfoPanel
+                  pokemon={myPokemon || null}
+                  isPlayer={true}
+                />
+                <StatIndicators
+                  statStages={myPokemon?.statStages || { attack: 0, defense: 0, spAttack: 0, spDefense: 0 }}
+                  position="side-right"
+                />
+              </div>
+              <StatChangeAnimation
+                statChanges={statAnimations
+                  .filter(a => a.pokemonPosition === 'player')
+                  .map(a => ({ stat: a.stat, change: a.change, totalStage: a.totalStage, isBuff: a.isBuff }))}
+                position="player"
               />
             </div>
           </>
@@ -1966,7 +2096,17 @@ export default function Battle({ roomCode }: BattleProps) {
 
 /**
  * Formatea mensajes legibles para cambios de estadística enviados por el servidor
- * statChanges: [{ stat, change, target }]
+ * statChanges: [{ stat, change, target, wasCapped }]
+ * 
+ * Spanish 3-tier template system:
+ *   +1: ¡{STAT} de {POKEMON} subió!
+ *   +2: ¡{STAT} de {POKEMON} subió mucho!
+ *   +3 to +6: ¡{STAT} de {POKEMON} subió muchísimo!
+ *   -1: ¡{STAT} de {POKEMON} bajó!
+ *   -2: ¡{STAT} de {POKEMON} bajó mucho!
+ *   -3 to -6: ¡{STAT} de {POKEMON} bajó muchísimo!
+ *   Capped +6: ¡{STAT} de {POKEMON} no puede subir más!
+ *   Capped -6: ¡{STAT} de {POKEMON} no puede bajar más!
  */
 function formatStatChangeMessages(statChanges: any[] | undefined, attackerPlayerId: string, defenderPlayerId: string, battleState: BattleState | null): string[] {
   if (!statChanges || !Array.isArray(statChanges) || statChanges.length === 0) return [];
@@ -1979,27 +2119,44 @@ function formatStatChangeMessages(statChanges: any[] | undefined, attackerPlayer
   };
 
   const messages: string[] = [];
-  const HUGE_THRESHOLD = 3; // Umbral por defecto: cambio absoluto >= 3 => "muchísimo"
 
   for (const ch of statChanges) {
     if (!ch || typeof ch.change !== 'number' || !ch.stat) continue;
 
     const label = STAT_LABELS[ch.stat] || ch.stat;
     const targetPlayerId = ch.target === 'attacker' ? attackerPlayerId : defenderPlayerId;
-    const pokemonName = battleState?.[targetPlayerId as keyof BattleState]?.activePokemon?.name || 'El Pokémon';
+    const playerData = targetPlayerId === 'player1' ? battleState?.player1 : targetPlayerId === 'player2' ? battleState?.player2 : undefined;
+    const pokemonName = playerData?.activePokemon?.name || 'El Pokémon';
     const magnitude = Math.abs(ch.change);
 
-    if (ch.change < 0) {
-      if (magnitude >= HUGE_THRESHOLD) {
-        messages.push(`${label} de ${pokemonName} ha bajado muchísimo.`);
-      } else {
-        messages.push(`${label} de ${pokemonName} ha disminuido.`);
+    // Handle capped (min/max border) messages
+    if (ch.wasCapped === true) {
+      if (ch.change > 0) {
+        messages.push(`¡${label} de ${pokemonName} no puede subir más!`);
+      } else if (ch.change < 0) {
+        messages.push(`¡${label} de ${pokemonName} no puede bajar más!`);
       }
-    } else if (ch.change > 0) {
-      if (magnitude >= HUGE_THRESHOLD) {
-        messages.push(`${label} de ${pokemonName} ha aumentado muchísimo.`);
+      continue;
+    }
+
+    // 3-tier template system
+    if (ch.change > 0) {
+      // Buff
+      if (magnitude >= 3) {
+        messages.push(`¡${label} de ${pokemonName} subió muchísimo!`);
+      } else if (magnitude === 2) {
+        messages.push(`¡${label} de ${pokemonName} subió mucho!`);
       } else {
-        messages.push(`${label} de ${pokemonName} ha aumentado.`);
+        messages.push(`¡${label} de ${pokemonName} subió!`);
+      }
+    } else if (ch.change < 0) {
+      // Debuff
+      if (magnitude >= 3) {
+        messages.push(`¡${label} de ${pokemonName} bajó muchísimo!`);
+      } else if (magnitude === 2) {
+        messages.push(`¡${label} de ${pokemonName} bajó mucho!`);
+      } else {
+        messages.push(`¡${label} de ${pokemonName} bajó!`);
       }
     }
   }
