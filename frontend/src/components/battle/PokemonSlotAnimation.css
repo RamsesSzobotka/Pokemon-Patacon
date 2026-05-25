@@ -1,12 +1,11 @@
 /* ============================================
-   🎮 POKÉMON PATACON - SLOT ANIMATION
-   Estilo Pixel Art - Pokémon Ruby (GBA)
+   POKEMON PATACON — SLOT ANIMATION
+   Estilo Pixel Art — GBA Ruby (Sistema)
    ============================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
 :root {
-  /* Paleta Ruby/GBA - Rojo */
   --ruby-bg: #0A1F3D;
   --ruby-red: #E31C2B;
   --ruby-red-dark: #8B1428;
@@ -22,247 +21,360 @@
   --font-pixel: 'Press Start 2P', 'Courier New', monospace;
 }
 
-/* Overlay contenedor */
-.slot-animation-overlay {
+/* Overlay */
+.slot-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  /* Fondo con partículas rojas */
-  background-image: 
-    linear-gradient(rgba(227, 28, 43, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(227, 28, 43, 0.02) 1px, transparent 1px);
+  background: linear-gradient(rgba(227, 28, 43, 0.02) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(227, 28, 43, 0.02) 1px, transparent 1px);
   background-size: 24px 24px;
+  background-color: #0a121c;
   animation: pixel-drift 20s linear infinite;
 }
 
 @keyframes pixel-drift {
-  0% { transform: translate(0, 0); }
+  0%   { transform: translate(0, 0); }
   100% { transform: translate(-24px, -24px); }
 }
 
-/* Contenedor principal */
-.slot-machine-container {
-  text-align: center;
-  max-width: 560px;
-  width: 100%;
-  padding: 36px 32px;
+/* Container — square corners, thick border, block shadow */
+.slot-container {
+  width: 620px;
+  max-width: 94vw;
   background: var(--ruby-panel);
   border: 4px solid var(--ruby-border-light);
   border-radius: 0;
+  padding: 28px 24px 20px;
   box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.6);
-  animation: card-appear 0.4s steps(4);
+  animation: card-appear 0.35s steps(4);
 }
 
 @keyframes card-appear {
-  from { 
-    opacity: 0; 
-    transform: translateY(16px); 
-  }
-  to { 
-    opacity: 1; 
-    transform: translateY(0); 
-  }
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Título */
+/* ===== HEADER ===== */
+.slot-header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
 .slot-title {
   font-family: var(--font-pixel);
+  font-size: 13px;
   color: var(--ruby-gold);
-  font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 2px;
-  margin-bottom: 24px;
   text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
-  animation: blink 1s steps(2) infinite;
+  animation: title-blink 1s steps(2) infinite;
+}
+
+@keyframes title-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.8; }
+}
+
+/* ===== STATUS BAR ===== */
+.slot-status {
+  text-align: center;
+  margin-bottom: 18px;
+  min-height: 20px;
+}
+
+.slot-status-text {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.slot-status-spinning {
+  color: var(--ruby-text-light);
+  animation: blink 0.6s steps(2) infinite;
+}
+
+.slot-status-stopping {
+  color: var(--ruby-red);
+}
+
+.slot-status-complete {
+  color: var(--hp-green);
 }
 
 @keyframes blink {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; }
+  50%      { opacity: 0.5; }
 }
 
-/* Contenedor de equipos */
-.slot-teams-container {
+/* ===== TEAMS LAYOUT ===== */
+.slot-teams {
   display: flex;
-  justify-content: space-around;
-  gap: 12px;
-  margin: 24px 0;
+  gap: 0;
+  align-items: stretch;
+  margin-bottom: 14px;
 }
 
-/* Sección de equipo */
-.slot-team-section {
+.slot-team-group {
   flex: 1;
-  background: var(--ruby-panel-dark);
-  border: 3px solid var(--ruby-border);
-  padding: 12px;
+  min-width: 0;
 }
 
-.slot-team-section.opponent {
-  border-color: var(--ruby-border-light);
-}
-
-/* Título del equipo */
-.slot-team-title {
+.slot-team-label {
   font-family: var(--font-pixel);
-  font-size: 9px;
-  color: var(--ruby-red);
+  font-size: 8px;
+  letter-spacing: 2px;
+  text-align: center;
+  margin-bottom: 8px;
+  padding: 4px 0;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 10px;
+  background: var(--ruby-panel-dark);
+  border: 2px solid var(--ruby-border);
 }
 
-.slot-team-section.opponent .slot-team-title {
+.player-label {
+  color: var(--ruby-red);
+  border-color: var(--ruby-red-dark);
+}
+
+.opponent-label {
   color: var(--ruby-text-light);
+  border-color: var(--ruby-border);
 }
 
-/* Reel */
-.slot-reel {
+/* Grid 3x2 */
+.slot-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 5px;
+}
+
+/* ===== SLOT CELL ===== */
+.slot-cell {
+  background: var(--ruby-panel-dark);
+  border: 2px solid var(--ruby-border);
+  border-radius: 0;
+  padding: 6px 4px;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+  transition: border-color 0.15s steps(2);
 }
 
-/* Slot individual */
-.slot-item {
-  width: 56px;
-  height: 64px;
+/* Spinning state */
+.slot-spinning {
+  border-color: var(--ruby-red-dark);
+  box-shadow: 2px 2px 0px rgba(227, 28, 43, 0.3);
+}
+
+.slot-spinning .slot-icon-wrap {
+  animation: slot-shake 0.1s steps(2) infinite;
+}
+
+@keyframes slot-shake {
+  0%   { transform: translateY(-2px); }
+  100% { transform: translateY(2px); }
+}
+
+/* Stopped state */
+.slot-stopped {
+  border-color: var(--hp-green);
+  box-shadow: 2px 2px 0px rgba(72, 208, 72, 0.3);
+}
+
+.slot-stopped .slot-icon-wrap {
+  transform: scale(1.05);
+}
+
+/* Icon image */
+.slot-icon-wrap {
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--ruby-panel);
-  border: 2px solid var(--ruby-border);
-  position: relative;
-  transition: all 0.1s steps(2);
 }
 
-.slot-item.spinning {
-  border-color: var(--ruby-red);
-  box-shadow: 3px 3px 0px rgba(227, 28, 43, 0.4);
-}
-
-.slot-item.stopped {
-  border-color: var(--hp-green);
-  box-shadow: 2px 2px 0px rgba(72, 208, 72, 0.4);
-}
-
-/* Sprite */
-.slot-sprite {
+.slot-icon {
   width: 44px;
   height: 44px;
   image-rendering: pixelated;
   filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.4));
-  transition: transform 0.1s steps(2);
+  transition: filter 0.15s steps(2);
 }
 
-.slot-item.spinning .slot-sprite {
-  animation: spinSprite 0.1s steps(2) infinite;
+.slot-stopped .slot-icon {
+  filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.4))
+          drop-shadow(0 0 4px rgba(72, 208, 72, 0.4));
 }
 
-@keyframes spinSprite {
-  0% { transform: translateY(-2px); }
-  50% { transform: translateY(0px); }
-   100% { transform: translateY(2px); }
+/* Pokemon name */
+.slot-pokemon-name {
+  font-family: var(--font-pixel);
+  font-size: 6px;
+  color: var(--ruby-white);
+  text-align: center;
+  line-height: 1.3;
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
 }
 
-.slot-item.stopped .slot-sprite {
-  animation: none;
-  filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 4px rgba(72, 208, 72, 0.4));
-  transform: scale(1.05);
+/* Type indicators */
+.slot-types {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  min-height: 14px;
 }
 
-/* Número del slot */
+.slot-type-icon {
+  width: 14px;
+  height: 14px;
+  image-rendering: pixelated;
+  filter: drop-shadow(1px 1px 0px rgba(0, 0, 0, 0.3));
+}
+
+/* Slot number badge */
 .slot-number {
   position: absolute;
   top: 2px;
-  left: 4px;
+  left: 3px;
   font-family: var(--font-pixel);
   font-size: 6px;
   color: #5a6a7a;
 }
 
-/* Indicador de detenido */
-.slot-stop-indicator {
+.slot-number-stopped {
+  color: var(--hp-green);
+}
+
+/* Stopped indicator bar */
+.slot-stop-bar {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 2px;
   background: var(--hp-green);
 }
 
-/* Estado */
-.slot-status {
-  height: 24px;
+/* ===== VS DIVIDER ===== */
+.slot-divider-v {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 12px;
+  width: 36px;
+  flex-shrink: 0;
 }
 
-.slot-spinning-indicator {
+.slot-vs {
   font-family: var(--font-pixel);
-  font-size: 9px;
-  color: var(--ruby-text-light);
+  font-size: 14px;
+  color: var(--ruby-gold);
+  text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+  letter-spacing: 1px;
+}
+
+/* ===== FOOTER ===== */
+.slot-footer {
+  padding-top: 12px;
+  border-top: 2px solid var(--ruby-border);
+  text-align: center;
+}
+
+.slot-footer-text {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: #5a6a7a;
+}
+
+.slot-footer-dots {
+  margin-top: 6px;
   display: flex;
-  align-items: center;
   gap: 6px;
+  justify-content: center;
 }
 
-.slot-spinner {
-  animation: spin 0.5s steps(4) infinite;
-  display: inline-block;
+.slot-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--ruby-border);
+  transition: background 0.2s steps(2);
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.slot-dot.completed {
+  background: var(--ruby-gold);
+  box-shadow: 0 0 4px rgba(255, 215, 0, 0.4);
 }
 
-.slot-stopping-indicator {
-  font-family: var(--font-pixel);
-  font-size: 9px;
-  color: var(--ruby-red);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+.slot-dot.active {
+  background: var(--ruby-red);
+  animation: dot-blink 0.6s steps(2) infinite;
 }
 
-.slot-complete-indicator {
-  font-family: var(--font-pixel);
-  font-size: 10px;
-  color: var(--hp-green);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+@keyframes dot-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
 }
 
-/* Responsive */
-@media (max-width: 600px) {
-  .slot-machine-container {
-    padding: 24px 16px;
-  }
-
-  .slot-teams-container {
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .slot-item {
-    width: 44px;
-    height: 52px;
-  }
-
-  .slot-sprite {
-    width: 36px;
-    height: 36px;
+/* ===== RESPONSIVE ===== */
+@media (max-width: 540px) {
+  .slot-container {
+    padding: 20px 12px 16px;
   }
 
   .slot-title {
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  .slot-icon-wrap {
+    width: 38px;
+    height: 38px;
+  }
+
+  .slot-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .slot-pokemon-name {
+    font-size: 5px;
+    max-width: 48px;
+  }
+
+  .slot-divider-v {
+    width: 24px;
+  }
+
+  .slot-vs {
     font-size: 11px;
+  }
+
+  .slot-grid {
+    gap: 4px;
+  }
+
+  .slot-cell {
+    padding: 4px 2px;
+  }
+
+  .slot-team-label {
+    font-size: 7px;
+  }
+
+  .slot-type-icon {
+    width: 12px;
+    height: 12px;
   }
 }

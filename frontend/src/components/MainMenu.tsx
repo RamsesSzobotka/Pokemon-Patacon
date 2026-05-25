@@ -7,7 +7,7 @@ import { AuthModal } from './AuthModal';
 import StoreModal from './StoreModal';
 import { useNotification } from './NotificationProvider';
 import { PokemonSlotAnimation } from './battle/PokemonSlotAnimation';
-import { resolveFrontSprite } from '../utils/spriteResolver';
+import { resolveIconSprite } from '../utils/spriteResolver';
 import '../styles/MainMenu.css';
 import '../components/battle/PokemonSlotAnimation.css';
 
@@ -37,7 +37,7 @@ const MainMenu: React.FC = () => {
   const [roomCode, setRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
 const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
-  const { playerName: authPlayerName, isAuthenticated, shinyPack } = useAuthSession();
+  const { playerName: authPlayerName, isAuthenticated } = useAuthSession();
   const { getToken, isSignedIn } = useAuth();
 
   // Cuando auth sincroniza, actualiza localStorage + estado local
@@ -492,45 +492,84 @@ const [createdRoomCode, setCreatedRoomCode] = useState<string>('');
     // Una vez terminada la animación, mostrar el resultado final con countdown
     return (
       <div className="main-menu-container">
-        <div className="random-loading-screen">
-          <h2>¡Equipos aleatorios seleccionados!</h2>
-          
-          <div className="countdown-display">
-            <span className="countdown-number">{randomCountdown}</span>
-            <p>La batalla está por comenzar...</p>
+        <div className="random-ready-screen">
+          <div className="random-ready-header">
+            <h2>EQUIPOS CONFIRMADOS</h2>
           </div>
-          
-          <div className="teams-preview">
-            <div className="team-section">
-              <h3>Tu Equipo</h3>
-              <div className="team-pokemons">
+
+          <div className="ready-countdown">
+            <span className="ready-number">{randomCountdown}</span>
+            <p className="ready-text">La batalla comienza en segundos</p>
+          </div>
+
+          <div className="ready-teams">
+            <div className="ready-team">
+              <h3 className="ready-team-title player-title">TU EQUIPO</h3>
+              <div className="ready-grid">
                 {(myTeam || []).slice(0, 6).map((pokemon: any, index: number) => (
-                  <div key={index} className="pokemon-preview">
-                    <img 
-                      src={resolveFrontSprite(pokemon.sprites, pokemon.owner_shiny ?? shinyPack, pokemon.pokeapi_id) || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.pokeapi_id}.png`}
-                      alt={String(pokemon.pokeapi_id)}
+                  <div key={index} className="ready-slot">
+                    <img
+                      src={resolveIconSprite(pokemon.sprites, pokemon.pokeapi_id)}
+                      alt=""
+                      className="ready-icon"
                     />
+                    {pokemon.types && (
+                      <div className="ready-types">
+                        {pokemon.types.map((t: string) => (
+                          <img
+                            key={t}
+                            src={`/assets/icons/${t}.svg`}
+                            alt={t}
+                            className="ready-type-icon"
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
-            
-            <div className="team-section">
-              <h3>Equipo del oponente</h3>
-              <div className="team-pokemons">
+
+            <div className="ready-divider">
+              <span className="ready-vs">VS</span>
+            </div>
+
+            <div className="ready-team">
+              <h3 className="ready-team-title opponent-title">OPONENTE</h3>
+              <div className="ready-grid">
                 {(opponentTeam || []).slice(0, 6).map((pokemon: any, index: number) => (
-                  <div key={index} className="pokemon-preview">
-                    <img 
-                      src={resolveFrontSprite(pokemon.sprites, pokemon.owner_shiny ?? false, pokemon.pokeapi_id) || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.pokeapi_id}.png`}
-                      alt={String(pokemon.pokeapi_id)}
+                  <div key={index} className="ready-slot">
+                    <img
+                      src={resolveIconSprite(pokemon.sprites, pokemon.pokeapi_id)}
+                      alt=""
+                      className="ready-icon"
                     />
+                    {pokemon.types && (
+                      <div className="ready-types">
+                        {pokemon.types.map((t: string) => (
+                          <img
+                            key={t}
+                            src={`/assets/icons/${t}.svg`}
+                            alt={t}
+                            className="ready-type-icon"
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
           </div>
-          
-          <p className="loading-text">Preparando batalla...</p>
+
+          <div className="ready-dots">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="ready-dot completed" />
+            ))}
+          </div>
+          <div className="ready-bar-track">
+            <div className="ready-bar-fill" />
+          </div>
         </div>
       </div>
     );

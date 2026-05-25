@@ -15,6 +15,16 @@ export function resolveFrontSprite(sprites: any | undefined | null, shinyPack: b
   return '';
 }
 
+/**
+ * Resolves the small static icon (96x96 PNG) for a Pokemon.
+ * Prefers sprites.icon from the database, falls back to the PokeAPI URL.
+ */
+export function resolveIconSprite(sprites: any | undefined | null, pokeapiId: number): string {
+  if (sprites && sprites.icon) return sprites.icon;
+
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokeapiId}.png`;
+}
+
 export function resolveBackSprite(sprites: any | undefined | null, shinyPack: boolean, pokeapiId?: number): string {
   if (shinyPack && sprites) {
     if (sprites.back_shiny) return sprites.back_shiny;

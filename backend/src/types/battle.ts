@@ -132,6 +132,7 @@ export interface PokemonInBattle {
     back_default: string | null;
     front_shiny: string | null;
     back_shiny: string | null;
+    icon: string | null;
   };
   
   // Movimientos disponibles

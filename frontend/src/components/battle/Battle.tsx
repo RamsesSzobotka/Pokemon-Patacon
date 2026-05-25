@@ -492,15 +492,18 @@ function CommandPanel({
     return name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  // Función para obtener el tipo del movimiento
-  const getTypeIcon = (type: string | undefined): string => {
-    const typeIcons: Record<string, string> = {
-      normal: '⚪', fire: '🔥', water: '💧', electric: '⚡', grass: '🌿',
-      ice: '❄️', fighting: '👊', poison: '☠️', ground: '🪨', flying: '🐦',
-      psychic: '🔮', bug: '🐛', rock: '🪨', ghost: '👻', dragon: '🐉',
-      dark: '🌑', steel: '⚙️', fairy: '✨'
-    };
-    return typeIcons[type?.toLowerCase() || ''] || '⚪';
+  // Función para obtener el icono SVG del tipo
+  const getTypeIcon = (type: string | undefined): React.ReactNode => {
+    const t = type?.toLowerCase() || '';
+    return (
+      <img
+        src={`/assets/icons/${t}.svg`}
+        alt={t}
+        className="move-type-icon"
+        style={{ width: 14, height: 14, display: 'inline-block', verticalAlign: 'middle' }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
   };
 
   // Colores de tipos (semi-transparentes, igual que en la Pokédex)
@@ -733,14 +736,17 @@ function MoveDetailModal({
     return name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  const getTypeIcon = (type: string): string => {
-    const typeIcons: Record<string, string> = {
-      normal: '⚪', fire: '🔥', water: '💧', electric: '⚡', grass: '🌿',
-      ice: '❄️', fighting: '👊', poison: '☠️', ground: '🪨', flying: '🐦',
-      psychic: '🔮', bug: '🐛', rock: '🪨', ghost: '👻', dragon: '🐉',
-      dark: '🌑', steel: '⚙️', fairy: '✨'
-    };
-    return typeIcons[type?.toLowerCase()] || '⚪';
+  const getTypeIcon = (type: string): React.ReactNode => {
+    const t = type?.toLowerCase() || '';
+    return (
+      <img
+        src={`/assets/icons/${t}.svg`}
+        alt={t}
+        className="move-detail-type-icon-img"
+        style={{ width: 20, height: 20, display: 'inline-block', verticalAlign: 'middle' }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
   };
 
   return (

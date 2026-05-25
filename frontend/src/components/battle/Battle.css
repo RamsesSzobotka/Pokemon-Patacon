@@ -503,7 +503,12 @@
 }
 
 .move-type {
-  font-size: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.move-type-icon {
+  image-rendering: pixelated;
 }
 
 .move-power {
@@ -1117,7 +1122,12 @@
 }
 
 .move-detail-type-icon {
-  font-size: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.move-detail-type-icon-img {
+  image-rendering: pixelated;
 }
 
 .move-detail-name {

@@ -67,6 +67,8 @@ export interface PokemonType {
     // Sprites estáticos (fallback)
     static_front_default: string | null;
     static_back_default: string | null;
+    // Icono pequeño estático (96x96 PNG de PokeAPI)
+    icon: string | null;
   };
   height_dm: number;
   weight_hg: number;

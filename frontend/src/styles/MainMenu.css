@@ -759,112 +759,191 @@
   text-transform: uppercase;
 }
 
-/* Random Loading Screen */
-.random-loading-screen {
+/* Random Ready Screen — pixel-art GBA Ruby style */
+.random-ready-screen {
   background: var(--ruby-panel);
   border: 4px solid var(--ruby-border-light);
-  padding: 32px 28px;
+  border-radius: 0;
+  padding: 28px 24px;
   max-width: 520px;
   width: 100%;
   text-align: center;
   box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.6);
-  animation: card-appear 0.4s steps(4);
+  animation: card-appear 0.35s steps(4);
 }
 
-.random-loading-screen h2 {
+.random-ready-header {
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.random-ready-header h2 {
   font-family: var(--font-pixel);
   font-size: 12px;
   color: var(--ruby-gold);
-  margin-bottom: 24px;
-  text-transform: uppercase;
   letter-spacing: 2px;
   text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+  text-transform: uppercase;
 }
 
-.countdown-display {
-  margin: 28px 0;
+/* Countdown */
+.ready-countdown {
+  margin: 20px 0;
 }
 
-.countdown-number {
-  font-family: 'Courier New', monospace;
-  font-size: 64px;
-  font-weight: bold;
+.ready-number {
+  font-family: var(--font-pixel);
+  font-size: 56px;
   color: var(--ruby-red);
   display: block;
   text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
-  animation: countdown-pulse 0.8s steps(2) infinite;
+  animation: ready-pulse 0.8s steps(2) infinite;
 }
 
-@keyframes countdown-pulse {
+@keyframes ready-pulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+  50%      { transform: scale(1.05); }
 }
 
-.countdown-display p {
+.ready-text {
   font-family: var(--font-pixel);
-  font-size: 9px;
+  font-size: 7px;
   color: var(--ruby-text-light);
-  margin-top: 12px;
+  margin-top: 10px;
   letter-spacing: 1px;
   text-transform: uppercase;
 }
 
-.teams-preview {
+/* Teams */
+.ready-teams {
   display: flex;
-  justify-content: space-around;
-  gap: 12px;
-  margin: 24px 0;
+  align-items: stretch;
+  gap: 0;
+  margin: 18px 0;
 }
 
-.team-section {
+.ready-team {
   flex: 1;
+  min-width: 0;
+}
+
+.ready-team-title {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  padding: 4px 0;
+  text-transform: uppercase;
+  font-weight: normal;
   background: var(--ruby-panel-dark);
-  padding: 12px;
   border: 2px solid var(--ruby-border);
 }
 
-.team-section h3 {
-  font-family: var(--font-pixel);
-  font-size: 8px;
-  color: var(--ruby-gold);
-  margin-bottom: 10px;
-  text-transform: uppercase;
-  font-weight: normal;
-  letter-spacing: 1px;
+.player-title {
+  color: var(--ruby-red);
+  border-color: var(--ruby-red-dark);
 }
 
-.team-pokemons {
+.opponent-title {
+  color: var(--ruby-text-light);
+  border-color: var(--ruby-border);
+}
+
+.ready-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 5px;
+}
+
+.ready-slot {
+  background: var(--ruby-panel-dark);
+  border: 2px solid var(--ruby-border);
+  border-radius: 0;
+  padding: 6px 4px;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
 }
 
-.pokemon-preview {
+.ready-icon {
   width: 44px;
   height: 44px;
+  image-rendering: pixelated;
+  filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.4));
+}
+
+.ready-types {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  min-height: 14px;
+}
+
+.ready-type-icon {
+  width: 14px;
+  height: 14px;
+  image-rendering: pixelated;
+  filter: drop-shadow(1px 1px 0px rgba(0, 0, 0, 0.3));
+}
+
+/* VS divider */
+.ready-divider {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--ruby-panel);
-  border: 2px solid var(--ruby-border);
-}
-
-.pokemon-preview img {
   width: 36px;
-  height: 36px;
-  image-rendering: pixelated;
+  flex-shrink: 0;
 }
 
-.loading-text {
+.ready-vs {
   font-family: var(--font-pixel);
-  font-size: 8px;
-  color: #5a6a7a;
-  margin-top: 16px;
+  font-size: 14px;
+  color: var(--ruby-gold);
+  text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+  letter-spacing: 1px;
+}
+
+/* Footer dots */
+.ready-dots {
+  margin-top: 14px;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.ready-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--ruby-border);
+}
+
+.ready-dot.completed {
+  background: var(--ruby-gold);
+  box-shadow: 0 0 4px rgba(255, 215, 0, 0.4);
+}
+
+.ready-bar-track {
+  height: 3px;
+  background: var(--ruby-panel-dark);
+  margin-top: 14px;
+  overflow: hidden;
+}
+
+.ready-bar-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--ruby-gold);
+  animation: ready-bar-sweep 1.2s steps(4) infinite;
+}
+
+@keyframes ready-bar-sweep {
+  0%   { opacity: 0.4; }
+  100% { opacity: 1; }
 }
 
 /* Responsive */
-@media (max-width: 480px) {
+@media (max-width: 520px) {
   .menu-card {
     padding: 24px 20px;
   }
@@ -893,12 +972,43 @@
     font-size: 12px;
   }
 
-  .countdown-number {
-    font-size: 48px;
+  .random-ready-screen {
+    padding: 20px 14px;
   }
 
-  .teams-preview {
+  .random-ready-header h2 {
+    font-size: 9px;
+  }
+
+  .ready-number {
+    font-size: 40px;
+  }
+
+  .ready-grid {
+    gap: 4px;
+  }
+
+  .ready-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .ready-type-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .ready-slot {
+    padding: 6px 2px;
+  }
+
+  .ready-teams {
     flex-direction: column;
-    gap: 16px;
+    gap: 10px;
+  }
+
+  .ready-divider {
+    width: 100%;
+    height: 24px;
   }
 }
