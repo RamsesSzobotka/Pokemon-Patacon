@@ -16,6 +16,7 @@ import { CoinFlipAnimation } from './CoinFlipAnimation';
 import { StatIndicators } from './StatIndicators';
 import { StatChangeAnimation } from './StatChangeAnimation';
 import './Battle.css';
+import BagSelector from './BagSelector';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import { resolveFrontSprite, resolveBackSprite } from '../../utils/spriteResolver';
 
@@ -42,7 +43,7 @@ interface BattleMove {
   maxPp: number;
 }
 
-interface BattlePokemon {
+export interface BattlePokemon {
   id: number;
   pokeapiId: number;
   name: string;
@@ -89,12 +90,14 @@ interface BattleState {
     activePokemon: BattlePokemon;
     team: BattlePokemon[];
     shiny_pack?: boolean;
+    inventory?: { hiperPosion: number; maximoRevivir: number };
   };
   player2: {
     name: string;
     activePokemon: BattlePokemon;
     team: BattlePokemon[];
     shiny_pack?: boolean;
+    inventory?: { hiperPosion: number; maximoRevivir: number };
   };
 }
 
@@ -379,6 +382,29 @@ function getBattleSprite(pokemon: BattlePokemon | null, isBackSprite: boolean): 
 }
 
 /**
+ * Determina si un Pokémon en carga evasiva está usando Vuelo o Excavar
+ */
+function getEvasiveMoveType(pokemon: BattlePokemon | null): 'fly' | 'dig' | 'dive' | null {
+  if (!pokemon?.currentTwoTurnMove) return null;
+  const name = (pokemon.currentTwoTurnMove.name || '').toLowerCase();
+  if (name === 'fly' || name === 'vuelo') return 'fly';
+  if (name === 'dig' || name === 'excavar') return 'dig';
+  if (name === 'dive' || name === 'buceo') return 'dive';
+  return null;
+}
+
+function isEvasiveMoveName(moveName: string | undefined | null): boolean {
+  const normalized = String(moveName || '').toLowerCase();
+  return ['fly', 'vuelo', 'dig', 'excavar', 'dive', 'buceo'].includes(normalized);
+}
+
+function shouldClearEvasiveChargeState(pokemon: BattlePokemon | null, moveName: string | undefined | null, isChargingResult: boolean | undefined): boolean {
+  if (!pokemon) return false;
+  if (!isEvasiveMoveName(moveName)) return false;
+  return isChargingResult !== true;
+}
+
+/**
  * Sprite del Pokémon en el campo de batalla
  * V3: Con soporte para carga, evasión y fatiga
  */
@@ -388,7 +414,9 @@ function PokemonSprite({
   isFainting = false,
   showSprite = true,
   isAttacking = false,
-  isHit = false
+  isHit = false,
+  returningFromEvasive = false,
+  healType
 }: {
   pokemon: BattlePokemon | null;
   isPlayer: boolean;
@@ -396,6 +424,8 @@ function PokemonSprite({
   showSprite?: boolean;
   isAttacking?: boolean;
   isHit?: boolean;
+  returningFromEvasive?: boolean;
+  healType?: 'heal' | 'revive' | null;
 }) {
   // Si no hay sprite para mostrar (cuando está cambiando), mostrar placeholder
   if (!showSprite) {
@@ -424,6 +454,14 @@ function PokemonSprite({
     spriteClass = 'fainted';
   }
 
+  // Determinar animación evasiva (Vuelo/Excavar/Buceo)
+  const evasiveMoveType = getEvasiveMoveType(pokemon);
+  // Todos los movimientos evasivos: desaparecen en carga, aparecen sin animación al ejecutar
+  const evasiveChargeClass = !returningFromEvasive && pokemon.isEvasivelyCharging && evasiveMoveType
+    ? `evasive-charge-${evasiveMoveType}`
+    : '';
+  const evasiveClass = evasiveChargeClass;
+
   // Agregar clase de ataque si está atacando o recibiendo daño
   const spriteClasses = [
     spriteClass,
@@ -432,11 +470,14 @@ function PokemonSprite({
     // V3: Agregar clases para estados V3
     pokemon.isChargingTwoTurn ? 'v3-charging' : '',
     pokemon.isEvasivelyCharging ? 'v3-evasive' : '',
-    pokemon.isFatigued ? `v3-fatigued v3-fatigued-${pokemon.fatigueSource || 'unknown'}` : ''
+    pokemon.isFatigued ? `v3-fatigued v3-fatigued-${pokemon.fatigueSource || 'unknown'}` : '',
+    // Efecto visual de curación/revivimiento
+    healType === 'heal' ? 'heal-glow' : '',
+    healType === 'revive' ? 'revive-glow' : '',
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={`pokemon-sprite ${isPlayer ? 'player' : 'enemy'} ${isAttacking ? 'attacking' : ''} ${isHit ? 'hit' : ''} ${pokemon.isChargingTwoTurn ? 'v3-charging' : ''} ${pokemon.isEvasivelyCharging ? 'v3-evasive' : ''} ${pokemon.isFatigued ? 'v3-fatigued' : ''}`}>
+    <div className={`pokemon-sprite ${isPlayer ? 'player' : 'enemy'} ${isAttacking ? 'attacking' : ''} ${isHit ? 'hit' : ''} ${pokemon.isChargingTwoTurn ? 'v3-charging' : ''} ${pokemon.isEvasivelyCharging ? 'v3-evasive' : ''} ${pokemon.isFatigued ? 'v3-fatigued' : ''} ${evasiveClass} ${healType === 'heal' ? 'heal-glow' : ''} ${healType === 'revive' ? 'revive-glow' : ''}`}>
       <div className="pokemon-base" aria-hidden="true" />
       {sprite ? (
         <img
@@ -458,6 +499,7 @@ function PokemonSprite({
 function CommandPanel({
   onAttack,
   onChange,
+  onBagClick,
   onSurrender,
   moves,
   disabled,
@@ -469,6 +511,7 @@ function CommandPanel({
 }: {
   onAttack: (moveId: number) => void;
   onChange: () => void;
+  onBagClick: () => void;
   onSurrender?: () => void;
   moves?: any[];
   disabled?: boolean;
@@ -554,12 +597,13 @@ function CommandPanel({
     );
   }
 
-  // V3: Si está fatigado (recharge), mostrar mensaje bloqueante
+  // V3: Si está fatigado (recharge), mostrar mensaje bloqueante sin acciones permitidas
   if (isFatigueBlocking) {
     return (
       <div className="command-panel v3-fatigue-mode">
         <div className="fatigue-notice">
-          <p>💤 ¡Tu Pokémon está agotado! Necesita descansar.</p>
+          <p>💤 ¡Tu Pokémon está agotado! Debe descansar este turno.</p>
+          <p className="auto-rest-text">Descansando... No puedes realizar ninguna acción.</p>
         </div>
         <div className="commands-grid">
           <button
@@ -567,24 +611,26 @@ function CommandPanel({
             disabled={true}
             title="Tu Pokémon está agotado y no puede atacar"
           >
-            LUCHAR (Bloqueado)
+            LUCHAR
           </button>
           <button
             className="command-btn bag"
-            onClick={onChange}
-            disabled={disabled}
+            disabled={true}
+            title="Tu Pokémon está agotado y no puede cambiar"
           >
             CAMBIAR
           </button>
           <button
             className="command-btn pokemon"
             disabled={true}
+            title="Tu Pokémon está agotado"
           >
             MOCHILA
           </button>
           <button
             className="command-btn run"
             disabled={true}
+            title="Tu Pokémon está agotado"
           >
             RENDIRSE
           </button>
@@ -613,6 +659,7 @@ function CommandPanel({
           </button>
           <button
             className="command-btn pokemon"
+            onClick={onBagClick}
             disabled={disabled}
           >
             MOCHILA
@@ -1220,6 +1267,7 @@ export default function Battle({ roomCode }: BattleProps) {
   }, []);
   
   const [showPokemonSelector, setShowPokemonSelector] = useState(false);
+  const [showBagSelector, setShowBagSelector] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [loadingCountdown, setLoadingCountdown] = useState<number | null>(5); // Iniciar con 5 segundos visible
   const [playerNumber, setPlayerNumber] = useState<number>(1); // Determinar si somos player1 o player2
@@ -1234,6 +1282,12 @@ export default function Battle({ roomCode }: BattleProps) {
   
   // Estado para animación de recibir daño
   const [hitPlayer, setHitPlayer] = useState<'player1' | 'player2' | null>(null);
+
+  // Estado para animación de retorno de carga evasiva (Vuelo/Excavar)
+  const [returningFromEvasive, setReturningFromEvasive] = useState<'player1' | 'player2' | null>(null);
+
+  // Estado para animación de curación/revivimiento (Bolsa)
+  const [healingPokemon, setHealingPokemon] = useState<{ playerId: 'player1' | 'player2'; pokemonId: number; type: 'heal' | 'revive' } | null>(null);
 
   // Estado para saber si ya sélectioné mi acción (para bloquear botones)
   const [hasSelectedAction, setHasSelectedAction] = useState(false);
@@ -1380,6 +1434,10 @@ export default function Battle({ roomCode }: BattleProps) {
           const defenderPlayerId = isP1Action ? 'player2' : 'player1';
           const defenderHp = message.data.defenderHp || 0;
 
+          // V3: Al recibir resultado, limpiar animación de retorno evasivo
+          // (el backend ya ejecutó el movimiento y limpió los flags de carga)
+          setReturningFromEvasive(prev => prev === attackerPlayerId ? null : prev);
+
           // Si es un CAMBIO de Pokémon, NO hacer animación de ataque
           if (message.data.action.type === 'change') {
             // El cambio de Pokémon no tiene animación de ataque
@@ -1409,6 +1467,67 @@ export default function Battle({ roomCode }: BattleProps) {
             // Mostrar mensaje de cambio
             setLastBattleMessage(message.data.result.message || '¡Pokémon cambiado!');
             break; // Salir del case sin animación
+          }
+
+          // Si es un ÍTEM de curación/revivimiento, NO hacer animación de ataque
+          if (message.data.action.type === 'item') {
+            const targetPokemonId = message.data.action.targetPokemonId;
+            const resultData = message.data.result;
+
+            if (resultData && resultData.success) {
+              // Reproducir sonido de curación
+              playHealSound();
+
+              // Activar animación de brillo en el sprite
+              const isRevive = message.data.action.itemId === 'maximoRevivir';
+              setHealingPokemon({
+                playerId: message.data.playerId,
+                pokemonId: targetPokemonId,
+                type: isRevive ? 'revive' : 'heal',
+              });
+              setTimeout(() => setHealingPokemon(null), isRevive ? 2000 : 1500);
+
+              // Actualizar el estado: HP del objetivo, inventario, isFainted
+              setBattleState(prev => {
+                if (!prev) return null;
+                const userPlayerId = message.data.playerId as 'player1' | 'player2';
+
+                // Actualizar el Pokémon objetivo en el equipo
+                const updatedTeam = prev[userPlayerId].team.map(p => {
+                  if (p.id === targetPokemonId) {
+                    return {
+                      ...p,
+                      hp: resultData.targetHpAfter ?? p.maxHp,
+                      isFainted: false,
+                    };
+                  }
+                  return p;
+                });
+
+                // Si el objetivo es el activo, actualizarlo también
+                const isTargetActive = prev[userPlayerId].activePokemon.id === targetPokemonId;
+                const updatedActivePokemon = isTargetActive
+                  ? updatedTeam.find(p => p.id === targetPokemonId) || prev[userPlayerId].activePokemon
+                  : prev[userPlayerId].activePokemon;
+
+                return {
+                  ...prev,
+                  [userPlayerId]: {
+                    ...prev[userPlayerId],
+                    activePokemon: updatedActivePokemon,
+                    team: updatedTeam,
+                    inventory: resultData.inventory || prev[userPlayerId].inventory,
+                  },
+                };
+              });
+
+              // Mostrar mensaje del resultado
+              if (resultData.message) {
+                setLastBattleMessage(resultData.message);
+              }
+            }
+
+            break; // Salir del case sin animación de ataque
           }
 
           // Continuar con la lógica de ataque normal...
@@ -1463,14 +1582,35 @@ export default function Battle({ roomCode }: BattleProps) {
 
           setBattleState(prev => {
             if (!prev) return null;
+
+            const attackerKey = isP1Action ? 'player1' : 'player2';
+            const attackerPokemon = prev[attackerKey].activePokemon;
+            const clearEvasive = shouldClearEvasiveChargeState(
+              attackerPokemon,
+              message.data.result?.moveName,
+              message.data.result?.isCharging
+            );
+
+            // V3: Clear charge state when execution result arrives (not just evasive moves)
+            const wasCharging = attackerPokemon.isChargingTwoTurn && attackerPokemon.chargePhase === 'charge';
+            const isExecutionResult = !message.data.result?.isCharging;
+            const clearChargeState = clearEvasive || (wasCharging && isExecutionResult);
+
             return {
               ...prev,
-              [isP1Action ? 'player1' : 'player2']: {
-                ...prev[isP1Action ? 'player1' : 'player2'],
+              [attackerKey]: {
+                ...prev[attackerKey],
                 activePokemon: {
-                  ...(isP1Action ? prev.player1.activePokemon : prev.player2.activePokemon),
+                  ...attackerPokemon,
                   hp: message.data.attackerHp,
-                  statStages: newAttackerStages
+                  statStages: newAttackerStages,
+                  ...(clearChargeState ? {
+                    isChargingTwoTurn: false,
+                    chargePhase: null,
+                    currentTwoTurnMove: null,
+                    isEvasivelyCharging: false,
+                    evasiveChargeMove: null
+                  } : {})
                 }
               },
               [defenderPlayerId]: {
@@ -1722,6 +1862,36 @@ export default function Battle({ roomCode }: BattleProps) {
         break;
       }
 
+      case 'battle:fatigue-rest': {
+        // V3: El Pokémon está fatigado y descansará automáticamente
+        setLastBattleMessage(message.data.message);
+        // El mensaje puede llegar para cualquiera de los dos jugadores
+        const fatiguedPlayerId = message.data.playerId;
+        if (fatiguedPlayerId) {
+          const isMyPokemonFatigued = fatiguedPlayerId === (playerNumberRef.current === 1 || playerNumberRef.current === 0 ? 'player1' : 'player2');
+          if (isMyPokemonFatigued) {
+            setHasSelectedAction(true);
+            setIsMyTurn(false);
+          }
+        } else {
+          // Si no tiene playerId, asumir que es para este jugador (sendTo)
+          setHasSelectedAction(true);
+          setIsMyTurn(false);
+        }
+        break;
+      }
+
+      case 'battle:charging-move-execute': {
+        // V3: Animación de retorno para movimientos evasivos (Vuelo / Excavar)
+        // Se limpia cuando llegue battle:action-result (el backend procesa la ejecución
+        // y envía el resultado ~1s después, tiempo suficiente para la animación de Vuelo)
+        const playerId = message.data.playerId as 'player1' | 'player2';
+        setReturningFromEvasive(playerId);
+        // Safety timeout por si nunca llega el action-result
+        setTimeout(() => setReturningFromEvasive(prev => prev === playerId ? null : prev), 5000);
+        break;
+      }
+
       case 'battle:v3-state-message': {
         // V3: Mostrar mensajes de carga y fatiga desde el servidor
         const v3Message = message.data.message;
@@ -1772,6 +1942,20 @@ export default function Battle({ roomCode }: BattleProps) {
     setShowPokemonSelector(true);
   }, []);
 
+  const handleItemUse = useCallback((itemId: string, targetId: number) => {
+    sendMessage({
+      type: 'battle:action',
+      data: {
+        type: 'item',
+        itemId,
+        targetId
+      }
+    });
+    setShowBagSelector(false);
+    setHasSelectedAction(true);
+    setIsMyTurn(false);
+  }, [sendMessage]);
+
   const handleSurrender = useCallback(() => {
     sendMessage({ type: 'battle:surrender', data: {} });
     // Limpiar session storage y navegar al menú
@@ -1807,6 +1991,9 @@ export default function Battle({ roomCode }: BattleProps) {
   const myTeam = isPlayer1 
     ? (battleState?.player1?.team || []) 
     : (battleState?.player2?.team || []);
+  const myInventory = isPlayer1 
+    ? (battleState?.player1?.inventory)
+    : (battleState?.player2?.inventory);
   const myPokemon = isPlayer1 
     ? battleState?.player1?.activePokemon 
     : battleState?.player2?.activePokemon;
@@ -1916,6 +2103,8 @@ export default function Battle({ roomCode }: BattleProps) {
                 showSprite={showPlayer2Sprite}
                 isAttacking={attackingPlayer === 'player2'}
                 isHit={hitPlayer === 'player2'}
+                returningFromEvasive={returningFromEvasive === 'player2'}
+                healType={healingPokemon?.pokemonId === opponentPokemon?.id && healingPokemon?.playerId === (playerNumber === 1 ? 'player2' : 'player1') ? healingPokemon.type : null}
               />
               <StatChangeAnimation
                 statChanges={statAnimations
@@ -1933,6 +2122,8 @@ export default function Battle({ roomCode }: BattleProps) {
                 showSprite={showPlayer1Sprite}
                 isAttacking={attackingPlayer === 'player1'}
                 isHit={hitPlayer === 'player1'}
+                returningFromEvasive={returningFromEvasive === 'player1'}
+                healType={healingPokemon?.pokemonId === myPokemon?.id && healingPokemon?.playerId === (playerNumber === 1 ? 'player1' : 'player2') ? healingPokemon.type : null}
               />
               <div className="player-info-wrapper">
                 <PokemonInfoPanel
@@ -1973,6 +2164,8 @@ export default function Battle({ roomCode }: BattleProps) {
                 showSprite={showPlayer1Sprite}
                 isAttacking={attackingPlayer === 'player1'}
                 isHit={hitPlayer === 'player1'}
+                returningFromEvasive={returningFromEvasive === 'player1'}
+                healType={healingPokemon?.pokemonId === opponentPokemon?.id && healingPokemon?.playerId === (playerNumber === 2 ? 'player1' : 'player2') ? healingPokemon.type : null}
               />
               <StatChangeAnimation
                 statChanges={statAnimations
@@ -1990,6 +2183,8 @@ export default function Battle({ roomCode }: BattleProps) {
                 showSprite={showPlayer2Sprite}
                 isAttacking={attackingPlayer === 'player2'}
                 isHit={hitPlayer === 'player2'}
+                returningFromEvasive={returningFromEvasive === 'player2'}
+                healType={healingPokemon?.pokemonId === myPokemon?.id && healingPokemon?.playerId === (playerNumber === 2 ? 'player2' : 'player1') ? healingPokemon.type : null}
               />
               <div className="player-info-wrapper">
                 <PokemonInfoPanel
@@ -2020,6 +2215,7 @@ export default function Battle({ roomCode }: BattleProps) {
         <CommandPanel 
           onAttack={(moveId: number) => handleAttack(moveId)}
           onChange={handleOpenChange}
+          onBagClick={() => setShowBagSelector(true)}
           onSurrender={showSurrenderConfirm}
           moves={moves}
           disabled={!isMyTurn || battleState.phase === 'ended' || hasSelectedAction}
@@ -2070,6 +2266,16 @@ export default function Battle({ roomCode }: BattleProps) {
           onSelect={handleChange}
           onCancel={() => setShowPokemonSelector(false)}
           currentPokemonId={myPokemon?.id || 0}
+        />
+      )}
+
+      {/* Bolsa de Batalla (MOCHILA) */}
+      {showBagSelector && (
+        <BagSelector
+          inventory={myInventory || { hiperPosion: 2, maximoRevivir: 1 }}
+          team={myTeam || []}
+          onUse={handleItemUse}
+          onCancel={() => setShowBagSelector(false)}
         />
       )}
 

@@ -271,6 +271,14 @@ export async function getAllTypes(): Promise<TypeDocument[]> {
 export async function loadTypeEffectivenessCache(): Promise<void> {
   try {
     const types = await getAllTypes();
+    
+    // Si la colección está vacía, cache = null (forzar fallback a DB)
+    if (types.length === 0) {
+      console.warn('⚠️ Colección types vacía — cache deshabilitado, se usará fallback a DB');
+      typeEffectivenessCache = null;
+      return;
+    }
+
     const cache: Record<string, Record<string, number>> = {};
 
     for (const type of types) {
@@ -307,82 +315,92 @@ export async function ensureTypeEffectivenessCache(): Promise<void> {
 }
 
 /**
+ * Valida y loguea el estado de la colección types para diagnóstico
+ * Verifica:
+ * - Cantidad de tipos cargados
+ * - Ejemplos de relaciones de daño
+ * - Si el cache está disponible
+ */
+export async function validateTypeEffectivenessData(): Promise<void> {
+  try {
+    const types = await getAllTypes();
+    console.log(`\n📊 VALIDACIÓN DE TIPOS - Resumen:\n` +
+      `   • Tipos en DB: ${types.length}\n` +
+      `   • Cache disponible: ${typeEffectivenessCache ? 'SÍ' : 'NO'}`);
+
+    if (types.length > 0) {
+      // Mostrar ejemplos
+      const fireType = types.find(t => t.name.toLowerCase() === 'fire');
+      const waterType = types.find(t => t.name.toLowerCase() === 'water');
+      
+      if (fireType) {
+        console.log(`\n🔥 Ejemplo - Tipo Fire:\n` +
+          `   Súper efectivo contra: ${fireType.damage_relations.to.double.join(', ')}\n` +
+          `   Poco efectivo contra: ${fireType.damage_relations.to.half.join(', ')}\n` +
+          `   Inmune a: ${fireType.damage_relations.to.immune.join(', ') || 'ninguno'}`);
+      }
+      
+      if (waterType) {
+        console.log(`\n💧 Ejemplo - Tipo Water:\n` +
+          `   Súper efectivo contra: ${waterType.damage_relations.to.double.join(', ')}\n` +
+          `   Poco efectivo contra: ${waterType.damage_relations.to.half.join(', ')}\n` +
+          `   Inmune a: ${waterType.damage_relations.to.immune.join(', ') || 'ninguno'}`);
+      }
+      
+      // Verificar que un ataque sea correcto (Water -> Fire debe ser súper efectivo)
+      if (waterType) {
+        const isEffectiveAgainstFire = waterType.damage_relations.to.double.includes('fire');
+        console.log(`\n✓ Water es súper efectivo contra Fire: ${isEffectiveAgainstFire ? 'CORRECTO ✅' : 'ERROR ❌'}`);
+      }
+    }
+    
+    console.log('✅ Validación de tipos completada\n');
+  } catch (error) {
+    console.error('❌ Error en validación de tipos:', error);
+  }
+}
+
+/**
  * Calcula la efectividad de un tipo ataque contra uno o dos tipos defensores
  * Retorna: 0, 0.25, 0.5, 1.0, 2.0, o 4.0 (para tipos duales)
  */
-export function getTypeEffectiveness(
+export async function getTypeEffectiveness(
   attackTypeName: string,
   defenderTypes: string[]
-): number {
-  const typeMap: Record<string, TypeDocument> = {};
-  
-  // Cache de tipos (usar en memoria si ya están cargados)
-  // Por ahora usamos una función sincrónica con datos hardcodeados como fallback
-  // En producción, esto consultaría la DB
-  
-  const effectiveness = getEffectivenessFromCache(attackTypeName, defenderTypes);
-  return effectiveness;
+): Promise<number> {
+  // 1. Intentar desde el cache en memoria (rápido)
+  const cached = getEffectivenessFromCache(attackTypeName, defenderTypes);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // 2. Fallback: consultar DB directamente
+  console.warn(`⚠️ Cache de tipos no disponible, consultando DB para ${attackTypeName}`);
+  return await getTypeEffectivenessFromDB(attackTypeName, defenderTypes);
 }
 
-// Mapa de efectividad hardcodeado (basado en datos de PokeAPI Gen V + Fairy)
-const TYPE_EFFECTIVENESS_MAP: Record<string, Record<string, number>> = {
-  // type que ataca -> { tipo defensor: efectividad }
-  normal: { normal: 1, fighting: 1, flying: 1, poison: 1, ground: 1, rock: 0.5, bug: 1, ghost: 0, steel: 0.5, fire: 1, water: 1, grass: 1, electric: 1, psychic: 1, ice: 1, dragon: 1, dark: 1, fairy: 1 },
-  fighting: { normal: 2, fighting: 1, flying: 0.5, poison: 0.5, ground: 1, rock: 2, bug: 0.5, ghost: 0, steel: 2, fire: 1, water: 1, grass: 1, electric: 1, psychic: 0.5, ice: 2, dragon: 1, dark: 2, fairy: 0.5 },
-  flying: { normal: 1, fighting: 2, flying: 1, poison: 1, ground: 0, rock: 0.5, bug: 2, ghost: 1, steel: 0.5, fire: 1, water: 1, grass: 2, electric: 0.5, psychic: 1, ice: 1, dragon: 1, dark: 1, fairy: 1 },
-  poison: { normal: 1, fighting: 1, flying: 1, poison: 0.5, ground: 0.5, rock: 0.5, bug: 0.5, ghost: 0.5, steel: 0, fire: 1, water: 1, grass: 2, electric: 1, psychic: 1, ice: 1, dragon: 1, dark: 1, fairy: 2 },
-  ground: { normal: 1, fighting: 1, flying: 1, poison: 2, rock: 2, bug: 0.5, ghost: 1, steel: 2, fire: 2, water: 0.5, grass: 0.5, electric: 2, psychic: 1, ice: 1, dragon: 1, dark: 1, fairy: 1 },
-  rock: { normal: 1, fighting: 0.5, flying: 2, poison: 1, ground: 0.5, rock: 0.5, bug: 2, ghost: 1, steel: 0.5, fire: 2, water: 0.5, grass: 0.5, electric: 1, psychic: 1, ice: 2, dragon: 1, dark: 1, fairy: 1 },
-  bug: { normal: 1, fighting: 0.5, flying: 0.5, poison: 0.5, ground: 0.5, rock: 0.5, bug: 1, ghost: 0.5, steel: 0.5, fire: 0.5, water: 1, grass: 2, electric: 1, psychic: 2, ice: 1, dragon: 1, dark: 2, fairy: 0.5 },
-  ghost: { normal: 0, fighting: 1, flying: 1, poison: 1, ground: 1, rock: 1, bug: 1, ghost: 2, steel: 1, fire: 1, water: 1, grass: 1, electric: 1, psychic: 2, ice: 1, dragon: 1, dark: 0.5, fairy: 1 },
-  steel: { normal: 1, fighting: 1, flying: 1, poison: 1, ground: 1, rock: 2, bug: 1, ghost: 1, steel: 0.5, fire: 0.5, water: 0.5, grass: 1, electric: 0.5, psychic: 1, ice: 2, dragon: 1, dark: 1, fairy: 2 },
-  fire: { normal: 1, fighting: 1, flying: 1, poison: 1, ground: 1, rock: 0.5, bug: 2, ghost: 1, steel: 2, fire: 0.5, water: 0.5, grass: 2, electric: 1, psychic: 1, ice: 2, dragon: 0.5, dark: 1, fairy: 1 },
-  water: { normal: 1, fighting: 1, flying: 1, poison: 1, ground: 2, rock: 2, bug: 1, ghost: 1, steel: 1, fire: 2, water: 0.5, grass: 0.5, electric: 1, psychic: 1, ice: 1, dragon: 0.5, dark: 1, fairy: 1 },
-  grass: { normal: 1, fighting: 1, flying: 0.5, poison: 0.5, ground: 2, rock: 2, bug: 0.5, ghost: 1, steel: 0.5, fire: 0.5, water: 2, grass: 0.5, electric: 1, psychic: 1, ice: 1, dragon: 0.5, dark: 1, fairy: 1 },
-  electric: { normal: 1, fighting: 1, flying: 2, poison: 1, ground: 0, rock: 1, bug: 1, ghost: 1, steel: 1, fire: 1, water: 2, grass: 0.5, electric: 0.5, psychic: 1, ice: 1, dragon: 0.5, dark: 1, fairy: 1 },
-  psychic: { normal: 1, fighting: 2, flying: 1, poison: 2, ground: 1, rock: 1, bug: 1, ghost: 1, steel: 0.5, fire: 1, water: 1, grass: 1, electric: 1, psychic: 0.5, ice: 1, dragon: 1, dark: 0, fairy: 1 },
-  ice: { normal: 1, fighting: 1, flying: 2, poison: 1, ground: 2, rock: 1, bug: 1, ghost: 1, steel: 0.5, fire: 0.5, water: 0.5, grass: 2, electric: 1, psychic: 1, ice: 0.5, dragon: 2, dark: 1, fairy: 1 },
-  dragon: { normal: 1, fighting: 1, flying: 1, poison: 1, ground: 1, rock: 1, bug: 1, ghost: 1, steel: 0.5, fire: 1, water: 1, grass: 1, electric: 1, psychic: 1, ice: 1, dragon: 2, dark: 1, fairy: 0 },
-  dark: { normal: 1, fighting: 1, flying: 1, poison: 1, ground: 1, rock: 1, bug: 1, ghost: 2, steel: 1, fire: 1, water: 1, grass: 1, electric: 1, psychic: 2, ice: 1, dragon: 1, dark: 0.5, fairy: 0.5 },
-  fairy: { normal: 1, fighting: 2, flying: 1, poison: 0.5, ground: 1, rock: 1, bug: 1, ghost: 1, steel: 0.5, fire: 0.5, water: 1, grass: 1, electric: 1, psychic: 1, ice: 1, dragon: 2, dark: 2, fairy: 1 }
-};
-
 /**
- * Calcula efectividad de tipo usando el mapa en memoria
- * Más rápido que consultar DB en cada ataque
+ * Consulta el cache en memoria.
+ * Retorna null si el cache no está disponible (para que el caller caiga a DB).
  */
 function getEffectivenessFromCache(
   attackType: string,
   defenderTypes: string[]
-): number {
-  const attack = attackType.toLowerCase();
-
-  // Try DB-backed cache first
-  if (typeEffectivenessCache) {
-    const attackMap = typeEffectivenessCache[attack];
-    if (attackMap) {
-      let effectiveness = 1.0;
-      for (const defender of defenderTypes) {
-        const defenderName = defender.toLowerCase();
-        const modifier = attackMap[defenderName] ?? 1.0;
-        effectiveness *= modifier;
-      }
-      return effectiveness;
-    }
-    console.warn(`⚠️ Tipo de ataque desconocido en cache: ${attackType}`);
-    return 1.0;
+): number | null {
+  // Cache no cargado → null (el caller usará DB)
+  if (!typeEffectivenessCache) {
+    return null;
   }
 
-  // Fallback to hardcoded map when cache is not loaded
-  const attackMap = TYPE_EFFECTIVENESS_MAP[attack];
+  const attack = attackType.toLowerCase();
+  const attackMap = typeEffectivenessCache[attack];
   
   if (!attackMap) {
-    console.warn(`⚠️ Tipo de ataque desconocido: ${attackType}`);
-    return 1.0;
+    console.warn(`⚠️ Tipo de ataque "${attackType}" no encontrado en cache`);
+    return null;
   }
   
   let effectiveness = 1.0;
-  
   for (const defender of defenderTypes) {
     const defenderName = defender.toLowerCase();
     const modifier = attackMap[defenderName] ?? 1.0;

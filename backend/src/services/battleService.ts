@@ -28,8 +28,6 @@ import type {
 import { 
   BATTLE_CONFIG,
   V3_MOVES,
-  EVASIVE_MOVES,
-  FATIGUE_MOVES,
   TEST_MOVES
 } from '../types/battle.js';
 import { getTypeEffectiveness } from '../db/mongodb.js';
@@ -49,6 +47,10 @@ export function getActionPriority(action: PlayerAction | null): number {
   
   if (action.type === 'change') {
     return BATTLE_CONFIG.PRIORITY_SWITCH; // +6
+  }
+  
+  if (action.type === 'item') {
+    return BATTLE_CONFIG.PRIORITY_ITEM; // +4
   }
   
   if (action.type === 'attack' && action.move) {
@@ -332,7 +334,9 @@ export function canActWithAilments(pokemon: PokemonInBattle): {
   
   // V3: Verificar fatiga ANTES de otros estados (must be first to prevent action)
   // Only recharge-type fatigue blocks action; exhaustion is narrative only
+  // Al bloquear, se consume la fatiga: este turno cuenta como el descanso
   if (pokemon.isFatigued && pokemon.fatigueSource === 'recharge') {
+    resetFatigueState(pokemon);
     return { canAct: false, reason: 'Agotado (necesita descansar)' };
   }
   
@@ -642,13 +646,13 @@ export function getMovePhase(pokemon: PokemonInBattle): 'charge' | 'execute' | '
  * @param playerId - ID del jugador atacante
  * @returns ActionResult con los resultados de la acción
  */
-export function handleTwoTurnMove(
+export async function handleTwoTurnMove(
   attacker: PokemonInBattle,
   defender: PokemonInBattle,
   move: BattleMove,
   phase: 'charge' | 'execute',
   playerId: 'player1' | 'player2'
-): ActionResult {
+): Promise<ActionResult> {
   
   if (phase === 'charge') {
     // ===== FASE DE CARGA =====
@@ -685,7 +689,7 @@ export function handleTwoTurnMove(
   // ===== FASE DE EJECUCIÓN =====
   
   // Calcular daño normalmente
-  const { damage, effectiveness } = calculateDamage(attacker, defender, move);
+  const { damage, effectiveness } = await calculateDamage(attacker, defender, move);
   
   // Verificar si el defensor está evadiendo
   if (isDefenderEvading(defender)) {
@@ -719,13 +723,15 @@ export function handleTwoTurnMove(
   // Construir mensaje narrativo estilo Pokémon BW
   let message = `${attacker.name} usado ${move.name}.`;
   
-  // Agregar efectividad del ataque
-  if (effectiveness > 1) {
-    message += '\n¡Es muy efectivo!';
+  // Agregar efectividad del ataque con mensajes específicos
+  if (effectiveness >= 4) {
+    message += '\n¡Es súper efectivo!'; // x4 (tipo dual con ambos débiles)
+  } else if (effectiveness > 1) {
+    message += '\n¡Es muy efectivo!'; // x2
   } else if (effectiveness < 1 && effectiveness > 0) {
-    message += '\nNo es muy efectivo...';
+    message += '\nNo es muy efectivo...'; // x0.5
   } else if (effectiveness === 0) {
-    message += '\n¡No tiene efecto!';
+    message += '\n¡No tiene efecto! (Inmune)'; // Inmunidad clara
   }
   
 // Verificar si se debilitó
@@ -772,13 +778,12 @@ export function handleTwoTurnMove(
     }
   }
    
-  // Verificar si el movimiento causa fatiga
-  if (FATIGUE_MOVES[move.moveId]) {
-    const fatigueInfo = FATIGUE_MOVES[move.moveId];
-    if (fatigueInfo.fatigueType === 'recharge') {
+  // Verificar si el movimiento causa fatiga (usando flags de la DB)
+  if (move.flags.fatigue === true) {
+    if (move.flags.recharge === true) {
       applyFatigue(attacker, 'recharge');
       message += `\n¡${attacker.name} necesita descansar!`;
-    } else if (fatigueInfo.fatigueType === 'exhaustion') {
+    } else {
       applyFatigue(attacker, 'exhaustion');
       message += `\n¡${attacker.name} está agotado!`;
     }
@@ -871,11 +876,11 @@ export function updateTwoTurnState(pokemon: PokemonInBattle): void {
  * 
  * Sin estados, sin críticos, sin quemadura
  */
-export function calculateDamage(
+export async function calculateDamage(
   attacker: PokemonInBattle,
   defender: PokemonInBattle,
   move: BattleMove
-): { damage: number; effectiveness: number } {
+): Promise<{ damage: number; effectiveness: number }> {
   
   // Ignorar si el movimiento no causa daño
   if (!move.power || move.power === 0 || move.damageClass === 'status') {
@@ -901,7 +906,7 @@ export function calculateDamage(
   const stab = attacker.types.includes(move.type) ? BATTLE_CONFIG.STAB_MULTIPLIER : 1;
   
   // Calcular efectividad de tipos
-  const effectiveness = getTypeEffectiveness(move.type, defender.types);
+  const effectiveness = await getTypeEffectiveness(move.type, defender.types);
   
   // Aleatorio (85% - 100%)
   const random = BATTLE_CONFIG.DAMAGE_RANDOM_MIN + 
@@ -1027,12 +1032,12 @@ function buildStatChangeMessage(pokemon: PokemonInBattle, stat: BattleStatKey, c
 /**
  * Ejecuta un movimiento de ataque (V2 - ahora con efectos de estado)
  */
-export function executeMove(
+export async function executeMove(
   attacker: PokemonInBattle,
   defender: PokemonInBattle,
   move: BattleMove,
   attackerPlayerId: 'player1' | 'player2'
-): ActionResult {
+): Promise<ActionResult> {
 
   // Decrementar PP del movimiento
   // Para movimientos de carga (2 turnos): descontar al seleccionar en el turno 1 (cuando NO está cargando)
@@ -1073,7 +1078,27 @@ export function executeMove(
     }
     
     // Calcular daño normalmente
-    const { damage, effectiveness } = calculateDamage(attacker, defender, move);
+    const { damage, effectiveness } = await calculateDamage(attacker, defender, move);
+    
+    // V3: Verificar si el defensor está evadiendo (Fly, Dig, Bounce, etc.)
+    if (isDefenderEvading(defender)) {
+      // Aplicar fatiga igualmente aunque haya evadido (el esfuerzo ya se hizo)
+      applyFatigue(attacker, 'recharge');
+      
+      return {
+        success: true,
+        action: { playerId: attackerPlayerId, type: 'attack', move, moveId: move.moveId },
+        message: `${attacker.name} usado ${move.name}.\n¡Pero ${defender.name} evadió el ataque!\n¡${attacker.name} necesita descansar!`,
+        damage: 0,
+        targetHpBefore: defender.hp,
+        targetHpAfter: defender.hp,
+        effectiveness: 0,
+        failed: false,
+        attackerName: attacker.name,
+        defenderName: defender.name,
+        moveName: move.name
+      };
+    }
     
     // Aplicar daño
     const hpBefore = defender.hp;
@@ -1084,13 +1109,15 @@ export function executeMove(
 // Construir mensaje narrativo estilo Pokémon BW
   let message = `${attacker.name} usado ${move.name}.`;
   
-  // Agregar efectividad del ataque
-  if (effectiveness > 1) {
-    message += '\n¡Es muy efectivo!';
+  // Agregar efectividad del ataque con mensajes específicos
+  if (effectiveness >= 4) {
+    message += '\n¡Es súper efectivo!'; // x4 (tipo dual con ambos débiles)
+  } else if (effectiveness > 1) {
+    message += '\n¡Es muy efectivo!'; // x2
   } else if (effectiveness < 1 && effectiveness > 0) {
-    message += '\nNo es muy efectivo...';
+    message += '\nNo es muy efectivo...'; // x0.5
   } else if (effectiveness === 0) {
-    message += '\n¡No tiene efecto!';
+    message += '\n¡No tiene efecto! (Inmune)'; // Inmunidad clara
   }
   
   // Verificar si se debilitó
@@ -1178,10 +1205,10 @@ export function executeMove(
     // Verificar si ya está cargando
     if (!isTwoTurnCharging(attacker)) {
       // Primera ejecución: Fase de Carga
-      return handleTwoTurnMove(attacker, defender, move, 'charge', attackerPlayerId);
+      return await handleTwoTurnMove(attacker, defender, move, 'charge', attackerPlayerId);
     } else {
       // Segunda ejecución: Fase de Ejecución
-      return handleTwoTurnMove(attacker, defender, move, 'execute', attackerPlayerId);
+      return await handleTwoTurnMove(attacker, defender, move, 'execute', attackerPlayerId);
     }
   }
   
@@ -1198,7 +1225,24 @@ export function executeMove(
   }
   
   // Calcular daño (versión básica)
-  const { damage, effectiveness } = calculateDamage(attacker, defender, move);
+  const { damage, effectiveness } = await calculateDamage(attacker, defender, move);
+  
+  // V3: Verificar si el defensor está evadiendo (Fly, Dig, Bounce, etc.)
+  if (isDefenderEvading(defender)) {
+    return {
+      success: true,
+      action: { playerId: attackerPlayerId, type: 'attack', move, moveId: move.moveId },
+      message: `${attacker.name} usado ${move.name}.\n¡Pero ${defender.name} evadió el ataque!`,
+      damage: 0,
+      targetHpBefore: defender.hp,
+      targetHpAfter: defender.hp,
+      effectiveness: 0,
+      failed: false,
+      attackerName: attacker.name,
+      defenderName: defender.name,
+      moveName: move.name
+    };
+  }
   
   // Aplicar daño
   const hpBefore = defender.hp;
@@ -1209,13 +1253,15 @@ export function executeMove(
   // Construir mensaje narrativo estilo Pokémon BW
   let message = `${attacker.name} usado ${move.name}.`;
   
-  // Agregar efectividad del ataque
-  if (effectiveness > 1) {
-    message += '\n¡Es muy efectivo!';
+  // Agregar efectividad del ataque con mensajes específicos
+  if (effectiveness >= 4) {
+    message += '\n¡Es súper efectivo!'; // x4 (tipo dual con ambos débiles)
+  } else if (effectiveness > 1) {
+    message += '\n¡Es muy efectivo!'; // x2
   } else if (effectiveness < 1 && effectiveness > 0) {
-    message += '\nNo es muy efectivo...';
+    message += '\nNo es muy efectivo...'; // x0.5
   } else if (effectiveness === 0) {
-    message += '\n¡No tiene efecto!';
+    message += '\n¡No tiene efecto! (Inmune)'; // Inmunidad clara
   }
   
   // Verificar si se debilitó
@@ -1383,6 +1429,148 @@ export function executeSwitch(
 }
 
 // ============================================
+// SISTEMA DE ÍTEMS EN BATALLA
+// ============================================
+
+/**
+ * IDs de ítems disponibles en batalla
+ */
+export type ItemId = 'hiperPosion' | 'maximoRevivir';
+
+/**
+ * Definición de un ítem usable en batalla
+ */
+interface ItemDef {
+  name: string;
+  description: string;
+  condition: (pokemon: PokemonInBattle) => boolean;
+  effect: (pokemon: PokemonInBattle) => void;
+}
+
+/**
+ * Mapa de definiciones de ítems
+ * Cada ítem tiene nombre, descripción, condición de uso y efecto
+ */
+const ITEM_DEFS: Record<ItemId, ItemDef> = {
+  hiperPosion: {
+    name: 'Hiper Poción',
+    description: 'Restaura todos los PS de un Pokémon',
+    condition: (p) => p.hp > 0 && p.hp < p.maxHp,
+    effect: (p) => { p.hp = p.maxHp; },
+  },
+  maximoRevivir: {
+    name: 'Máximo Revivir',
+    description: 'Revive un Pokémon debilitado al máximo PS',
+    condition: (p) => p.hp <= 0 || p.isFainted,
+    effect: (p) => { p.hp = p.maxHp; p.isFainted = false; },
+  },
+};
+
+/**
+ * Ejecuta el uso de un ítem en batalla
+ *
+ * 1. Valida que el ítem exista
+ * 2. Valida que haya al menos 1 unidad disponible
+ * 3. Encuentra al Pokémon objetivo por ID
+ * 4. Valida que el objetivo cumpla la condición del ítem
+ * 5. Aplica el efecto (cura/revive)
+ * 6. Decrementa el contador del ítem
+ * 7. Retorna ActionResult con healAmount e inventory actualizado
+ *
+ * @param player - Estado del jugador que usa el ítem
+ * @param itemId - ID del ítem a usar
+ * @param targetPokemonId - ID del Pokémon objetivo
+ * @returns ActionResult con el resultado de la acción
+ */
+export function executeItem(
+  player: PlayerBattleState,
+  itemId: ItemId,
+  targetPokemonId: number
+): ActionResult {
+  // Validar que el ítem exista
+  const itemDef = ITEM_DEFS[itemId];
+  if (!itemDef) {
+    return {
+      success: false,
+      action: { playerId: player.playerId, type: 'item', itemId },
+      message: 'Ítem no válido',
+      failed: true,
+      failureReason: 'invalid_item',
+    };
+  }
+
+  // Validar que haya al menos 1 unidad
+  if (player.inventory[itemId] <= 0) {
+    return {
+      success: false,
+      action: { playerId: player.playerId, type: 'item', itemId },
+      message: `No quedan ${itemDef.name}`,
+      failed: true,
+      failureReason: 'no_items_left',
+    };
+  }
+
+  // Encontrar al Pokémon objetivo
+  const target = player.team.find(p => p.id === targetPokemonId);
+  if (!target) {
+    return {
+      success: false,
+      action: { playerId: player.playerId, type: 'item', itemId, targetPokemonId },
+      message: 'Objetivo no válido',
+      failed: true,
+      failureReason: 'invalid_target',
+    };
+  }
+
+  // Validar condición del ítem sobre el objetivo
+  if (!itemDef.condition(target)) {
+    const failMessage = itemId === 'hiperPosion'
+      ? `${target.name} no necesita ser curado`
+      : `${target.name} no está debilitado`;
+    return {
+      success: false,
+      action: { playerId: player.playerId, type: 'item', itemId, targetPokemonId },
+      message: failMessage,
+      failed: true,
+      failureReason: 'condition_not_met',
+    };
+  }
+
+  // Guardar HP antes de aplicar efecto
+  const hpBefore = target.hp;
+
+  // Aplicar efecto
+  itemDef.effect(target);
+
+  const hpAfter = target.hp;
+  const healAmount = hpAfter - hpBefore;
+
+  // Decrementar contador (con piso defensivo en 0)
+  player.inventory[itemId] = Math.max(0, player.inventory[itemId] - 1);
+
+  // Construir PlayerAction para el resultado
+  const action: PlayerAction = {
+    playerId: player.playerId,
+    type: 'item',
+    itemId,
+    targetPokemonId,
+  };
+
+  return {
+    success: true,
+    action,
+    message: `¡${itemDef.name} usada en ${target.name}!\n¡${target.name} recuperó toda su vida!`,
+    healAmount,
+    targetHpBefore: hpBefore,
+    targetHpAfter: hpAfter,
+    attackerName: player.name,
+    targetName: target.name,
+    moveName: itemDef.name,
+    inventory: { ...player.inventory },
+  };
+}
+
+// ============================================
 // VERIFICACIÓN DE ESTADO DE BATALLA
 // ============================================
 
@@ -1523,6 +1711,10 @@ export function createPlayerBattleState(
     sessionId,
     team: battleTeam,
     activePokemonIndex: 0,
-    hasSelectedAction: false
+    hasSelectedAction: false,
+    inventory: {
+      hiperPosion: 2,
+      maximoRevivir: 1,
+    }
   };
 }

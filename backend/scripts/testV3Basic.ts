@@ -561,11 +561,12 @@ test(
     // Aplicar fatiga después de Hyper Beam
     applyFatigue(pokemon, 'recharge');
     
-    // Verificar que no puede actuar
+    // Verificar que no puede actuar (fatiga bloquea)
     const canAct = canActWithAilments(pokemon);
     
+    // La fatiga se CONSUME al bloquear (el Pokémon descansó este turno)
     return (
-      assertTrue(pokemon.isFatigued, 'Debería estar fatigado') &&
+      assertFalse(pokemon.isFatigued, 'Fatiga consumida tras descansar') &&
       assertFalse(canAct.canAct, 'No debería poder actuar mientras está fatigado')
     );
   }

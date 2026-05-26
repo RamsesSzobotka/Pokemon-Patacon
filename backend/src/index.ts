@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { connectDB, disconnectDB, ensureTypeEffectivenessCache } from './db/mongodb';
+import { connectDB, disconnectDB, ensureTypeEffectivenessCache, validateTypeEffectivenessData } from './db/mongodb';
 import { pokemonService } from './services/pokemonService';
 import { importAllData } from './services/dataImportService';
+import { updateMoveFlags } from './services/updateMoveFlagsService';
 import { initializeRoomsIndexes } from './db/rooms';
 import { initializeUsersIndexes } from './db/users';
 import pokemonRoutes from './routes/pokemon';
@@ -111,8 +112,15 @@ async function startServer() {
     // 3. Importar datos desde PokeAPI si no existen
     await importAllData();
 
+    // 3.25 Actualizar flags de movimientos (charge, evasive, interruptible, fatigue)
+    // Debe ejecutarse DESPUÉS de importAllData() para asegurar que los movimientos existen
+    await updateMoveFlags();
+
     // 3.5 Cargar cache de efectividad de tipos desde MongoDB
     await ensureTypeEffectivenessCache();
+
+    // 3.6 Validar y loguear estado de tipos
+    await validateTypeEffectivenessData();
 
     // 4. Inicializar servicio de Pokémon
     await pokemonService.initialize();

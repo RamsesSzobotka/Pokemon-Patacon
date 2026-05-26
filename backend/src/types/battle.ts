@@ -191,6 +191,7 @@ export interface PlayerAction {
   move?: BattleMove;
   pokemonId?: number; // Para cambio de Pokémon
   targetPokemonId?: number; // Para movimientos que apuntan a un objetivo específico
+  itemId?: 'hiperPosion' | 'maximoRevivir'; // Para uso de ítems en batalla
 }
 
 /**
@@ -245,6 +246,11 @@ export interface ActionResult {
   attackerName?: string;
   defenderName?: string;
   moveName?: string;
+
+  // Para uso de ítems (curación)
+  healAmount?: number;
+  inventory?: { hiperPosion: number; maximoRevivir: number };
+  targetName?: string;
 }
 
 /**
@@ -268,6 +274,12 @@ export interface PlayerBattleState {
   // ¿El jugador ha seleccionado acción este turno?
   hasSelectedAction: boolean;
   selectedAction?: PlayerAction;
+
+  // Inventario de ítems para usar en batalla (per-battle only, no persistencia)
+  inventory: {
+    hiperPosion: number;
+    maximoRevivir: number;
+  };
 }
 
 /**
@@ -472,6 +484,7 @@ export const BATTLE_CONFIG = {
   
   // Prioridades
   PRIORITY_SWITCH: 6,  // Cambiar Pokémon siempre tiene prioridad +6
+  PRIORITY_ITEM: 4,    // Usar ítem (entre switch +6 y movimientos normales 0)
   PRIORITY_MIN: -7,    // Prioridad mínima de movimientos
   PRIORITY_MAX: 5,     // Prioridad máxima de movimientos
   

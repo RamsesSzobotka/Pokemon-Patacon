@@ -257,7 +257,7 @@ scenario(
     
     const passed =
       !canActAfterRecharge.canAct &&
-      p1.isFatigued &&
+      !p1.isFatigued && // Fatiga consumida al bloquear (descansó)
       canActAfterRecovery.canAct &&
       !p1.isFatigued;
     

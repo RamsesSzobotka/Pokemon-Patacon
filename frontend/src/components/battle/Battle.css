@@ -201,10 +201,58 @@
   50% { filter: drop-shadow(2px 3px 0px rgba(0, 0, 0, 0.5)) brightness(1.2); }
 }
 
-/* V3 Evasive State */
+/* V3 Evasive State — override with move-specific animations below */
 .pokemon-sprite.v3-evasive {
   opacity: 0.6;
 }
+
+/* ============================================
+   V3 EVASIVE CHARGE ANIMATIONS (Fly / Dig)
+   ============================================ */
+
+/* Vuelo — carga: sprite se eleva y desaparece */
+@keyframes evasive-fly-up {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-160px) scale(0.5); opacity: 0; }
+}
+
+.pokemon-sprite.evasive-charge-fly.v3-evasive {
+  opacity: 1;
+}
+.pokemon-sprite.evasive-charge-fly img {
+  animation: evasive-fly-up 0.6s ease-out forwards !important;
+}
+
+/* Excavar — carga: sprite se hunde bajo tierra */
+@keyframes evasive-dig-down {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(160px) scale(0.3); opacity: 0; }
+}
+
+.pokemon-sprite.evasive-charge-dig.v3-evasive {
+  opacity: 1;
+}
+.pokemon-sprite.evasive-charge-dig img {
+  animation: evasive-dig-down 0.6s ease-in forwards !important;
+}
+
+/* Buceo — carga: sprite se hunde bajo el agua con la misma base visual */
+@keyframes evasive-dive-down {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(170px) scale(0.32); opacity: 0; }
+}
+
+.pokemon-sprite.evasive-charge-dive.v3-evasive {
+  opacity: 1;
+}
+.pokemon-sprite.evasive-charge-dive img {
+  animation: evasive-dive-down 0.6s ease-in forwards !important;
+}
+
+/* No hay animación de retorno — el sprite reaparece instantáneamente al ejecutar
+   (se quita evasive-charge-{type} y vuelve a posición normal) */
+
+/* La base (sombra) siempre visible — el sprite se eleva pero la sombra queda en el suelo */
 
 .pokemon-sprite.v3-fatigued img {
   filter: drop-shadow(2px 3px 0px rgba(0, 0, 0, 0.5)) grayscale(50%);
@@ -421,6 +469,13 @@
   padding: 8px;
   background: var(--ruby-panel-dark);
   border: 2px solid var(--ruby-border);
+}
+
+.command-panel.v3-fatigue-mode .auto-rest-text {
+  font-size: 8px;
+  color: var(--ruby-text-light);
+  margin-top: 4px;
+  opacity: 0.8;
 }
 
 /* ============================================
@@ -886,6 +941,22 @@
 .action-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.action-btn.valid-target {
+  background: #2d6b2d;
+  border-color: #4CAF50;
+  color: #ffffff;
+}
+
+.action-btn.valid-target:hover:not(:disabled) {
+  background: #4CAF50;
+  border-color: #66ff66;
+}
+
+/* En la bolsa, el botón "Usar" dentro de una carta fainted no debe heredar la opacidad */
+.bag-selector .team-member-card.fainted .action-btn:not(:disabled) {
+  opacity: 1;
 }
 
 .cancel-btn {
@@ -1711,4 +1782,138 @@
   .battle-result-title {
     letter-spacing: 1px;
   }
+}
+
+/* ============================================
+   BAG SELECTOR (MOCHILA / ITEMS)
+   ============================================ */
+
+.bag-selector-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 31, 61, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.bag-selector {
+  background: var(--ruby-panel);
+  border: 4px solid var(--ruby-border-light);
+  padding: 20px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.6);
+}
+
+.bag-selector h3 {
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--ruby-gold);
+  text-align: center;
+  margin: 0 0 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.bag-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.item-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--ruby-panel-dark);
+  border: 3px solid var(--ruby-border);
+  cursor: pointer;
+  transition: all 0.1s steps(2);
+  text-align: left;
+  width: 100%;
+  font-family: var(--font-pixel);
+}
+
+.item-slot:hover:not(.item-disabled) {
+  border-color: var(--ruby-gold);
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.4);
+}
+
+.item-slot:active:not(.item-disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.4);
+}
+
+.item-slot.item-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.item-icon {
+  width: 40px;
+  height: 40px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item-name {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--ruby-white);
+  text-transform: uppercase;
+}
+
+.item-desc {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--ruby-text-light);
+}
+
+.item-count {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--ruby-gold);
+  font-weight: bold;
+  min-width: 30px;
+  text-align: center;
+}
+
+/* Heal Glow Animation */
+@keyframes healGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px #48D048) brightness(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 20px #48D048) drop-shadow(0 0 40px #48D048) brightness(1.3);
+  }
+}
+
+.heal-glow {
+  animation: healGlow 1.5s ease-in-out;
+}
+
+/* Revive Glow Animation */
+@keyframes reviveGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px #FFD700) brightness(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 20px #FFD700) drop-shadow(0 0 40px #FFA500) brightness(1.4);
+  }
+}
+
+.revive-glow {
+  animation: reviveGlow 2s ease-in-out;
 }
